@@ -7,6 +7,8 @@ import Link from "next/link"
 import { EventActions } from "@/components/events/event-actions"
 import { RegenerateEditLinkButton } from "@/components/events/regenerate-edit-link-button"
 
+export const dynamic = "force-dynamic"
+
 export default async function MyEventsPage() {
   const session = await getSession()
 
