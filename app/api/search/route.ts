@@ -1,9 +1,10 @@
-import { type NextRequest, NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
 import { detectLanguage } from "@/lib/search/language-detection"
 import { normalizeQuery } from "@/lib/search/query-normalization"
 import { searchDatabase } from "@/lib/search/database-search"
 import { searchWeb, deduplicateResults } from "@/lib/search/web-search"
 import type { SearchResponse } from "@/lib/types"
+import { ok, fail } from "@/lib/http"
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,7 +12,7 @@ export async function POST(request: NextRequest) {
     const { query, userLat, userLng, uiLang, filters, includeWeb = false } = body
 
     if (!query || query.trim().length === 0) {
-      return NextResponse.json({ error: "Query is required" }, { status: 400 })
+      return fail("Query is required", 400)
     }
 
     console.log("[v0] Search request:", { query, userLat, userLng, filters, includeWeb })
@@ -62,9 +63,9 @@ export async function POST(request: NextRequest) {
       totalResults: allResults.length,
     }
 
-    return NextResponse.json(response)
+    return ok(response)
   } catch (error) {
     console.error("Search error:", error)
-    return NextResponse.json({ error: "Search failed" }, { status: 500 })
+    return fail("Search failed", 500)
   }
 }

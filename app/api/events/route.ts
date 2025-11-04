@@ -6,6 +6,7 @@ import { geocodeAddress } from "@/lib/geocoding"
 import { createSearchTextFolded } from "@/lib/search/accent-fold"
 import { createEventEditToken } from "@/lib/eventEditToken"
 import { sendEventEditLinkEmail } from "@/lib/email"
+import { ok, fail, validationError } from "@/lib/http"
 
 const EventCreate = z.object({
   title: z.string().min(3).max(120),
@@ -55,10 +56,10 @@ export async function GET(request: NextRequest) {
       take: limit,
     })
 
-    return NextResponse.json({ events })
+    return ok({ events })
   } catch (error) {
     console.error("Error fetching events:", error)
-    return NextResponse.json({ error: "Failed to fetch events" }, { status: 500 })
+    return fail("Failed to fetch events", 500)
   }
 }
 
@@ -70,7 +71,7 @@ export async function POST(request: NextRequest) {
     const data = EventCreate.parse(body)
 
     if (new Date(data.endAt) < new Date(data.startAt)) {
-      return NextResponse.json({ error: "endAt must be after startAt" }, { status: 400 })
+      return fail("endAt must be after startAt", 400)
     }
 
     const { title, description, categories, startAt, endAt } = data
@@ -148,13 +149,13 @@ export async function POST(request: NextRequest) {
     console.error("Error creating event:", error)
 
     if (error.message === "Unauthorized") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return fail("Unauthorized", 401)
     }
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid request data", details: error.errors }, { status: 400 })
+      return validationError("Invalid request data", error.errors)
     }
 
-    return NextResponse.json({ error: "Failed to create event" }, { status: 500 })
+    return fail("Failed to create event", 500)
   }
 }

@@ -1,7 +1,8 @@
-import { type NextRequest, NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
 import { db } from "@/lib/db"
 import { getSession } from "@/lib/jwt"
 import { validateEventEditToken } from "@/lib/eventEditToken"
+import { ok, fail } from "@/lib/http"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -20,13 +21,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     })
 
     if (!event) {
-      return NextResponse.json({ error: "Event not found" }, { status: 404 })
+      return fail("Event not found", 404)
     }
 
-    return NextResponse.json({ event })
+    return ok({ event })
   } catch (error) {
     console.error("Error fetching event:", error)
-    return NextResponse.json({ error: "Failed to fetch event" }, { status: 500 })
+    return fail("Failed to fetch event", 500)
   }
 }
 
@@ -34,7 +35,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   try {
     const session = await getSession()
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return fail("Unauthorized", 401)
     }
 
     const { id } = params
@@ -47,11 +48,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     })
 
     if (!event) {
-      return NextResponse.json({ error: "Event not found" }, { status: 404 })
+      return fail("Event not found", 404)
     }
 
     if (event.createdById !== session.userId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      return fail("Forbidden", 403)
     }
 
     // Update event with allowed fields
@@ -70,10 +71,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       },
     })
 
-    return NextResponse.json({ event: updatedEvent })
+    return ok({ event: updatedEvent })
   } catch (error) {
     console.error("[v0] Error updating event:", error)
-    return NextResponse.json({ error: "Failed to update event" }, { status: 500 })
+    return fail("Failed to update event", 500)
   }
 }
 
@@ -102,13 +103,13 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     })
 
     if (!event) {
-      return NextResponse.json({ error: "Event not found" }, { status: 404 })
+      return fail("Event not found", 404)
     }
 
     // Check if event has ended (block edits after event ends)
     const now = new Date()
     if (event.endAt && now > event.endAt) {
-      return NextResponse.json({ error: "Cannot edit event after it has ended" }, { status: 403 })
+      return fail("Cannot edit event after it has ended", 403)
     }
 
     // Try session-based authentication first (existing owner flow)
@@ -125,15 +126,15 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       if (tokenValidation === "ok") {
         isAuthorized = true
       } else if (tokenValidation === "expired") {
-        return NextResponse.json({ error: "token_expired" }, { status: 401 })
+        return fail("token_expired", 401)
       } else {
-        return NextResponse.json({ error: "Invalid edit token" }, { status: 401 })
+        return fail("Invalid edit token", 401)
       }
     }
 
     // If still not authorized, return 401
     if (!isAuthorized) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return fail("Unauthorized", 401)
     }
 
     // Validate dates if provided
@@ -141,7 +142,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const endAt = body.endAt ? new Date(body.endAt) : event.endAt
 
     if (startAt && endAt && endAt <= startAt) {
-      return NextResponse.json({ error: "End time must be after start time" }, { status: 400 })
+      return fail("End time must be after start time", 400)
     }
 
     // Update event with allowed fields
@@ -165,10 +166,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       },
     })
 
-    return NextResponse.json({ event: updatedEvent })
+    return ok({ event: updatedEvent })
   } catch (error) {
     console.error("[v0] Error updating event:", error)
-    return NextResponse.json({ error: "Failed to update event" }, { status: 500 })
+    return fail("Failed to update event", 500)
   }
 }
 
@@ -176,7 +177,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   try {
     const session = await getSession()
     if (!session) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return fail("Unauthorized", 401)
     }
 
     const { id } = params
@@ -188,20 +189,20 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     })
 
     if (!event) {
-      return NextResponse.json({ error: "Event not found" }, { status: 404 })
+      return fail("Event not found", 404)
     }
 
     if (event.createdById !== session.userId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      return fail("Forbidden", 403)
     }
 
     await db.event.delete({
       where: { id },
     })
 
-    return NextResponse.json({ ok: true })
+    return ok({ ok: true })
   } catch (error) {
     console.error("[v0] Error deleting event:", error)
-    return NextResponse.json({ error: "Failed to delete event" }, { status: 500 })
+    return fail("Failed to delete event", 500)
   }
 }

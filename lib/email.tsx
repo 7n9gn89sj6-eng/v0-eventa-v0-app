@@ -1,11 +1,11 @@
 import nodemailer from "nodemailer"
 
 const isEmailConfigured = !!(
-  process.env.EMAIL_SERVER_HOST &&
-  process.env.EMAIL_SERVER_PORT &&
-  process.env.EMAIL_SERVER_USER &&
-  process.env.EMAIL_SERVER_PASSWORD &&
-  process.env.EMAIL_FROM
+  process.env.EMAIL_SERVER_HOST?.trim() &&
+  process.env.EMAIL_SERVER_PORT?.trim() &&
+  process.env.EMAIL_SERVER_USER?.trim() &&
+  process.env.EMAIL_SERVER_PASSWORD?.trim() &&
+  process.env.EMAIL_FROM?.trim()
 )
 
 let transporter: nodemailer.Transporter | null = null
@@ -116,7 +116,7 @@ This code will expire in 20 minutes. If you didn't submit an event, you can safe
 
 export async function sendEventEditLinkEmail(to: string, eventTitle: string, eventId: string, token: string) {
   const baseUrl = process.env.APP_BASE_URL ?? "http://localhost:3000"
-  const editUrl = `${baseUrl}/my/events/${eventId}/edit?token=${encodeURIComponent(token)}`
+  const editUrl = `${baseUrl}/edit/${eventId}?token=${encodeURIComponent(token)}`
   const subject = `Edit link for "${escapeHtml(eventTitle)}"`
 
   const html = `
@@ -135,7 +135,7 @@ export async function sendEventEditLinkEmail(to: string, eventTitle: string, eve
         
         <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
           <h2 style="margin-top: 0; color: #111827;">Edit Your Event</h2>
-          <p style="font-size: 16px; margin-bottom: 20px;">You can edit <strong>${escapeHtml(eventTitle)}</strong> any time until the event ends.</p>
+          <p style="font-size: 16px; margin-bottom: 20px;">You can edit <strong>${escapeHtml(eventTitle)}</strong> any time using this secure link. No sign-in required!</p>
           
           <div style="text-align: center; margin: 30px 0;">
             <a href="${editUrl}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">Edit this event</a>
@@ -147,7 +147,7 @@ export async function sendEventEditLinkEmail(to: string, eventTitle: string, eve
           </div>
           
           <p style="font-size: 14px; color: #6b7280; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
-            This link expires automatically after the event ends (plus a short grace period). Keep this email safe to make changes to your event.
+            This link expires 30 days after creation. Keep this email safe to make changes to your event.
           </p>
         </div>
         
@@ -161,12 +161,12 @@ export async function sendEventEditLinkEmail(to: string, eventTitle: string, eve
   const text = `
 Edit Your Event
 
-You can edit "${eventTitle}" any time until the event ends.
+You can edit "${eventTitle}" any time using this secure link. No sign-in required!
 
 Visit this link to edit your event:
 ${editUrl}
 
-This link expires automatically after the event ends (plus a short grace period). Keep this email safe to make changes to your event.
+This link expires 30 days after creation. Keep this email safe to make changes to your event.
 
 © ${new Date().getFullYear()} Eventa. All rights reserved.
   `.trim()

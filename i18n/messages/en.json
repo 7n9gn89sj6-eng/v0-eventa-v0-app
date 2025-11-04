@@ -2,8 +2,8 @@
   "common": {
     "eventa": "Eventa",
     "search": "Search",
-    "signIn": "Sign in",
-    "signOut": "Sign out",
+    "signIn": "Sign In",
+    "signOut": "Sign Out",
     "cancel": "Cancel",
     "save": "Save",
     "loading": "Loading...",
@@ -35,37 +35,37 @@
   },
   "home": {
     "heroTitle": "Discover & Create Events",
-    "heroSubtitle": "Step 4: Search enabled (internal + external). Create with prefill & confirm. Publishing disabled.",
+    "heroSubtitle": "Find events or create your own.",
     "location": "Location",
     "addEvent": "Add Event",
     "tryTestCases": "Try these test cases:",
     "viewDrafts": "View Drafts ({count})",
     "yourDrafts": "Your Drafts",
     "noResults": "No results found. Try different keywords or create your own event.",
-    "consoleNote": "Step 4: Check browser console for instrumentation logs.",
-    "footerText": "Eventa - AI-powered event discovery and creation (Step 4 Testing: Dual Search)"
+    "consoleNote": "Search for events or create new ones using natural language.",
+    "footerText": "Eventa – AI-powered event discovery"
   },
   "toast": {
     "pastDateTitle": "Past date detected",
-    "pastDateDescription": "That date/time is in the past. Please choose a future date.",
+    "pastDateDescription": "This date/time is in the past. Please choose a future date.",
     "conflictingTimesTitle": "Conflicting times",
-    "conflictingTimesDescription": "I found multiple times: {times}. Which one is correct?",
+    "conflictingTimesDescription": "Found multiple times: {times}. Which is correct?",
     "invalidDateTitle": "Invalid date",
-    "invalidDateDescription": "I couldn't pin the date. Please choose from the calendar.",
-    "missingDate": "Which date should I set?",
-    "missingTime": "What time should it start?",
-    "missingLocation": "Where is it happening? (city or venue)",
+    "invalidDateDescription": "Could not determine the date. Please select from calendar.",
+    "missingDate": "What date should I set?",
+    "missingTime": "What time will it start?",
+    "missingLocation": "Where will it be? (city or venue)",
     "missingTitle": "What should I call this event?",
     "draftSavedTitle": "Draft saved",
-    "draftSavedDescription": "{title} — {date} {time} at {venue}. Publishing is disabled in Step 3.",
-    "draftSaveError": "Couldn't save the draft. Try again.",
+    "draftSavedDescription": "{title} — {date} {time} at {venue}.",
+    "draftSaveError": "Could not save draft. Try again.",
     "draftDeletedTitle": "Draft deleted",
     "draftDeletedDescription": "The draft has been removed."
   },
   "hero": {
     "title": "Discover Events Near You",
-    "subtitle": "Ask for events in your own words — any language. We search local listings and the web.",
-    "placeholder": "e.g., markets this weekend, fiesta gratuita, πανηγύρι Αθήνα...",
+    "subtitle": "Search for events in your own words — any language. We search local listings and the web.",
+    "placeholder": "e.g., markets this weekend, free concerts, Athens festival...",
     "useLocation": "Use my location for better results",
     "disclaimer": "We show Eventa listings first. You can also include results from the web."
   },
@@ -74,8 +74,8 @@
     "detectedLanguage": "Detected language: {lang}",
     "includeWeb": "Include web results",
     "noResults": "No events found for \"{query}\"",
-    "noResultsHint": "Try a broader date range, a different word (e.g., 'market'/'fiesta'), or include web results.",
-    "webResultsNote": "Showing results from Eventa and the web. Web results are labeled with \"Source: Web\".",
+    "noResultsHint": "Try a broader date range, different word (e.g. 'market'/'fair'), or include web results.",
+    "webResultsNote": "Showing results from Eventa and the web. Web results are marked with \"Source: Web\".",
     "sourceEventa": "Eventa",
     "sourceWeb": "Web",
     "free": "Free",
@@ -96,8 +96,8 @@
     "distance": "Distance (km)"
   },
   "event": {
-    "postEvent": "Post an Event",
-    "myEvents": "My events",
+    "postEvent": "Post Event",
+    "myEvents": "My Events",
     "title": "Event Title",
     "description": "Description",
     "categories": "Categories",
@@ -129,6 +129,6 @@
     "checkEmailInstructions": "Click the link in the email to sign in to your account.",
     "checkSpam": "If you don't see the email, check your spam folder.",
     "authError": "Authentication Error",
-    "authNotConfigured": "Authentication not configured"
+    "authNotConfigured": "Authentication is not configured"
   }
 }

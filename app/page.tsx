@@ -5,13 +5,14 @@ import { Button } from "@/components/ui/button"
 import { Calendar, MapPin, Plus, Volume2, VolumeX } from "lucide-react"
 import { UserNav } from "@/components/auth/user-nav"
 import { LanguageSwitcher } from "@/components/language-switcher"
+import { VersionBadge } from "@/components/version-badge"
 import { AISearchBar } from "@/components/search/ai-search-bar"
 import { ResultCard } from "@/components/search/result-card"
 import { DraftEventCard } from "@/components/events/draft-event-card"
 import { DraftsList } from "@/components/events/drafts-list"
 import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
-import { useTranslations, useLocale } from "next-intl"
+// import { useTranslations, useLocale } from "next-intl"
 import { speak, stopSpeaking } from "@/lib/tts"
 
 interface DraftEvent {
@@ -26,7 +27,7 @@ interface DraftEvent {
 }
 
 export default function HomePage() {
-  const locale = useLocale()
+  const locale = "en"
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [searchParaphrase, setSearchParaphrase] = useState("")
   const [showResults, setShowResults] = useState(false)
@@ -40,9 +41,9 @@ export default function HomePage() {
   const [isSpeakingSearch, setIsSpeakingSearch] = useState(false)
 
   const { toast } = useToast()
-  const t = useTranslations("common")
-  const tHome = useTranslations("home")
-  const tToast = useTranslations("toast")
+  // const t = useTranslations("common")
+  // const tHome = useTranslations("home")
+  // const tToast = useTranslations("toast")
 
   const searchBarRef = useRef<{ setQuery: (q: string) => void } | null>(null)
 
@@ -61,8 +62,8 @@ export default function HomePage() {
     // Check for validation errors
     if (extracted.validation?.pastDate) {
       toast({
-        title: tToast("pastDateTitle"),
-        description: tToast("pastDateDescription"),
+        title: "Past Date Detected",
+        description: "The date you specified is in the past. Please choose a future date.",
         variant: "destructive",
       })
       return
@@ -70,18 +71,16 @@ export default function HomePage() {
 
     if (extracted.validation?.timeConflicts) {
       toast({
-        title: tToast("conflictingTimesTitle"),
-        description: tToast("conflictingTimesDescription", {
-          times: extracted.validation.timeConflicts.join(", "),
-        }),
+        title: "Conflicting Times",
+        description: `Multiple conflicting times detected: ${extracted.validation.timeConflicts.join(", ")}. Please clarify.`,
         variant: "destructive",
       })
     }
 
     if (extracted.validation?.invalidDate) {
       toast({
-        title: tToast("invalidDateTitle"),
-        description: tToast("invalidDateDescription"),
+        title: "Invalid Date",
+        description: "The date format is invalid. Please use a valid date.",
         variant: "destructive",
       })
     }
@@ -101,13 +100,13 @@ export default function HomePage() {
     if (extracted.missingFields && extracted.missingFields.length > 0) {
       const missing = extracted.missingFields[0]
       if (missing === "date") {
-        setFollowUpQuestion(tToast("missingDate"))
+        setFollowUpQuestion("When would you like this event to take place?")
       } else if (missing === "time") {
-        setFollowUpQuestion(tToast("missingTime"))
+        setFollowUpQuestion("What time should the event start?")
       } else if (missing === "location") {
-        setFollowUpQuestion(tToast("missingLocation"))
+        setFollowUpQuestion("Where will this event be held?")
       } else if (missing === "title") {
-        setFollowUpQuestion(tToast("missingTitle"))
+        setFollowUpQuestion("What would you like to call this event?")
       }
     }
   }
@@ -125,21 +124,16 @@ export default function HomePage() {
       setFollowUpQuestion("")
 
       toast({
-        title: tToast("draftSavedTitle"),
-        description: tToast("draftSavedDescription", {
-          title: draft.title,
-          date: new Date(draft.date).toLocaleDateString(),
-          time: draft.time,
-          venue: draft.venue || draft.city,
-        }),
+        title: "Draft Saved",
+        description: `"${draft.title}" saved for ${new Date(draft.date).toLocaleDateString()} at ${draft.time} in ${draft.venue || draft.city}`,
       })
 
       console.log("[v0] Draft saved:", newDraft)
     } catch (error) {
       console.error("[v0] ERR_DRAFT_SAVE:", error)
       toast({
-        title: t("error"),
-        description: tToast("draftSaveError"),
+        title: "Error",
+        description: "Failed to save draft. Please try again.",
         variant: "destructive",
       })
     }
@@ -161,8 +155,8 @@ export default function HomePage() {
   const handleDeleteDraft = (id: string) => {
     setDrafts((prev) => prev.filter((d) => d.id !== id))
     toast({
-      title: tToast("draftDeletedTitle"),
-      description: tToast("draftDeletedDescription"),
+      title: "Draft Deleted",
+      description: "Your draft has been removed.",
     })
   }
 
@@ -198,13 +192,17 @@ export default function HomePage() {
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <Link href="/" className="flex items-center gap-2">
             <Calendar className="h-6 w-6" />
-            <h1 className="text-xl font-bold">{t("eventa")}</h1>
+            <h1 className="text-xl font-bold">Eventa</h1>
           </Link>
 
           <div className="flex items-center gap-3">
+            <div className="hidden md:block">
+              <VersionBadge />
+            </div>
+
             <Button variant="outline" size="sm" className="gap-2 bg-transparent" onClick={() => {}}>
               <MapPin className="h-4 w-4" />
-              <span className="hidden sm:inline">{tHome("location")}</span>
+              <span className="hidden sm:inline">Location</span>
             </Button>
 
             <LanguageSwitcher />
@@ -212,25 +210,28 @@ export default function HomePage() {
             <Button asChild size="sm" className="gap-2">
               <Link href="/add-event">
                 <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">{tHome("addEvent")}</span>
+                <span className="hidden sm:inline">Post Event</span>
               </Link>
             </Button>
 
             <UserNav />
           </div>
         </div>
+        <div className="md:hidden flex justify-center pb-2">
+          <VersionBadge />
+        </div>
       </header>
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="mx-auto max-w-3xl py-16 text-center">
-          <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance sm:text-5xl">{tHome("heroTitle")}</h2>
-          <p className="mb-8 text-lg text-muted-foreground text-balance">{tHome("heroSubtitle")}</p>
+          <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance sm:text-5xl">Discover & Create Events</h2>
+          <p className="mb-8 text-lg text-muted-foreground text-balance">Find events or create your own.</p>
 
           <AISearchBar ref={searchBarRef} onSearch={handleSearch} onCreate={handleCreate} onError={handleError} />
 
           <div className="mt-8 flex flex-wrap justify-center gap-2">
-            <p className="w-full text-sm text-muted-foreground mb-2">{tHome("tryTestCases")}</p>
+            <p className="w-full text-sm text-muted-foreground mb-2">Try these examples:</p>
             {[
               "Create an open mic at The Dock next Saturday 8pm",
               "Create yoga in Lisbon on Saturday",
@@ -260,11 +261,13 @@ export default function HomePage() {
               className="mt-6 bg-transparent"
               onClick={() => setShowDraftsList(!showDraftsList)}
             >
-              {tHome("viewDrafts", { count: drafts.length })}
+              View Drafts ({drafts.length})
             </Button>
           )}
 
-          <p className="mt-8 text-sm text-muted-foreground">{tHome("consoleNote")}</p>
+          <p className="mt-8 text-sm text-muted-foreground">
+            Search for events or create new ones using natural language.
+          </p>
         </div>
 
         {showDraftCard && currentDraft && (
@@ -288,7 +291,7 @@ export default function HomePage() {
 
         {showDraftsList && (
           <div className="mx-auto max-w-2xl mt-12">
-            <h3 className="text-2xl font-semibold mb-6">{tHome("yourDrafts")}</h3>
+            <h3 className="text-2xl font-semibold mb-6">Your Drafts</h3>
             <DraftsList drafts={drafts} onEdit={handleEditDraft} onDelete={handleDeleteDraft} />
           </div>
         )}
@@ -335,7 +338,7 @@ export default function HomePage() {
               </div>
             ) : (
               <div className="text-center py-12">
-                <p className="text-lg text-muted-foreground">{tHome("noResults")}</p>
+                <p className="text-lg text-muted-foreground">No results found</p>
               </div>
             )}
           </div>
@@ -345,7 +348,7 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="mt-16 border-t bg-muted/30 py-8">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>{tHome("footerText")}</p>
+          <p>Eventa – AI-powered event discovery</p>
         </div>
       </footer>
     </div>

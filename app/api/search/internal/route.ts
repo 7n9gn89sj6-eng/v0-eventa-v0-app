@@ -182,7 +182,7 @@ function parseDatePhrase(phrase: string): { gte?: Date; lte?: Date } | undefined
   }
 
   if (lowerPhrase.includes("this weekend") || lowerPhrase.includes("weekend")) {
-    const daysUntilSaturday = (6 - now.weekday) % 7
+    const daysUntilSaturday = (6 - now.weekday + 7) % 7
     const saturday = now.plus({ days: daysUntilSaturday })
     return {
       gte: saturday.startOf("day").toJSDate(),

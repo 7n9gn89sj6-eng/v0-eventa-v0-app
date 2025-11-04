@@ -13,11 +13,14 @@
     "dev": "next dev",
     "postinstall": "prisma generate && prisma migrate deploy",
     "lint": "next lint",
+    "smoke:prod": "node ./scripts/smoke-prod.mjs",
     "start": "next start",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:unit": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "vercel:logs": "vercel logs --prod --since=1h",
+    "vercel:promote": "node ./scripts/promote-prev.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "latest",
@@ -64,6 +67,7 @@
     "@vitest/ui": "latest",
     "ai": "latest",
     "bcryptjs": "latest",
+    "child_process": "latest",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "crypto": "latest",
@@ -107,6 +111,7 @@
     "tailwindcss": "^4.1.9",
     "ts-node": "^10.9.2",
     "typescript": "^5",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "wait-on": "^8.0.1"
   }
 }

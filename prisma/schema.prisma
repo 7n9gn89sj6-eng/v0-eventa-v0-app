@@ -130,7 +130,7 @@ model Event {
 model EventEditToken {
   id        String   @id @default(cuid())
   eventId   String
-  token     String   @unique
+  tokenHash String   @unique
   expires   DateTime
   usedAt    DateTime?
 
@@ -138,5 +138,5 @@ model EventEditToken {
   createdAt DateTime @default(now())
   
   @@index([eventId])
-  @@index([token])
+  @@index([tokenHash])
 }

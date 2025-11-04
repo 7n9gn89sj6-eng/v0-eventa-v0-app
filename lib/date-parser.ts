@@ -35,7 +35,7 @@ export function parseDatePhrase(phrase: string): string | null {
     const targetDay = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"].indexOf(
       dayName.toLowerCase(),
     )
-    const currentDay = melbourneNow.weekday % 7 // Luxon uses 1-7 (Mon-Sun), convert to 0-6 (Sun-Sat)
+    const currentDay = melbourneNow.weekday === 7 ? 0 : melbourneNow.weekday
 
     let daysToAdd = targetDay - currentDay
     if (modifier === "next" || daysToAdd <= 0) {
@@ -72,9 +72,28 @@ export function parseTime(timeStr: string): string | null {
   const minutes = match[2] ? Number.parseInt(match[2]) : 0
   const meridiem = match[3]
 
+  // Check for NaN (non-numeric input)
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null
+
+  // Check for negative numbers
+  if (hours < 0 || minutes < 0) return null
+
+  // Validate minutes range
+  if (minutes > 59) return null
+
+  // Validate hours based on format
+  if (meridiem) {
+    // 12-hour format: hours must be 1-12
+    if (hours < 1 || hours > 12) return null
+  } else {
+    // 24-hour format: hours must be 0-23
+    if (hours > 23) return null
+  }
+
   if (meridiem === "pm" && hours < 12) hours += 12
   if (meridiem === "am" && hours === 12) hours = 0
 
+  // Final sanity check after conversion
   if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null
 
   return `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`
@@ -99,3 +118,5 @@ export function isPastDateTime(dateISO: string, time24h: string): boolean {
   const now = getMelbourneNow()
   return eventDateTime < now
 }
+
+export const parseNaturalDate = parseDatePhrase

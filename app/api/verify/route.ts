@@ -1,8 +1,9 @@
-import { type NextRequest, NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
 import { z } from "zod"
 import bcrypt from "bcryptjs"
 import { db } from "@/lib/db"
 import { createSession } from "@/lib/jwt"
+import { ok, fail, validationError } from "@/lib/http"
 
 const verifySchema = z.object({
   email: z.string().email(),
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
+      return fail("User not found", 404)
     }
 
     // Find the latest non-consumed verification for this email
@@ -35,19 +36,19 @@ export async function POST(request: NextRequest) {
     })
 
     if (!verification) {
-      return NextResponse.json({ error: "No verification code found. Please request a new one." }, { status: 404 })
+      return fail("No verification code found. Please request a new one.", 404)
     }
 
     // Check if expired
     if (new Date() > verification.expiresAt) {
-      return NextResponse.json({ error: "Verification code has expired. Please request a new one." }, { status: 400 })
+      return fail("Verification code has expired. Please request a new one.", 400)
     }
 
     // Verify the code
     const isValid = await bcrypt.compare(code, verification.code)
 
     if (!isValid) {
-      return NextResponse.json({ error: "Invalid verification code" }, { status: 400 })
+      return fail("Invalid verification code", 400)
     }
 
     // Mark user as verified
@@ -69,14 +70,14 @@ export async function POST(request: NextRequest) {
       isVerified: true,
     })
 
-    return NextResponse.json({ ok: true })
+    return ok({ ok: true })
   } catch (error) {
     console.error("[v0] Verification error:", error)
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid input", details: error.errors }, { status: 400 })
+      return validationError("Invalid input", error.errors)
     }
 
-    return NextResponse.json({ error: "Verification failed. Please try again." }, { status: 500 })
+    return fail("Verification failed. Please try again.", 500)
   }
 }

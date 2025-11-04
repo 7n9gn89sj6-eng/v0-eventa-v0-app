@@ -1,9 +1,9 @@
+import { ok } from "@/lib/http"
+
 export function GET() {
   // In production, don't expose environment variable details for security
   if (process.env.NODE_ENV === "production") {
-    return new Response(JSON.stringify({ ok: true }), {
-      headers: { "content-type": "application/json" },
-    })
+    return ok({ ok: true })
   }
 
   // Development only: show missing/available environment variables
@@ -18,7 +18,5 @@ export function GET() {
   ]
   const missing = reqd.filter((k) => !process.env[k])
   const optionalMissing = opt.filter((k) => !process.env[k])
-  return new Response(JSON.stringify({ missing, optionalMissing }, null, 2), {
-    headers: { "content-type": "application/json" },
-  })
+  return ok({ missing, optionalMissing })
 }

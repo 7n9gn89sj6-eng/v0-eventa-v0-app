@@ -39,6 +39,22 @@ export const authOptions: NextAuthOptions = {
       return session
     },
     async redirect({ url, baseUrl }) {
+      const debugEnabled = process.env.DEBUG_AUTH_REDIRECTS === "1"
+
+      // If already on /add-event with ?from=auth, don't redirect again
+      try {
+        const urlObj = new URL(url, baseUrl)
+        if (urlObj.pathname === "/add-event" && urlObj.searchParams.has("from")) {
+          const finalUrl = url.startsWith("/") ? baseUrl + url : url
+          if (debugEnabled) {
+            console.log("[Auth Redirect] Loop prevention: from=%s to=%s", url, finalUrl)
+          }
+          return finalUrl
+        }
+      } catch {
+        // Invalid URL, continue with normal logic
+      }
+
       // Allow intended relative paths
       if (url.startsWith("/")) {
         // If root or auth pages, send to /add-event
@@ -49,19 +65,40 @@ export const authOptions: NextAuthOptions = {
           url.startsWith("/auth/verify") ||
           url === "/auth/signin"
         ) {
-          return baseUrl + "/add-event"
+          const finalUrl = baseUrl + "/add-event"
+          if (debugEnabled) {
+            console.log("[Auth Redirect] Auth page: from=%s to=%s", url, finalUrl)
+          }
+          return finalUrl
         }
-        return baseUrl + url
+        const finalUrl = baseUrl + url
+        if (debugEnabled) {
+          console.log("[Auth Redirect] Relative path: from=%s to=%s", url, finalUrl)
+        }
+        return finalUrl
       }
       // Absolute URLs: allow same-origin, else fall back
       try {
         const u = new URL(url)
         if (u.origin === baseUrl) {
-          if (u.pathname === "/") return baseUrl + "/add-event"
+          if (u.pathname === "/") {
+            const finalUrl = baseUrl + "/add-event"
+            if (debugEnabled) {
+              console.log("[Auth Redirect] Root absolute: from=%s to=%s", url, finalUrl)
+            }
+            return finalUrl
+          }
+          if (debugEnabled) {
+            console.log("[Auth Redirect] Same origin: from=%s to=%s", url, u.toString())
+          }
           return u.toString()
         }
       } catch {}
-      return baseUrl + "/add-event"
+      const finalUrl = baseUrl + "/add-event"
+      if (debugEnabled) {
+        console.log("[Auth Redirect] Fallback: from=%s to=%s", url, finalUrl)
+      }
+      return finalUrl
     },
   },
   session: {
