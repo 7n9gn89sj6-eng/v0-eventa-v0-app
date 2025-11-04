@@ -10,6 +10,8 @@ import Link from "next/link"
 import { EventActions } from "@/components/events/event-actions"
 import { RegenerateEditLinkButton } from "@/components/events/regenerate-edit-link-button"
 
+export const dynamic = "force-dynamic"
+
 export default async function MyEventDetailPage({ params }: { params: { id: string } }) {
   const session = await getSession()
 
@@ -17,7 +19,7 @@ export default async function MyEventDetailPage({ params }: { params: { id: stri
     redirect("/verify")
   }
 
-  const { id } = await params
+  const { id } = params
 
   const event = await prisma.event.findUnique({
     where: { id },
