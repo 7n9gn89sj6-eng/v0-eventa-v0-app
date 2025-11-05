@@ -3,9 +3,9 @@
 import type React from "react"
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react"
 import { Search, Mic, MicOff, Loader2, Sparkles, RotateCcw, Volume2, VolumeX } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { speak, stopSpeaking } from "@/lib/tts"
+import { Button } from "../ui/button"
+import { Alert, AlertDescription } from "../ui/alert"
+import { speak, stopSpeaking } from "../../lib/tts"
 
 interface AISearchBarProps {
   onSearch?: (results: any[], paraphrase: string) => void
