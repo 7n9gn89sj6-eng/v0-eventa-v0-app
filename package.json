@@ -4,11 +4,13 @@
   "private": true,
   "scripts": {
     "build": "next build",
+    "postbuild": "tsx scripts/run-all-setup.ts",
     "build:ci": "next build && npm run typecheck && npm run lint",
     "build:local": "next build",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:push": "prisma db push",
+    "db:setup": "tsx scripts/run-all-setup.ts",
     "db:studio": "prisma studio",
     "dev": "next dev",
     "postinstall": "prisma generate",
