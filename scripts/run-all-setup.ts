@@ -11,7 +11,8 @@ async function runSetup() {
     console.log("[v0] ✓ pgvector enabled")
 
     console.log("[v0] Creating enum types...")
-    await sql`CREATE TYPE IF NOT EXISTS "EventStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'ARCHIVED')`
+    await sql`DROP TYPE IF EXISTS "EventStatus" CASCADE`
+    await sql`CREATE TYPE "EventStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'ARCHIVED')`
     console.log("[v0] ✓ Enum types created")
 
     console.log("[v0] Creating database tables...")
