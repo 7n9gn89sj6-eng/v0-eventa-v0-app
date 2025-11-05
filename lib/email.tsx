@@ -1,39 +1,59 @@
-import { Resend } from "resend"
-import { sql } from "./db"
+import nodemailer from "nodemailer"
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+let transporter: nodemailer.Transporter | null = null
+let initError: string | null = null
 
-export function generateEditToken(): string {
-  return crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "")
+try {
+  const isEmailConfigured = !!(
+    process.env.EMAIL_SERVER_HOST?.trim() &&
+    process.env.EMAIL_SERVER_PORT?.trim() &&
+    process.env.EMAIL_SERVER_USER?.trim() &&
+    process.env.EMAIL_SERVER_PASSWORD?.trim() &&
+    process.env.EMAIL_FROM?.trim()
+  )
+
+  if (isEmailConfigured) {
+    transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_SERVER_HOST,
+      port: Number(process.env.EMAIL_SERVER_PORT),
+      secure: false,
+      auth: {
+        user: process.env.EMAIL_SERVER_USER,
+        pass: process.env.EMAIL_SERVER_PASSWORD,
+      },
+    })
+    console.log("[v0] Email transporter initialized")
+  } else {
+    initError = "Email environment variables not configured"
+    console.log("[v0] Email not configured - missing environment variables")
+  }
+} catch (error) {
+  initError = error instanceof Error ? error.message : "Failed to initialize email"
+  console.error("[v0] Email initialization error:", error)
 }
 
-export async function hashToken(token: string): Promise<string> {
-  const encoder = new TextEncoder()
-  const data = encoder.encode(token)
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("")
+function escapeHtml(text: string): string {
+  const map: Record<string, string> = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  }
+  return text.replace(/[&<>"']/g, (m) => map[m])
 }
 
-export async function createEditTokenForEvent(eventId: string): Promise<string> {
-  const token = generateEditToken()
-  const tokenHash = await hashToken(token)
-  const expires = new Date()
-  expires.setDate(expires.getDate() + 30) // 30 days from now
+export async function sendVerificationEmail(email: string, code: string) {
+  console.log("[v0] Attempting to send verification email to:", email)
 
-  await sql`
-    INSERT INTO "EventEditToken" (id, "eventId", "tokenHash", expires, "createdAt")
-    VALUES (${crypto.randomUUID().replace(/-/g, "")}, ${eventId}, ${tokenHash}, ${expires.toISOString()}, NOW())
-  `
+  if (!transporter) {
+    const errorMsg = initError || "Email system not configured"
+    console.error("[v0] Cannot send email:", errorMsg)
+    throw new Error(errorMsg)
+  }
 
-  return token
-}
-
-export async function sendEditLinkEmail(email: string, eventTitle: string, eventId: string, token: string) {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-  const editUrl = `${baseUrl}/edit/${eventId}?token=${token}`
-
-  const subject = `Edit link for "${eventTitle}"`
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+  const magicLink = `${appUrl}/verify?email=${encodeURIComponent(email)}&code=${code}`
 
   const html = `
     <!DOCTYPE html>
@@ -41,59 +61,146 @@ export async function sendEditLinkEmail(email: string, eventTitle: string, event
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-          body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
-          .container { max-width: 600px; margin: 0 auto; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 20px; text-align: center; }
-          .header h1 { color: white; margin: 0; font-size: 32px; }
-          .header p { color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px; }
-          .content { padding: 40px 20px; background: white; }
-          .content h2 { color: #1a1a1a; font-size: 24px; margin: 0 0 20px 0; }
-          .content p { color: #4a4a4a; line-height: 1.6; margin: 0 0 20px 0; }
-          .button { display: inline-block; padding: 14px 32px; background: #667eea; color: white; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0; }
-          .button:hover { background: #5568d3; }
-          .fallback { background: #f5f5f5; padding: 20px; border-radius: 6px; margin: 20px 0; }
-          .fallback p { margin: 0 0 10px 0; font-size: 14px; color: #666; }
-          .fallback a { color: #667eea; word-break: break-all; font-size: 13px; }
-          .footer { padding: 20px; text-align: center; color: #999; font-size: 14px; }
-        </style>
+        <title>Verify Your Event Submission</title>
       </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>Eventa</h1>
-            <p>Your Event Edit Link</p>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">Eventa</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Verify Your Event Submission</p>
+        </div>
+        
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px; margin-bottom: 20px;">Thank you for submitting your event! To publish it, please verify your email address.</p>
+          
+          <div style="background: #f9fafb; border: 2px dashed #d1d5db; border-radius: 8px; padding: 20px; text-align: center; margin: 25px 0;">
+            <p style="margin: 0 0 10px 0; font-size: 14px; color: #6b7280;">Your verification code:</p>
+            <p style="font-size: 32px; font-weight: bold; letter-spacing: 8px; margin: 0; color: #667eea;">${code}</p>
           </div>
-          <div class="content">
-            <h2>Edit Your Event</h2>
-            <p>You can edit <strong>${eventTitle}</strong> any time using this secure link. No sign-in required!</p>
-            <a href="${editUrl}" class="button">Edit this event</a>
-            <div class="fallback">
-              <p>If the button doesn't work, paste this into your browser:</p>
-              <a href="${editUrl}">${editUrl}</a>
-            </div>
-            <p style="margin-top: 30px; padding-top: 30px; border-top: 1px solid #eee; color: #666; font-size: 14px;">
-              This link expires 30 days after creation. Keep this email safe to make changes to your event.
-            </p>
+          
+          <p style="text-align: center; margin: 25px 0;">Or click the button below to verify automatically:</p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${magicLink}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">Verify Email</a>
           </div>
-          <div class="footer">
-            © ${new Date().getFullYear()} Eventa. All rights reserved.
-          </div>
+          
+          <p style="font-size: 14px; color: #6b7280; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+            This code will expire in 20 minutes. If you didn't submit an event, you can safely ignore this email.
+          </p>
+        </div>
+        
+        <div style="text-align: center; margin-top: 20px; color: #9ca3af; font-size: 12px;">
+          <p>© ${new Date().getFullYear()} Eventa. All rights reserved.</p>
         </div>
       </body>
     </html>
   `
 
+  const text = `
+Verify Your Event Submission
+
+Thank you for submitting your event! To publish it, please verify your email address.
+
+Your verification code: ${code}
+
+Or visit this link to verify automatically:
+${magicLink}
+
+This code will expire in 20 minutes. If you didn't submit an event, you can safely ignore this email.
+
+© ${new Date().getFullYear()} Eventa. All rights reserved.
+  `.trim()
+
   try {
-    await resend.emails.send({
-      from: process.env.EMAIL_FROM || "noreply@eventa.test",
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM,
       to: email,
-      subject,
+      subject: "Verify Your Event Submission - Eventa",
+      text,
       html,
     })
-    return { success: true }
+    console.log("[v0] ✓ Verification email sent successfully to:", email)
   } catch (error) {
-    console.error("[v0] Error sending email:", error)
-    return { success: false, error: "Failed to send email" }
+    console.error("[v0] ✗ Failed to send verification email:", error)
+    throw new Error("Failed to send verification email")
+  }
+}
+
+export async function sendEventEditLinkEmail(to: string, eventTitle: string, eventId: string, token: string) {
+  console.log("[v0] Attempting to send edit link email to:", to)
+
+  if (!transporter) {
+    const errorMsg = initError || "Email system not configured"
+    console.error("[v0] Cannot send email:", errorMsg)
+    throw new Error(errorMsg)
+  }
+
+  const baseUrl = process.env.APP_BASE_URL ?? "http://localhost:3000"
+  const editUrl = `${baseUrl}/edit/${eventId}?token=${encodeURIComponent(token)}`
+  const subject = `Edit link for "${escapeHtml(eventTitle)}"`
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Edit Your Event</title>
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">Eventa</h1>
+          <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Your Event Edit Link</p>
+        </div>
+        
+        <div style="background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
+          <h2 style="margin-top: 0; color: #111827;">Edit Your Event</h2>
+          <p style="font-size: 16px; margin-bottom: 20px;">You can edit <strong>${escapeHtml(eventTitle)}</strong> any time using this secure link. No sign-in required!</p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${editUrl}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">Edit this event</a>
+          </div>
+          
+          <div style="background: #f9fafb; border-radius: 8px; padding: 15px; margin: 25px 0;">
+            <p style="margin: 0 0 8px 0; font-size: 14px; color: #6b7280;">If the button doesn't work, paste this into your browser:</p>
+            <p style="margin: 0; font-size: 13px; word-break: break-all; color: #667eea;">${editUrl}</p>
+          </div>
+          
+          <p style="font-size: 14px; color: #6b7280; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+            This link expires 30 days after creation. Keep this email safe to make changes to your event.
+          </p>
+        </div>
+        
+        <div style="text-align: center; margin-top: 20px; color: #9ca3af; font-size: 12px;">
+          <p>© ${new Date().getFullYear()} Eventa. All rights reserved.</p>
+        </div>
+      </body>
+    </html>
+  `
+
+  const text = `
+Edit Your Event
+
+You can edit "${eventTitle}" any time using this secure link. No sign-in required!
+
+Visit this link to edit your event:
+${editUrl}
+
+This link expires 30 days after creation. Keep this email safe to make changes to your event.
+
+© ${new Date().getFullYear()} Eventa. All rights reserved.
+  `.trim()
+
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM,
+      to,
+      subject,
+      text,
+      html,
+    })
+    console.log("[v0] ✓ Edit link email sent successfully to:", to)
+  } catch (error) {
+    console.error("[v0] ✗ Failed to send edit link email:", error)
+    throw new Error("Failed to send edit link email")
   }
 }
