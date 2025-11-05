@@ -35,9 +35,20 @@ export async function POST(request: NextRequest) {
 
     const validatedData = submitEventSchema.parse(body)
 
-    let user = await db.user.findUnique({
-      where: { email: validatedData.email },
-    })
+    let user
+    try {
+      user = await db.user.findUnique({
+        where: { email: validatedData.email },
+      })
+    } catch (dbError) {
+      console.error("[v0] Database error - tables may not exist:", dbError)
+      return NextResponse.json(
+        {
+          error: "Database not initialized. Please run the setup script first.",
+        },
+        { status: 500 },
+      )
+    }
 
     if (!user) {
       user = await db.user.create({
@@ -94,14 +105,11 @@ export async function POST(request: NextRequest) {
       emailedEditLink = true
       console.log(`[v0] Edit link email sent to ${validatedData.email} for event ${event.id}`)
     } catch (emailError) {
-      console.error("[v0] Failed to send edit link email:", emailError)
-      // Don't block event creation if email fails
+      console.error("[v0] Failed to send edit link email (non-fatal):", emailError)
     }
 
     const code = Math.floor(100000 + Math.random() * 900000).toString()
-
     const hashedCode = await bcrypt.hash(code, 10)
-
     const expiresAt = new Date(Date.now() + 20 * 60 * 1000)
 
     await db.emailVerification.create({
@@ -113,9 +121,13 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    await sendVerificationEmail(user.email, code)
-
-    console.log("[v0] Verification email sent to:", user.email)
+    try {
+      await sendVerificationEmail(user.email, code)
+      console.log("[v0] Verification email sent to:", user.email)
+    } catch (emailError) {
+      console.error("[v0] Failed to send verification email (non-fatal):", emailError)
+      console.log("[v0] Verification code for manual use:", code)
+    }
 
     return NextResponse.json({ ok: true, emailedEditLink })
   } catch (error) {
