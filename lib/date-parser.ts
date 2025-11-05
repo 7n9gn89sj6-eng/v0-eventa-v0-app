@@ -1,5 +1,4 @@
 import { DateTime } from "luxon"
-import { normalizeMultilingualDate } from "./i18n/date-tokens"
 
 const MELBOURNE_TZ = "Australia/Melbourne"
 
@@ -11,11 +10,10 @@ function getMelbourneNow(): DateTime {
 export function parseDatePhrase(phrase: string): string | null {
   const melbourneNow = getMelbourneNow()
 
-  const normalized = normalizeMultilingualDate(phrase)
-  const lowerPhrase = normalized.toLowerCase().trim()
+  const lowerPhrase = phrase.toLowerCase().trim()
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
-    return normalized
+  if (/^\d{4}-\d{2}-\d{2}$/.test(phrase)) {
+    return phrase
   }
 
   // Today

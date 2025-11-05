@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { DateTime } from "luxon"
-import { parseNaturalDate } from "../../../../lib/i18n/date-parser-inline"
+import { parseNaturalDate } from "../../../../lib/date-parser"
 
 /**
  * Temporary diagnostic endpoint for verifying date parsing logic

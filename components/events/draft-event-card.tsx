@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar, Clock, MapPin, Tag, X, Volume2, VolumeX } from "lucide-react"
 import { speak, stopSpeaking } from "@/lib/tts"
-import { isPastDateTime } from "../../lib/i18n/date-parser-inline"
+import { isPastDateTime } from "../../lib/date-parser"
 
 interface DraftEvent {
   id: string
