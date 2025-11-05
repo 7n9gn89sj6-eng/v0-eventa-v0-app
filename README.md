@@ -231,6 +231,7 @@ eventa-v0/
 - `POST /api/auth/*` - NextAuth endpoints
 - `GET /api/cron/events-maintenance` - Automated event maintenance
 - `POST /api/events/:id/edit` - Update event details using edit link
+- `GET /api/status` - Health endpoint
 
 ## Search Flow
 
@@ -241,6 +242,13 @@ eventa-v0/
 5. If < 6 results, automatically search Google PSE
 6. Results are merged and deduplicated
 7. Display with source badges (Eventa vs Web)
+
+## Build Safety
+
+- Auth is disabled by default (`NEXT_PUBLIC_AUTH_ENABLED=false`).
+- CI fails fast if critical envs are missing (`npm run check:env`).
+- Smoke test: `npm run smoke` (set `APP_BASE_URL` if testing a deployed URL).
+- Database scripts are NEVER auto-run; use `npm run db:setup` only when ready.
 
 ## License
 
