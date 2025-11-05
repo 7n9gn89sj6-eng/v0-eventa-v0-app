@@ -123,6 +123,8 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
     setError(null)
 
     try {
+      console.log("[v0] Submitting event data:", data)
+
       const response = await fetch("/api/events/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -131,12 +133,24 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
 
       if (!response.ok) {
         const errorData = await response.json()
+        console.error("[v0] Event submission failed:", errorData)
+
+        // Show validation errors if available
+        if (errorData.details && Array.isArray(errorData.details)) {
+          const errorMessages = errorData.details.map((err: any) => err.message).join(", ")
+          throw new Error(errorMessages)
+        }
+
         throw new Error(errorData.error || "Failed to submit event")
       }
+
+      const result = await response.json()
+      console.log("[v0] Event submitted successfully:", result)
 
       setIsSuccess(true)
       form.reset()
     } catch (err: any) {
+      console.error("[v0] Error in form submission:", err)
       setError(err.message || "An unexpected error occurred")
     } finally {
       setIsSubmitting(false)

@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { Calendar, MapPin, Plus, Volume2, VolumeX } from "lucide-react"
+import { Calendar, MapPin, Volume2, VolumeX } from "lucide-react"
 import { UserNav } from "@/components/auth/user-nav"
 import { LanguageSwitcher } from "@/components/language-switcher"
 import { VersionBadge } from "@/components/version-badge"
@@ -206,13 +206,6 @@ export default function HomePage() {
             </Button>
 
             <LanguageSwitcher />
-
-            <Button asChild size="sm" className="gap-2">
-              <Link href="/add-event">
-                <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">Post Event</span>
-              </Link>
-            </Button>
 
             <UserNav />
           </div>
