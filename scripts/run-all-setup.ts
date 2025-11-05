@@ -135,6 +135,14 @@ async function runSetup() {
 
     console.log("[v0] ✓ Database tables created")
 
+    console.log("[v0] Checking for missing columns...")
+    try {
+      await sql`ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "status" "EventStatus" DEFAULT 'DRAFT' NOT NULL`
+      console.log("[v0] ✓ Status column check complete")
+    } catch (error) {
+      console.log("[v0] Note: Status column already exists or error:", error)
+    }
+
     console.log("[v0] Creating indexes...")
     await sql`CREATE INDEX IF NOT EXISTS "EmailVerification_userId_idx" ON "EmailVerification"("userId")`
     await sql`CREATE INDEX IF NOT EXISTS "EmailVerification_email_idx" ON "EmailVerification"("email")`
