@@ -12,7 +12,6 @@ import { Separator } from "@/components/ui/separator"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { useTranslations } from "@/lib/i18n/context"
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
@@ -235,7 +234,6 @@ function Sidebar({
 
 function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<"button">) {
   const { toggleSidebar } = useSidebar()
-  const t = useTranslations("aria")
 
   return (
     <button
@@ -246,11 +244,11 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<"
         onClick?.(event)
         toggleSidebar()
       }}
-      aria-label={t("toggleSidebar")}
+      aria-label="Toggle Sidebar"
       {...props}
     >
       <PanelLeftIcon />
-      <span className="sr-only">{t("toggleSidebar")}</span>
+      <span className="sr-only">Toggle Sidebar</span>
     </button>
   )
 }

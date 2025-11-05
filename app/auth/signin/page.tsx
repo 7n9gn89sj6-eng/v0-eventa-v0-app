@@ -1,14 +1,10 @@
 import { SignInForm } from "@/components/auth/sign-in-form"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
-import { getTranslations } from "@/lib/i18n/server"
 
-export async function generateMetadata() {
-  const t = await getTranslations("metadata")
-  return {
-    title: t("signInTitle"),
-    description: t("signInDescription"),
-  }
+export const metadata = {
+  title: "Sign In - Eventa",
+  description: "Sign in to your Eventa account",
 }
 
 const isAuthConfigured = !!(
@@ -20,21 +16,19 @@ const isAuthConfigured = !!(
 )
 
 export default async function SignInPage() {
-  const t = await getTranslations("auth")
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
       <div className="w-full max-w-md space-y-4">
         <div className="text-center">
-          <h1 className="text-3xl font-bold tracking-tight">{t("signInTitle")}</h1>
-          <p className="mt-2 text-muted-foreground">{t("signInSubtitle")}</p>
+          <h1 className="text-3xl font-bold tracking-tight">Sign In</h1>
+          <p className="mt-2 text-muted-foreground">Enter your email to receive a sign-in link</p>
         </div>
 
         {!isAuthConfigured && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>{t("authError")}</AlertTitle>
-            <AlertDescription>{t("authNotConfigured")}</AlertDescription>
+            <AlertTitle>Authentication Error</AlertTitle>
+            <AlertDescription>Authentication is not configured. Please contact support.</AlertDescription>
           </Alert>
         )}
 

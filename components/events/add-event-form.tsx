@@ -111,9 +111,7 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
           // Set end time to 2 hours after start
           const endDate = new Date(date.getTime() + 2 * 60 * 60 * 1000)
           form.setValue("endAt", endDate.toISOString().slice(0, 16))
-        } catch (e) {
-          console.error("[v0] Failed to parse date:", e)
-        }
+        } catch (e) {}
       }
     }
   }, [initialData, form])
@@ -123,8 +121,6 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
     setError(null)
 
     try {
-      console.log("[v0] Submitting event data:", data)
-
       const response = await fetch("/api/events/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -133,7 +129,6 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
 
       if (!response.ok) {
         const errorData = await response.json()
-        console.error("[v0] Event submission failed:", errorData)
 
         // Show validation errors if available
         if (errorData.details && Array.isArray(errorData.details)) {
@@ -145,12 +140,11 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
       }
 
       const result = await response.json()
-      console.log("[v0] Event submitted successfully:", result)
 
       setIsSuccess(true)
       form.reset()
     } catch (err: any) {
-      console.error("[v0] Error in form submission:", err)
+      console.error("Error in form submission:", err)
       setError(err.message || "An unexpected error occurred")
     } finally {
       setIsSubmitting(false)

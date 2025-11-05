@@ -4,7 +4,6 @@ import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Calendar, MapPin, Volume2, VolumeX } from "lucide-react"
 import { UserNav } from "@/components/auth/user-nav"
-import { LanguageSwitcher } from "@/components/language-switcher"
 import { VersionBadge } from "@/components/version-badge"
 import { AISearchBar } from "@/components/search/ai-search-bar"
 import { ResultCard } from "@/components/search/result-card"
@@ -194,8 +193,6 @@ export default function HomePage() {
               <MapPin className="h-4 w-4" />
               <span className="hidden sm:inline">Location</span>
             </Button>
-
-            <LanguageSwitcher />
 
             <UserNav />
           </div>

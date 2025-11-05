@@ -1,26 +1,36 @@
 import { type NextRequest, NextResponse } from "next/server"
 
-const locales = ["en"] as const
-type Locale = (typeof locales)[number]
-
-function parseAcceptLanguage(acceptLanguage: string | null): Locale {
-  return "en"
-}
-
 export function middleware(request: NextRequest) {
-  const locale: Locale = "en"
-
-  // Create response without modifying URL
   const response = NextResponse.next()
 
-  // Expose locale to server components via custom header
-  response.headers.set("x-locale", locale)
+  // Prevent clickjacking attacks
+  response.headers.set("X-Frame-Options", "DENY")
 
-  // Ensure cookie is set for future requests
+  // Prevent MIME type sniffing
+  response.headers.set("X-Content-Type-Options", "nosniff")
+
+  // Enable XSS protection
+  response.headers.set("X-XSS-Protection", "1; mode=block")
+
+  // Referrer policy for privacy
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin")
+
+  // Content Security Policy
+  response.headers.set(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://vercel.live https://va.vercel-scripts.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https://vercel.live https://va.vercel-scripts.com; frame-src 'self' https://vercel.live;",
+  )
+
+  // Set locale header for English-only app
+  response.headers.set("x-locale", "en")
+
+  // Set locale cookie if not present
   if (!request.cookies.get("NEXT_LOCALE")) {
-    response.cookies.set("NEXT_LOCALE", locale, {
+    response.cookies.set("NEXT_LOCALE", "en", {
       path: "/",
       maxAge: 31536000, // 1 year
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
     })
   }
 

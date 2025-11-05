@@ -3,65 +3,43 @@
 import type React from "react"
 
 import { useState } from "react"
-import { signIn } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Mail, Loader2, AlertCircle } from "lucide-react"
+import { toast } from "@/hooks/use-toast"
 
 export function SignInForm() {
   const [email, setEmail] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError(null)
 
-    try {
-      const result = await signIn("email", {
-        email,
-        redirect: false,
-        callbackUrl: "/add-event", // Updated callbackUrl to /add-event
-      })
+    // Mock sign-in for v0 preview
+    toast({
+      title: "Authentication Disabled",
+      description: "Auth is disabled in v0 preview. The app is in demo mode.",
+    })
 
-      if (result?.error) {
-        if (result.error.includes("Configuration")) {
-          setError("Authentication is not configured yet. Please contact the administrator to set up email service.")
-        } else {
-          setError("Failed to send magic link. Please try again.")
-        }
-      } else {
-        // Redirect to verify page
-        window.location.href = "/auth/verify?email=" + encodeURIComponent(email)
-      }
-    } catch (err: any) {
-      if (err?.message?.includes("503") || err?.message?.includes("not configured")) {
-        setError(
-          "Authentication is not configured yet. The administrator needs to set up email service environment variables.",
-        )
-      } else {
-        setError("An unexpected error occurred. Please try again.")
-      }
-      console.error("[v0] Sign in error:", err)
-    } finally {
-      setIsLoading(false)
-    }
+    setIsLoading(false)
   }
 
   return (
-    <Card>
+    <Card className="w-full max-w-md">
       <CardHeader>
-        <CardTitle>Sign in with email</CardTitle>
-        <CardDescription>We'll send you a magic link to sign in without a password</CardDescription>
+        <CardTitle>Sign In</CardTitle>
+        <CardDescription>Authentication is disabled in preview mode</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">Email address</Label>
+            <Label htmlFor="email">Email</Label>
             <Input
               id="email"
               type="email"
@@ -90,7 +68,7 @@ export function SignInForm() {
             ) : (
               <>
                 <Mail className="mr-2 h-4 w-4" />
-                Send magic link
+                Sign In (Disabled in Preview)
               </>
             )}
           </Button>

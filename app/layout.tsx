@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "../components/ui/toaster"
 import { SessionProvider } from "../components/auth/session-provider"
-import { I18nProvider } from "../lib/i18n/context"
 import "./globals.css"
 
 const _geist = Geist({ subsets: ["latin"] })
@@ -23,11 +22,9 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body className={`font-sans antialiased`}>
-        <I18nProvider>
-          <SessionProvider>{children}</SessionProvider>
-          <Analytics />
-          <Toaster />
-        </I18nProvider>
+        <SessionProvider>{children}</SessionProvider>
+        <Analytics />
+        <Toaster />
       </body>
     </html>
   )
