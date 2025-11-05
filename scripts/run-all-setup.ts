@@ -3,9 +3,120 @@ import { neon } from "@neondatabase/serverless"
 const sql = neon(process.env.NEON_DATABASE_URL || process.env.DATABASE_URL!)
 
 async function runSetup() {
-  console.log("[v0] Starting database setup...")
+  console.log("[v0] Starting complete database setup...")
 
   try {
+    console.log("[v0] Creating database tables...")
+
+    // Create User table
+    await sql`
+      CREATE TABLE IF NOT EXISTS "User" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "name" TEXT,
+        "email" TEXT UNIQUE,
+        "emailVerified" TIMESTAMP(3),
+        "image" TEXT,
+        "isAdmin" BOOLEAN NOT NULL DEFAULT false,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `
+
+    // Create Account table (for OAuth)
+    await sql`
+      CREATE TABLE IF NOT EXISTS "Account" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "userId" TEXT NOT NULL,
+        "type" TEXT NOT NULL,
+        "provider" TEXT NOT NULL,
+        "providerAccountId" TEXT NOT NULL,
+        "refresh_token" TEXT,
+        "access_token" TEXT,
+        "expires_at" INTEGER,
+        "token_type" TEXT,
+        "scope" TEXT,
+        "id_token" TEXT,
+        "session_state" TEXT,
+        CONSTRAINT "Account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+        CONSTRAINT "Account_provider_providerAccountId_key" UNIQUE ("provider", "providerAccountId")
+      )
+    `
+
+    // Create Session table
+    await sql`
+      CREATE TABLE IF NOT EXISTS "Session" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "sessionToken" TEXT NOT NULL UNIQUE,
+        "userId" TEXT NOT NULL,
+        "expires" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "Session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE
+      )
+    `
+
+    // Create VerificationToken table
+    await sql`
+      CREATE TABLE IF NOT EXISTS "VerificationToken" (
+        "identifier" TEXT NOT NULL,
+        "token" TEXT NOT NULL UNIQUE,
+        "expires" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "VerificationToken_identifier_token_key" UNIQUE ("identifier", "token")
+      )
+    `
+
+    // Create EmailVerification table
+    await sql`
+      CREATE TABLE IF NOT EXISTS "EmailVerification" (
+        "id" TEXT NOT NULL PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "email" TEXT NOT NULL,
+        "token" TEXT NOT NULL UNIQUE,
+        "expires" TIMESTAMP(3) NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `
+
+    // Create Event table
+    await sql`
+      CREATE TABLE IF NOT EXISTS "Event" (
+        "id" TEXT NOT NULL PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "title" TEXT NOT NULL,
+        "description" TEXT NOT NULL,
+        "venueName" TEXT NOT NULL,
+        "address" TEXT NOT NULL,
+        "city" TEXT NOT NULL,
+        "country" TEXT NOT NULL,
+        "startAt" TIMESTAMP(3) NOT NULL,
+        "endAt" TIMESTAMP(3) NOT NULL,
+        "categories" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+        "languages" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+        "imageUrl" TEXT,
+        "externalUrl" TEXT,
+        "organizerName" TEXT NOT NULL,
+        "organizerEmail" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'PENDING',
+        "searchText" TEXT NOT NULL DEFAULT '',
+        "searchTextFolded" TEXT NOT NULL DEFAULT '',
+        "archived" BOOLEAN NOT NULL DEFAULT false,
+        "createdBy" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "Event_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE
+      )
+    `
+
+    // Create EventEditToken table
+    await sql`
+      CREATE TABLE IF NOT EXISTS "EventEditToken" (
+        "id" TEXT NOT NULL PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "eventId" TEXT NOT NULL,
+        "tokenHash" TEXT NOT NULL UNIQUE,
+        "expiresAt" TIMESTAMP(3) NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "EventEditToken_eventId_fkey" FOREIGN KEY ("eventId") REFERENCES "Event"("id") ON DELETE CASCADE ON UPDATE CASCADE
+      )
+    `
+
+    console.log("[v0] ✓ Database tables created")
+
     // 1. Enable pgvector extension
     console.log("[v0] Enabling pgvector extension...")
     await sql`CREATE EXTENSION IF NOT EXISTS vector`
