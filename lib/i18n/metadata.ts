@@ -1,15 +1,22 @@
-import { getTranslations } from "next-intl/server"
+import { translations, type Locale } from "./translations"
 import type { Metadata } from "next"
 
+/**
+ * Gets localized metadata for pages
+ * @param titleKey - Translation key for the title
+ * @param descriptionKey - Translation key for the description
+ * @param locale - The locale to use (defaults to "en")
+ * @returns Metadata object with localized title and description
+ */
 export async function getLocalizedMetadata(
   titleKey: string,
   descriptionKey: string,
-  namespace = "metadata",
+  locale: Locale = "en",
 ): Promise<Metadata> {
-  const t = await getTranslations(namespace)
+  const t = translations[locale].metadata as any
 
   return {
-    title: t(titleKey),
-    description: t(descriptionKey),
+    title: t[titleKey] || titleKey,
+    description: t[descriptionKey] || descriptionKey,
   }
 }

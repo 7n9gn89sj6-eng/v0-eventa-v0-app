@@ -8,9 +8,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar, Clock, MapPin, Tag, X, Volume2, VolumeX } from "lucide-react"
-import { useLocale } from "next-intl"
 import { speak, stopSpeaking } from "@/lib/tts"
-import { isPastDateTime } from "@/lib/date-parser"
+import { isPastDateTime } from "../../lib/i18n/date-parser-inline"
 
 interface DraftEvent {
   id: string
@@ -34,7 +33,7 @@ interface DraftEventCardProps {
 const CATEGORIES = ["Music", "Sports", "Arts", "Food", "Tech", "Business", "Health", "Education", "Community", "Other"]
 
 export function DraftEventCard({ draft, paraphrase, onConfirm, onCancel, onAskFollowUp }: DraftEventCardProps) {
-  const locale = useLocale()
+  const locale = "en"
   const [editedDraft, setEditedDraft] = useState<Partial<DraftEvent>>(draft)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isSpeaking, setIsSpeaking] = useState(false)

@@ -3,7 +3,7 @@
 import type * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { ChevronRightIcon, MoreHorizontalIcon } from "lucide-react"
-import { useTranslations } from "next-intl"
+import { useTranslations } from "@/lib/i18n/context"
 
 import { cn } from "@/lib/utils"
 

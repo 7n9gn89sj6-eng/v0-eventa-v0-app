@@ -2,7 +2,12 @@ import { type NextRequest, NextResponse } from "next/server"
 import { generateObject } from "ai"
 import { openai } from "@ai-sdk/openai"
 import { z } from "zod"
-import { parseDatePhrase, parseTime, detectTimeConflicts, isPastDateTime } from "@/lib/date-parser"
+import {
+  parseDatePhrase,
+  parseTime,
+  detectTimeConflicts,
+  isPastDateTime,
+} from "../../../../lib/i18n/date-parser-inline"
 
 const intentSchema = z.object({
   intent: z

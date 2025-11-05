@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { Loader2Icon } from "lucide-react"
-import { useTranslations } from "next-intl"
+import { useTranslations } from "@/lib/i18n/context"
 
 import { cn } from "@/lib/utils"
 

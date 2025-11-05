@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 import Link from "next/link"
-import { useTranslations } from "next-intl"
+import { useTranslations } from "@/lib/i18n/context"
 
 export function UserNav() {
   const tEvent = useTranslations("event")

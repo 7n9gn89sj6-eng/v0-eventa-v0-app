@@ -27,7 +27,7 @@
   "dependencies": {
     "@ai-sdk/openai": "latest",
     "@auth/core": "0.41.0",
-    "@auth/prisma-adapter": "latest",
+    "@auth/prisma-adapter": "2.11.0",
     "@edge-runtime/vm": "latest",
     "@hookform/resolvers": "latest",
     "@neondatabase/serverless": "latest",
@@ -83,7 +83,6 @@
     "luxon": "latest",
     "next": "16.0.0",
     "next-auth": "latest",
-    "next-intl": "latest",
     "nodemailer": "latest",
     "path": "latest",
     "playwright": "latest",

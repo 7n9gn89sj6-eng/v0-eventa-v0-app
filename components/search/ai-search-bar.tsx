@@ -5,7 +5,6 @@ import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "re
 import { Search, Mic, MicOff, Loader2, Sparkles, RotateCcw, Volume2, VolumeX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { useLocale } from "next-intl"
 import { speak, stopSpeaking } from "@/lib/tts"
 
 interface AISearchBarProps {
@@ -30,7 +29,7 @@ function getRecognitionLanguage(locale: string): string {
 }
 
 export const AISearchBar = forwardRef<AISearchBarRef, AISearchBarProps>(({ onSearch, onCreate, onError }, ref) => {
-  const locale = useLocale()
+  const locale = "en" // Hardcoded locale to 'en'
   const [query, setQuery] = useState("")
   const [lastQuery, setLastQuery] = useState("")
   const [isListening, setIsListening] = useState(false)

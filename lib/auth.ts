@@ -1,16 +1,16 @@
 import type { NextAuthOptions } from "next-auth"
 import EmailProvider from "next-auth/providers/email"
-import { PrismaAdapter } from "@auth/prisma-adapter"
-import { prisma } from "./db"
 import { isAuthConfigured } from "./auth-config"
+
+let PrismaAdapter: any
+let prisma: any
 
 if (!isAuthConfigured) {
   console.warn("[NextAuth] Email provider not configured. Authentication is disabled.")
-  console.warn("[NextAuth] Set EMAIL_SERVER_* environment variables to enable authentication.")
+  console.warn("[NextAuth] Set NEXT_PUBLIC_AUTH_ENABLED=true to enable authentication.")
 }
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma) as any,
   providers: isAuthConfigured
     ? [
         EmailProvider({
@@ -32,9 +32,9 @@ export const authOptions: NextAuthOptions = {
     error: "/auth/error",
   },
   callbacks: {
-    async session({ session, user }) {
-      if (session.user) {
-        session.user.id = user.id
+    async session({ session, user, token }) {
+      if (session.user && token?.sub) {
+        session.user.id = token.sub
       }
       return session
     },
@@ -102,7 +102,7 @@ export const authOptions: NextAuthOptions = {
     },
   },
   session: {
-    strategy: "database",
+    strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   debug: process.env.NODE_ENV === "development",

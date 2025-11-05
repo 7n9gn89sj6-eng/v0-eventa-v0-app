@@ -2,18 +2,15 @@
 
 import type * as React from "react"
 import { ChevronLeftIcon, ChevronRightIcon, MoreHorizontalIcon } from "lucide-react"
-import { useTranslations } from "next-intl"
 
 import { cn } from "@/lib/utils"
 import { type Button, buttonVariants } from "@/components/ui/button"
 
 function Pagination({ className, ...props }: React.ComponentProps<"nav">) {
-  const t = useTranslations("aria")
-
   return (
     <nav
       role="navigation"
-      aria-label={t("pagination")}
+      aria-label="pagination"
       data-slot="pagination"
       className={cn("mx-auto flex w-full justify-center", className)}
       {...props}
@@ -53,11 +50,9 @@ function PaginationLink({ className, isActive, size = "icon", ...props }: Pagina
 }
 
 function PaginationPrevious({ className, ...props }: React.ComponentProps<typeof PaginationLink>) {
-  const t = useTranslations("aria")
-
   return (
     <PaginationLink
-      aria-label={t("previousPage")}
+      aria-label="Go to previous page"
       size="default"
       className={cn("gap-1 px-2.5 sm:pl-2.5", className)}
       {...props}
@@ -69,11 +64,9 @@ function PaginationPrevious({ className, ...props }: React.ComponentProps<typeof
 }
 
 function PaginationNext({ className, ...props }: React.ComponentProps<typeof PaginationLink>) {
-  const t = useTranslations("aria")
-
   return (
     <PaginationLink
-      aria-label={t("nextPage")}
+      aria-label="Go to next page"
       size="default"
       className={cn("gap-1 px-2.5 sm:pr-2.5", className)}
       {...props}
@@ -85,8 +78,6 @@ function PaginationNext({ className, ...props }: React.ComponentProps<typeof Pag
 }
 
 function PaginationEllipsis({ className, ...props }: React.ComponentProps<"span">) {
-  const t = useTranslations("aria")
-
   return (
     <span
       aria-hidden
@@ -95,7 +86,7 @@ function PaginationEllipsis({ className, ...props }: React.ComponentProps<"span"
       {...props}
     >
       <MoreHorizontalIcon className="size-4" />
-      <span className="sr-only">{t("morePages")}</span>
+      <span className="sr-only">More pages</span>
     </span>
   )
 }

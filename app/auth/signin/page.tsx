@@ -1,11 +1,14 @@
 import { SignInForm } from "@/components/auth/sign-in-form"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
-import { getLocalizedMetadata } from "@/lib/i18n/metadata"
-import { getTranslations } from "next-intl/server"
+import { getTranslations } from "@/lib/i18n/server"
 
 export async function generateMetadata() {
-  return await getLocalizedMetadata("signInTitle", "signInDescription")
+  const t = await getTranslations("metadata")
+  return {
+    title: t("signInTitle"),
+    description: t("signInDescription"),
+  }
 }
 
 const isAuthConfigured = !!(
