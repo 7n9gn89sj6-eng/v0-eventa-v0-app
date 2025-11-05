@@ -1,5 +1,12 @@
 import nodemailer from "nodemailer"
 
+console.log("[v0] Email configuration check:")
+console.log("[v0] EMAIL_SERVER_HOST:", process.env.EMAIL_SERVER_HOST ? "✓ Set" : "✗ Missing")
+console.log("[v0] EMAIL_SERVER_PORT:", process.env.EMAIL_SERVER_PORT ? "✓ Set" : "✗ Missing")
+console.log("[v0] EMAIL_SERVER_USER:", process.env.EMAIL_SERVER_USER ? "✓ Set" : "✗ Missing")
+console.log("[v0] EMAIL_SERVER_PASSWORD:", process.env.EMAIL_SERVER_PASSWORD ? "✓ Set" : "✗ Missing")
+console.log("[v0] EMAIL_FROM:", process.env.EMAIL_FROM ? "✓ Set" : "✗ Missing")
+
 const isEmailConfigured = !!(
   process.env.EMAIL_SERVER_HOST?.trim() &&
   process.env.EMAIL_SERVER_PORT?.trim() &&
@@ -7,6 +14,8 @@ const isEmailConfigured = !!(
   process.env.EMAIL_SERVER_PASSWORD?.trim() &&
   process.env.EMAIL_FROM?.trim()
 )
+
+console.log("[v0] Email configured:", isEmailConfigured ? "✓ YES" : "✗ NO")
 
 let transporter: nodemailer.Transporter | null = null
 
@@ -19,6 +28,7 @@ if (isEmailConfigured) {
       pass: process.env.EMAIL_SERVER_PASSWORD,
     },
   })
+  console.log("[v0] Nodemailer transporter created successfully")
 }
 
 function escapeHtml(text: string): string {
