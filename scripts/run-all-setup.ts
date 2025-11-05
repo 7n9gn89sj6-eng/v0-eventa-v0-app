@@ -11,7 +11,7 @@ async function runSetup() {
     console.log("[v0] ✓ pgvector enabled")
 
     console.log("[v0] Creating enum types...")
-    await sql`CREATE TYPE "EventStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'ARCHIVED')`
+    await sql`CREATE TYPE IF NOT EXISTS "EventStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'ARCHIVED')`
     console.log("[v0] ✓ Enum types created")
 
     console.log("[v0] Creating database tables...")
@@ -155,16 +155,24 @@ async function runSetup() {
     `
     console.log("[v0] ✓ Indexes created")
 
-    // Clear existing sample events (optional - remove if you want to keep existing data)
+    console.log("[v0] Creating system user for sample events...")
+    const systemUserId = "system-sample-events"
+    await sql`
+      INSERT INTO "User" ("id", "email", "name", "isVerified", "createdAt", "updatedAt")
+      VALUES (${systemUserId}, 'system@eventa.app', 'System', true, NOW(), NOW())
+      ON CONFLICT ("id") DO NOTHING
+    `
+    console.log("[v0] ✓ System user created")
+
     console.log("[v0] Clearing existing sample events...")
-    await sql`DELETE FROM "Event" WHERE "organizerEmail" LIKE '%@example.com'`
+    await sql`DELETE FROM "Event" WHERE "createdById" = ${systemUserId}`
     console.log("[v0] ✓ Existing sample events cleared")
 
-    // Seed sample events
     console.log("[v0] Seeding sample events...")
 
     const events = [
       {
+        id: "sample-melbourne-food-wine",
         title: "Melbourne Food & Wine Festival",
         description:
           "Annual celebration of Melbourne's vibrant food and wine culture with tastings, masterclasses, and special dinners.",
@@ -176,15 +184,15 @@ async function runSetup() {
         endAt: new Date("2025-03-15T23:00:00+11:00"),
         categories: ["Food & Drink", "Festival"],
         languages: ["English"],
-        organizerName: "Melbourne Food & Wine",
-        organizerEmail: "info@melbournefoodandwine.com.au",
         status: "PUBLISHED",
+        priceFree: false,
         searchText:
           "Melbourne Food & Wine Festival Annual celebration food wine culture tastings masterclasses dinners Various Venues Multiple locations Melbourne Food & Drink Festival English",
         searchTextFolded:
           "melbourne food wine festival annual celebration food wine culture tastings masterclasses dinners various venues multiple locations melbourne food drink festival english",
       },
       {
+        id: "sample-sydney-opera-boheme",
         title: "Sydney Opera House: La Bohème",
         description: "Puccini's timeless opera performed by Opera Australia at the iconic Sydney Opera House.",
         venueName: "Sydney Opera House",
@@ -195,15 +203,15 @@ async function runSetup() {
         endAt: new Date("2025-02-20T22:30:00+11:00"),
         categories: ["Music", "Arts & Culture"],
         languages: ["Italian", "English"],
-        organizerName: "Opera Australia",
-        organizerEmail: "tickets@opera.org.au",
         status: "PUBLISHED",
+        priceFree: false,
         searchText:
           "Sydney Opera House La Bohème Puccini timeless opera Opera Australia iconic Sydney Opera House Bennelong Point Sydney Music Arts Culture Italian English",
         searchTextFolded:
           "sydney opera house la boheme puccini timeless opera opera australia iconic sydney opera house bennelong point sydney music arts culture italian english",
       },
       {
+        id: "sample-brisbane-tech-summit",
         title: "Brisbane Tech Summit 2025",
         description:
           "Leading technology conference featuring keynotes from industry experts, workshops, and networking opportunities.",
@@ -215,15 +223,15 @@ async function runSetup() {
         endAt: new Date("2025-04-12T17:00:00+10:00"),
         categories: ["Technology", "Business"],
         languages: ["English"],
-        organizerName: "Tech Summit Australia",
-        organizerEmail: "contact@techsummit.com.au",
         status: "PUBLISHED",
+        priceFree: false,
         searchText:
           "Brisbane Tech Summit 2025 technology conference keynotes industry experts workshops networking Brisbane Convention Centre South Brisbane Technology Business English",
         searchTextFolded:
           "brisbane tech summit 2025 technology conference keynotes industry experts workshops networking brisbane convention centre south brisbane technology business english",
       },
       {
+        id: "sample-perth-fringe",
         title: "Perth Fringe Festival",
         description:
           "Western Australia's biggest arts festival featuring comedy, cabaret, music, theatre, and visual arts.",
@@ -235,15 +243,15 @@ async function runSetup() {
         endAt: new Date("2025-02-16T23:59:00+08:00"),
         categories: ["Arts & Culture", "Festival", "Music"],
         languages: ["English"],
-        organizerName: "Fringe World",
-        organizerEmail: "info@fringeworld.com.au",
         status: "PUBLISHED",
+        priceFree: true,
         searchText:
           "Perth Fringe Festival Western Australia arts festival comedy cabaret music theatre visual arts Multiple Venues Perth Arts Culture Festival Music English",
         searchTextFolded:
           "perth fringe festival western australia arts festival comedy cabaret music theatre visual arts multiple venues perth arts culture festival music english",
       },
       {
+        id: "sample-adelaide-writers",
         title: "Adelaide Writers' Week",
         description:
           "Free literary festival in Pioneer Women's Memorial Garden featuring local and international authors.",
@@ -255,9 +263,8 @@ async function runSetup() {
         endAt: new Date("2025-03-06T17:00:00+10:30"),
         categories: ["Arts & Culture", "Literature"],
         languages: ["English"],
-        organizerName: "Adelaide Festival",
-        organizerEmail: "info@adelaidefestival.com.au",
         status: "PUBLISHED",
+        priceFree: true,
         searchText:
           "Adelaide Writers Week Free literary festival Pioneer Women Memorial Garden local international authors King William Road Adelaide Arts Culture Literature English",
         searchTextFolded:
@@ -268,17 +275,16 @@ async function runSetup() {
     for (const event of events) {
       await sql`
         INSERT INTO "Event" (
-          "title", "description", "venueName", "address", "city", "country",
-          "startAt", "endAt", "categories", "languages",
-          "organizerName", "organizerEmail", "status",
-          "searchText", "searchTextFolded", "createdAt", "updatedAt"
+          "id", "title", "description", "venueName", "address", "city", "country",
+          "startAt", "endAt", "categories", "languages", "status", "priceFree",
+          "searchText", "searchTextFolded", "createdById", "createdAt", "updatedAt"
         ) VALUES (
-          ${event.title}, ${event.description}, ${event.venueName}, ${event.address},
+          ${event.id}, ${event.title}, ${event.description}, ${event.venueName}, ${event.address},
           ${event.city}, ${event.country}, ${event.startAt}, ${event.endAt},
-          ${event.categories}, ${event.languages}, ${event.organizerName},
-          ${event.organizerEmail}, ${event.status}, ${event.searchText},
-          ${event.searchTextFolded}, NOW(), NOW()
+          ${event.categories}, ${event.languages}, ${event.status}, ${event.priceFree},
+          ${event.searchText}, ${event.searchTextFolded}, ${systemUserId}, NOW(), NOW()
         )
+        ON CONFLICT ("id") DO NOTHING
       `
     }
 
