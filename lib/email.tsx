@@ -135,7 +135,7 @@ This code will expire in 20 minutes. If you didn't submit an event, you can safe
 }
 
 export async function sendEventEditLinkEmail(to: string, eventTitle: string, eventId: string, token: string) {
-  const baseUrl = process.env.APP_BASE_URL ?? "http://localhost:3000"
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
   const editUrl = `${baseUrl}/edit/${eventId}?token=${encodeURIComponent(token)}`
   const subject = `Edit link for "${escapeHtml(eventTitle)}"`
 
