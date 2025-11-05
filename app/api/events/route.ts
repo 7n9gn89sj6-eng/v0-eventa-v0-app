@@ -7,8 +7,6 @@ import { createSearchTextFolded } from "@/lib/search/accent-fold"
 import { createEventEditToken } from "@/lib/eventEditToken"
 import { sendEventEditLinkEmail } from "@/lib/email"
 import { ok, fail, validationError } from "@/lib/http"
-import { ratelimit, strictRatelimit } from "@/lib/rate-limit"
-import { sanitizeString, isValidCategory, isValidUrl } from "@/lib/sanitize"
 
 const EventCreate = z.object({
   title: z.string().min(3).max(120),
@@ -25,25 +23,12 @@ const EventCreate = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    const ip = request.ip ?? "127.0.0.1"
-    const { success } = await ratelimit.limit(ip)
-
-    if (!success) {
-      return fail("Too many requests", 429)
-    }
-
     const searchParams = request.nextUrl.searchParams
     const category = searchParams.get("category")
     const free = searchParams.get("free")
-    const limit = Math.min(Number.parseInt(searchParams.get("limit") || "50"), 100)
+    const limit = Number.parseInt(searchParams.get("limit") || "50")
 
-    if (category && !isValidCategory(category)) {
-      return fail("Invalid category parameter", 400)
-    }
-
-    const where: any = {
-      status: "PUBLISHED",
-    }
+    const where: any = {}
 
     if (category) {
       where.categories = {
@@ -57,24 +42,13 @@ export async function GET(request: NextRequest) {
 
     const events = await prisma.event.findMany({
       where,
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        startAt: true,
-        endAt: true,
-        timezone: true,
-        venueName: true,
-        address: true,
-        lat: true,
-        lng: true,
-        priceFree: true,
-        priceAmount: true,
-        websiteUrl: true,
-        categories: true,
-        imageUrls: true,
-        createdAt: true,
-        // Don't expose creator email or sensitive data
+      include: {
+        createdBy: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
       },
       orderBy: {
         startAt: "asc",
@@ -91,20 +65,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const ip = request.ip ?? "127.0.0.1"
-    const { success } = await strictRatelimit.limit(ip)
-
-    if (!success) {
-      return fail("Too many requests. Please wait before creating another event.", 429)
-    }
-
     const user = await requireAuth()
     const body = await request.json()
-
-    const bodyString = JSON.stringify(body)
-    if (bodyString.length > 50000) {
-      return fail("Request body too large", 413)
-    }
 
     const data = EventCreate.parse(body)
 
@@ -112,16 +74,7 @@ export async function POST(request: NextRequest) {
       return fail("endAt must be after startAt", 400)
     }
 
-    const title = sanitizeString(data.title, 120)
-    const description = data.description ? sanitizeString(data.description, 5000) : ""
-
-    const categories = data.categories?.filter(isValidCategory) || []
-
-    const imageUrls = data.images?.filter(isValidUrl) || []
-
-    const websiteUrl = data.url && isValidUrl(data.url) ? data.url : undefined
-
-    const { startAt, endAt } = data
+    const { title, description, categories, startAt, endAt } = data
 
     let lat: number | undefined = data.lat
     let lng: number | undefined = data.lng
@@ -130,10 +83,7 @@ export async function POST(request: NextRequest) {
     let address: string | undefined
 
     if (body.address) {
-      if (body.address.length > 500) {
-        return fail("Address too long", 400)
-      }
-      address = sanitizeString(body.address, 500)
+      address = body.address
       const geocoded = await geocodeAddress(address)
       if (geocoded) {
         lat = geocoded.lat
@@ -142,31 +92,27 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (body.venueName) {
-      venueName = sanitizeString(body.venueName, 200)
-    }
-
-    const searchParts = [title, description, venueName, address, ...categories, ...(body.languages || [])]
+    const searchParts = [title, description, venueName, address, ...(categories || []), ...(body.languages || [])]
     const searchText = searchParts.filter(Boolean).join(" ")
     const searchTextFolded = createSearchTextFolded(searchParts)
 
     const event = await prisma.event.create({
       data: {
         title,
-        description,
-        categories,
+        description: description || "",
+        categories: categories || [],
         startAt: new Date(startAt),
         endAt: new Date(endAt),
         timezone: body.timezone || "UTC",
-        venueName,
+        venueName: body.venueName,
         address: geocodedAddress || address,
         lat,
         lng,
         priceFree: body.priceFree ?? false,
         priceAmount: body.priceAmount ? Number.parseInt(body.priceAmount) : null,
-        websiteUrl: websiteUrl || body.websiteUrl,
+        websiteUrl: data.url || body.websiteUrl,
         languages: body.languages || ["en"],
-        imageUrls,
+        imageUrls: data.images || body.imageUrls || [],
         searchText,
         searchTextFolded,
         createdById: user.id!,
@@ -190,9 +136,12 @@ export async function POST(request: NextRequest) {
       if (recipientEmail) {
         await sendEventEditLinkEmail(recipientEmail, event.title, event.id, token)
         emailedEditLink = true
+        console.log(`[v0] Edit link email sent to ${recipientEmail} for event ${event.id}`)
+      } else {
+        console.warn(`[v0] No recipient email available for event ${event.id}`)
       }
     } catch (emailError) {
-      console.error("Failed to send edit link email:", emailError)
+      console.error("[v0] Failed to send edit link email:", emailError)
     }
 
     return NextResponse.json({ event, emailedEditLink }, { status: 201 })

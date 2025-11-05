@@ -47,18 +47,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Query parameter 'q' is required" }, { status: 400 })
     }
 
-    if (query.length > 200) {
-      return NextResponse.json({ error: "Query too long (max 200 characters)" }, { status: 400 })
-    }
-
-    if (city && city.length > 100) {
-      return NextResponse.json({ error: "City parameter too long" }, { status: 400 })
-    }
-
-    if (country && country.length > 100) {
-      return NextResponse.json({ error: "Country parameter too long" }, { status: 400 })
-    }
-
     let internalEvents = []
     let dbError = false
 
@@ -75,17 +63,13 @@ export async function GET(request: NextRequest) {
           ...(city && { city: { contains: city, mode: "insensitive" } }),
           ...(country && { country: { contains: country, mode: "insensitive" } }),
         },
-        select: {
-          id: true,
-          title: true,
-          description: true,
-          startAt: true,
-          endAt: true,
-          locationAddress: true,
-          city: true,
-          country: true,
-          imageUrl: true,
-          externalUrl: true,
+        include: {
+          createdBy: {
+            select: {
+              name: true,
+              email: true,
+            },
+          },
         },
         orderBy: {
           startAt: "asc",
@@ -140,8 +124,8 @@ export async function GET(request: NextRequest) {
       ...(dbError && { warning: "Internal search temporarily unavailable" }),
     }
 
-    console.log("[v0] Search completed:", {
-      query_length: query.length,
+    console.log("[v0] Search results:", {
+      query,
       internal_count: internalEvents.length,
       external_count: externalEvents.length,
       tier1_latency_ms: tier1Latency,

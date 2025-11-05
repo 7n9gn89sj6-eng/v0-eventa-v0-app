@@ -3,9 +3,9 @@
 import type React from "react"
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react"
 import { Search, Mic, MicOff, Loader2, Sparkles, RotateCcw, Volume2, VolumeX } from "lucide-react"
-import { Button } from "../ui/button"
-import { Alert, AlertDescription } from "../ui/alert"
-import { speak, stopSpeaking } from "../../lib/tts"
+import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { speak, stopSpeaking } from "@/lib/tts"
 
 interface AISearchBarProps {
   onSearch?: (results: any[], paraphrase: string) => void
@@ -66,6 +66,7 @@ export const AISearchBar = forwardRef<AISearchBarRef, AISearchBarProps>(({ onSea
       }
 
       recognitionRef.current.onerror = (event: any) => {
+        console.error("[v0] Speech recognition error:", event.error)
         setIsListening(false)
         if (event.error === "not-allowed") {
           setFeedback("I didn't catch that—try again or use the keyboard.")
@@ -118,6 +119,8 @@ export const AISearchBar = forwardRef<AISearchBarRef, AISearchBarProps>(({ onSea
     setIntent(null)
 
     try {
+      console.log("[v0] Starting search with query:", query)
+
       const intentResponse = await fetch("/api/search/intent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -130,6 +133,7 @@ export const AISearchBar = forwardRef<AISearchBarRef, AISearchBarProps>(({ onSea
       })
 
       const intentData = await intentResponse.json()
+      console.log("[v0] Intent response:", intentData)
 
       if (intentData.paraphrase) {
         setParaphrase(intentData.paraphrase)
@@ -159,6 +163,7 @@ export const AISearchBar = forwardRef<AISearchBarRef, AISearchBarProps>(({ onSea
         })
 
         const searchData = await searchResponse.json()
+        console.log("[v0] Search response:", searchData)
 
         if (searchData.errors?.internal && searchData.errors?.external) {
           setFeedback("We couldn't fetch results right now. Please try again.")
@@ -169,20 +174,24 @@ export const AISearchBar = forwardRef<AISearchBarRef, AISearchBarProps>(({ onSea
             setFeedback("No results found. Try different keywords or create your own event.")
           } else {
             setFeedback("")
+            console.log("[v0] Calling onSearch with results:", searchData.results.length)
             if (onSearch) onSearch(searchData.results, intentData.paraphrase)
           }
         } else if (searchData.errors?.external) {
           setFeedback("Some web sources aren't responding. Showing what we have.")
+          console.log("[v0] Calling onSearch with results:", searchData.results.length)
           if (onSearch) onSearch(searchData.results, intentData.paraphrase)
         } else if (searchData.count === 0) {
           setFeedback("No results found. Try different keywords or create your own event.")
         } else {
           setFeedback("")
+          console.log("[v0] Calling onSearch with results:", searchData.results.length)
           if (onSearch) onSearch(searchData.results, intentData.paraphrase)
         }
       }
     } catch (error) {
-      console.error("Search error:", error)
+      console.error("[v0] Search error:", error)
+      console.error("[v0] ERR_PUBLISH_UI:", error)
       setFeedback("Something went wrong showing results.")
       if (onError) onError("Something went wrong showing results.")
     } finally {

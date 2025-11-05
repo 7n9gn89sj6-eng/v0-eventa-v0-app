@@ -7,6 +7,7 @@
     "postbuild": "tsx scripts/run-all-setup.ts",
     "build:ci": "next build && npm run typecheck && npm run lint",
     "build:local": "next build",
+    "db:bootstrap": "tsx scripts/run-database-setup.ts",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:push": "prisma db push",
@@ -42,14 +43,14 @@
     "@radix-ui/react-dialog": "^1.1.4",
     "@radix-ui/react-dropdown-menu": "^2.1.4",
     "@radix-ui/react-hover-card": "^1.1.4",
-    "@radix-ui/react-label": "latest",
+    "@radix-ui/react-label": "^2.1.1",
     "@radix-ui/react-menubar": "^1.1.4",
     "@radix-ui/react-navigation-menu": "^1.2.3",
     "@radix-ui/react-popover": "^1.1.4",
     "@radix-ui/react-progress": "^1.1.1",
     "@radix-ui/react-radio-group": "^1.2.2",
     "@radix-ui/react-scroll-area": "^1.2.2",
-    "@radix-ui/react-select": "latest",
+    "@radix-ui/react-select": "^2.1.4",
     "@radix-ui/react-separator": "^1.1.1",
     "@radix-ui/react-slider": "^1.2.2",
     "@radix-ui/react-slot": "latest",
@@ -62,7 +63,7 @@
     "@types/debug": "latest",
     "@upstash/ratelimit": "latest",
     "@upstash/redis": "latest",
-    "@vercel/analytics": "latest",
+    "@vercel/analytics": "^1.4.1",
     "@vitest/browser-playwright": "latest",
     "@vitest/browser-preview": "latest",
     "@vitest/browser-webdriverio": "latest",
@@ -116,5 +117,8 @@
     "typescript": "^5",
     "vitest": "^2.1.8",
     "wait-on": "^8.0.1"
+  },
+  "engines": {
+    "node": "22.x || >=22"
   }
 }

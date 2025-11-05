@@ -3,11 +3,16 @@
 import type React from "react"
 
 import { Loader2Icon } from "lucide-react"
+import { useTranslations } from "@/lib/i18n/context"
 
 import { cn } from "@/lib/utils"
 
 function Spinner({ className, ...props }: React.ComponentProps<"svg">) {
-  return <Loader2Icon role="status" aria-label="Loading" className={cn("size-4 animate-spin", className)} {...props} />
+  const t = useTranslations("aria")
+
+  return (
+    <Loader2Icon role="status" aria-label={t("loading")} className={cn("size-4 animate-spin", className)} {...props} />
+  )
 }
 
 export { Spinner }

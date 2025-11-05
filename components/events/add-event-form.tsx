@@ -4,12 +4,12 @@ import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { Button } from "../ui/button"
-import { Input } from "../ui/input"
-import { Textarea } from "../ui/textarea"
-import { Card, CardContent } from "../ui/card"
-import { Alert, AlertDescription } from "../ui/alert"
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "../ui/form"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Card, CardContent } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form"
 import { Loader2, CheckCircle2, Sparkles } from "lucide-react"
 
 const addEventSchema = z
@@ -111,7 +111,9 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
           // Set end time to 2 hours after start
           const endDate = new Date(date.getTime() + 2 * 60 * 60 * 1000)
           form.setValue("endAt", endDate.toISOString().slice(0, 16))
-        } catch (e) {}
+        } catch (e) {
+          console.error("[v0] Failed to parse date:", e)
+        }
       }
     }
   }, [initialData, form])
@@ -121,6 +123,8 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
     setError(null)
 
     try {
+      console.log("[v0] Submitting event data:", data)
+
       const response = await fetch("/api/events/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -129,6 +133,7 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
 
       if (!response.ok) {
         const errorData = await response.json()
+        console.error("[v0] Event submission failed:", errorData)
 
         // Show validation errors if available
         if (errorData.details && Array.isArray(errorData.details)) {
@@ -140,11 +145,12 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
       }
 
       const result = await response.json()
+      console.log("[v0] Event submitted successfully:", result)
 
       setIsSuccess(true)
       form.reset()
     } catch (err: any) {
-      console.error("Error in form submission:", err)
+      console.error("[v0] Error in form submission:", err)
       setError(err.message || "An unexpected error occurred")
     } finally {
       setIsSubmitting(false)

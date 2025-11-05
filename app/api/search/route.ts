@@ -5,18 +5,9 @@ import { searchDatabase } from "@/lib/search/database-search"
 import { searchWeb, deduplicateResults } from "@/lib/search/web-search"
 import type { SearchResponse } from "@/lib/types"
 import { ok, fail } from "@/lib/http"
-import { ratelimit } from "@/lib/rate-limit"
-import { sanitizeString } from "@/lib/sanitize"
 
 export async function POST(request: NextRequest) {
   try {
-    const ip = request.ip ?? "127.0.0.1"
-    const { success } = await ratelimit.limit(ip)
-
-    if (!success) {
-      return fail("Too many requests", 429)
-    }
-
     const body = await request.json()
     const { query, userLat, userLng, uiLang, filters, includeWeb = false } = body
 
@@ -24,15 +15,13 @@ export async function POST(request: NextRequest) {
       return fail("Query is required", 400)
     }
 
-    const sanitizedQuery = sanitizeString(query, 500)
+    console.log("[v0] Search request:", { query, userLat, userLng, filters, includeWeb })
 
-    if (sanitizedQuery.length < 2) {
-      return fail("Query too short", 400)
-    }
+    const langDetected = detectLanguage(query)
+    console.log("[v0] Detected language:", langDetected)
 
-    const langDetected = detectLanguage(sanitizedQuery)
-
-    const normalized = normalizeQuery(sanitizedQuery, langDetected)
+    const normalized = normalizeQuery(query, langDetected)
+    console.log("[v0] Normalized query:", normalized)
 
     const key = process.env.GOOGLE_API_KEY
     const cx = process.env.GOOGLE_PSE_ID
@@ -49,17 +38,22 @@ export async function POST(request: NextRequest) {
       limit: 20,
     })
 
+    console.log("[v0] Found", eventaResults.length, "Eventa results")
+
     let webResults: any[] = []
     const shouldSearchWeb = canWeb && (includeWeb || eventaResults.length < 6)
 
     if (shouldSearchWeb) {
+      console.log("[v0] Searching web...")
       webResults = await searchWeb({
         query: normalized.normalized,
         limit: 10,
       })
+      console.log("[v0] Found", webResults.length, "web results")
     }
 
     const allResults = deduplicateResults(eventaResults, webResults)
+    console.log("[v0] Total results after deduplication:", allResults.length)
 
     const response: SearchResponse = {
       results: allResults,
