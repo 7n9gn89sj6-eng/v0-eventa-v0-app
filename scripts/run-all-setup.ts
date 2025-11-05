@@ -6,19 +6,27 @@ async function runSetup() {
   console.log("[v0] Starting complete database setup...")
 
   try {
+    console.log("[v0] Enabling pgvector extension...")
+    await sql`CREATE EXTENSION IF NOT EXISTS vector`
+    console.log("[v0] ✓ pgvector enabled")
+
+    console.log("[v0] Creating enum types...")
+    await sql`CREATE TYPE "EventStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'ARCHIVED')`
+    console.log("[v0] ✓ Enum types created")
+
     console.log("[v0] Creating database tables...")
 
-    // Create User table
     await sql`
       CREATE TABLE IF NOT EXISTS "User" (
-        "id" TEXT NOT NULL PRIMARY KEY,
+        "id" TEXT PRIMARY KEY,
+        "email" TEXT UNIQUE NOT NULL,
         "name" TEXT,
-        "email" TEXT UNIQUE,
-        "emailVerified" TIMESTAMP(3),
+        "isVerified" BOOLEAN DEFAULT false NOT NULL,
+        "emailVerified" TIMESTAMP,
         "image" TEXT,
-        "isAdmin" BOOLEAN NOT NULL DEFAULT false,
-        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+        "isAdmin" BOOLEAN DEFAULT false NOT NULL,
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
       )
     `
 
@@ -63,67 +71,80 @@ async function runSetup() {
       )
     `
 
-    // Create EmailVerification table
+    // Updated EmailVerification table
     await sql`
       CREATE TABLE IF NOT EXISTS "EmailVerification" (
-        "id" TEXT NOT NULL PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "id" TEXT PRIMARY KEY,
+        "userId" TEXT NOT NULL,
         "email" TEXT NOT NULL,
-        "token" TEXT NOT NULL UNIQUE,
-        "expires" TIMESTAMP(3) NOT NULL,
-        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+        "code" TEXT NOT NULL,
+        "expiresAt" TIMESTAMP NOT NULL,
+        "consumedAt" TIMESTAMP,
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        CONSTRAINT "EmailVerification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE
       )
     `
 
-    // Create Event table
     await sql`
       CREATE TABLE IF NOT EXISTS "Event" (
-        "id" TEXT NOT NULL PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "id" TEXT PRIMARY KEY,
         "title" TEXT NOT NULL,
         "description" TEXT NOT NULL,
-        "venueName" TEXT NOT NULL,
-        "address" TEXT NOT NULL,
+        "startAt" TIMESTAMP NOT NULL,
+        "endAt" TIMESTAMP NOT NULL,
+        "locationAddress" TEXT,
         "city" TEXT NOT NULL,
         "country" TEXT NOT NULL,
-        "startAt" TIMESTAMP(3) NOT NULL,
-        "endAt" TIMESTAMP(3) NOT NULL,
-        "categories" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
-        "languages" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
         "imageUrl" TEXT,
         "externalUrl" TEXT,
-        "organizerName" TEXT NOT NULL,
-        "organizerEmail" TEXT NOT NULL,
-        "status" TEXT NOT NULL DEFAULT 'PENDING',
+        "status" "EventStatus" DEFAULT 'DRAFT' NOT NULL,
+        "categories" TEXT[] DEFAULT '{}' NOT NULL,
+        "timezone" TEXT DEFAULT 'UTC' NOT NULL,
+        "venueName" TEXT,
+        "address" TEXT,
+        "lat" DOUBLE PRECISION,
+        "lng" DOUBLE PRECISION,
+        "priceFree" BOOLEAN DEFAULT false NOT NULL,
+        "priceAmount" INTEGER,
+        "websiteUrl" TEXT,
+        "languages" TEXT[] DEFAULT '{}' NOT NULL,
+        "imageUrls" TEXT[] DEFAULT '{}' NOT NULL,
+        "createdById" TEXT NOT NULL,
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
         "searchText" TEXT NOT NULL DEFAULT '',
-        "searchTextFolded" TEXT NOT NULL DEFAULT '',
-        "archived" BOOLEAN NOT NULL DEFAULT false,
-        "createdBy" TEXT,
-        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT "Event_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE
+        "searchTextFolded" TEXT,
+        "embedding" vector(1536),
+        CONSTRAINT "Event_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE CASCADE
       )
     `
 
     // Create EventEditToken table
     await sql`
       CREATE TABLE IF NOT EXISTS "EventEditToken" (
-        "id" TEXT NOT NULL PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        "id" TEXT PRIMARY KEY,
         "eventId" TEXT NOT NULL,
-        "tokenHash" TEXT NOT NULL UNIQUE,
-        "expiresAt" TIMESTAMP(3) NOT NULL,
-        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT "EventEditToken_eventId_fkey" FOREIGN KEY ("eventId") REFERENCES "Event"("id") ON DELETE CASCADE ON UPDATE CASCADE
+        "tokenHash" TEXT UNIQUE NOT NULL,
+        "expires" TIMESTAMP NOT NULL,
+        "usedAt" TIMESTAMP,
+        "createdAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        CONSTRAINT "EventEditToken_eventId_fkey" FOREIGN KEY ("eventId") REFERENCES "Event"("id") ON DELETE CASCADE
       )
     `
 
     console.log("[v0] ✓ Database tables created")
 
-    // 1. Enable pgvector extension
-    console.log("[v0] Enabling pgvector extension...")
-    await sql`CREATE EXTENSION IF NOT EXISTS vector`
-    console.log("[v0] ✓ pgvector enabled")
+    console.log("[v0] Creating indexes...")
+    await sql`CREATE INDEX IF NOT EXISTS "EmailVerification_userId_idx" ON "EmailVerification"("userId")`
+    await sql`CREATE INDEX IF NOT EXISTS "EmailVerification_email_idx" ON "EmailVerification"("email")`
+    await sql`CREATE INDEX IF NOT EXISTS "Event_city_country_startAt_idx" ON "Event"("city", "country", "startAt")`
+    await sql`CREATE INDEX IF NOT EXISTS "Event_startAt_idx" ON "Event"("startAt")`
+    await sql`CREATE INDEX IF NOT EXISTS "Event_categories_idx" ON "Event"("categories")`
+    await sql`CREATE INDEX IF NOT EXISTS "Event_lat_lng_idx" ON "Event"("lat", "lng")`
+    await sql`CREATE INDEX IF NOT EXISTS "Event_status_idx" ON "Event"("status")`
+    await sql`CREATE INDEX IF NOT EXISTS "EventEditToken_eventId_idx" ON "EventEditToken"("eventId")`
+    await sql`CREATE INDEX IF NOT EXISTS "EventEditToken_tokenHash_idx" ON "EventEditToken"("tokenHash")`
 
-    // 2. Create search indexes
-    console.log("[v0] Creating search indexes...")
     await sql`
       CREATE INDEX IF NOT EXISTS idx_event_search 
       ON "Event" USING gin(to_tsvector('simple', "searchText"))
@@ -132,22 +153,14 @@ async function runSetup() {
       CREATE INDEX IF NOT EXISTS idx_event_search_folded 
       ON "Event" USING gin(to_tsvector('simple', "searchTextFolded"))
     `
-    await sql`
-      CREATE INDEX IF NOT EXISTS idx_event_dates 
-      ON "Event"("startAt", "endAt")
-    `
-    await sql`
-      CREATE INDEX IF NOT EXISTS idx_event_location 
-      ON "Event"("city", "country")
-    `
-    console.log("[v0] ✓ Search indexes created")
+    console.log("[v0] ✓ Indexes created")
 
-    // 3. Clear existing sample events (optional - remove if you want to keep existing data)
+    // Clear existing sample events (optional - remove if you want to keep existing data)
     console.log("[v0] Clearing existing sample events...")
     await sql`DELETE FROM "Event" WHERE "organizerEmail" LIKE '%@example.com'`
     console.log("[v0] ✓ Existing sample events cleared")
 
-    // 4. Seed sample events
+    // Seed sample events
     console.log("[v0] Seeding sample events...")
 
     const events = [
@@ -271,7 +284,7 @@ async function runSetup() {
 
     console.log("[v0] ✓ Sample events seeded")
 
-    // 5. Verify the data
+    // Verify the data
     const count = await sql`SELECT COUNT(*) as count FROM "Event" WHERE "status" = 'PUBLISHED'`
     console.log(`[v0] ✓ Database setup complete! ${count[0].count} published events in database`)
   } catch (error) {

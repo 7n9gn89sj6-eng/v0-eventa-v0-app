@@ -9,15 +9,24 @@ import { Calendar, MapPin, Globe, DollarSign, ExternalLink, CheckCircle2, Edit }
 import { DateTime } from "luxon"
 import Link from "next/link"
 import { useState } from "react"
+import { FavoriteButton } from "@/components/events/favorite-button"
+import { CalendarExportButton } from "@/components/events/calendar-export-button"
 
 interface EventDetailProps {
   event: Event & {
     createdBy: Pick<User, "name" | "email">
   }
   showSuccessBanner?: boolean
+  isFavorited?: boolean
+  hasSession?: boolean
 }
 
-export function EventDetail({ event, showSuccessBanner = false }: EventDetailProps) {
+export function EventDetail({
+  event,
+  showSuccessBanner = false,
+  isFavorited = false,
+  hasSession = false,
+}: EventDetailProps) {
   const [showBanner, setShowBanner] = useState(showSuccessBanner)
 
   const startDate = DateTime.fromJSDate(new Date(event.startAt)).setZone(event.timezone)
@@ -58,7 +67,13 @@ export function EventDetail({ event, showSuccessBanner = false }: EventDetailPro
       <Card>
         <CardHeader>
           <div className="space-y-4">
-            <h1 className="text-3xl font-bold tracking-tight text-balance">{event.title}</h1>
+            <div className="flex items-start justify-between gap-4">
+              <h1 className="text-3xl font-bold tracking-tight text-balance flex-1">{event.title}</h1>
+              <div className="flex gap-2 shrink-0">
+                {hasSession && <FavoriteButton eventId={event.id} initialIsFavorited={isFavorited} />}
+                <CalendarExportButton eventId={event.id} eventTitle={event.title} />
+              </div>
+            </div>
 
             <div className="flex flex-wrap gap-2">
               {event.categories.map((category) => (
@@ -71,7 +86,6 @@ export function EventDetail({ event, showSuccessBanner = false }: EventDetailPro
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {/* Date & Time */}
           <div className="flex items-start gap-3">
             <Calendar className="mt-0.5 h-5 w-5 text-muted-foreground" />
             <div>
@@ -80,7 +94,6 @@ export function EventDetail({ event, showSuccessBanner = false }: EventDetailPro
             </div>
           </div>
 
-          {/* Location */}
           {(event.venueName || event.address) && (
             <div className="flex items-start gap-3">
               <MapPin className="mt-0.5 h-5 w-5 text-muted-foreground" />
@@ -91,7 +104,6 @@ export function EventDetail({ event, showSuccessBanner = false }: EventDetailPro
             </div>
           )}
 
-          {/* Price */}
           <div className="flex items-start gap-3">
             <DollarSign className="mt-0.5 h-5 w-5 text-muted-foreground" />
             <div>
@@ -101,7 +113,6 @@ export function EventDetail({ event, showSuccessBanner = false }: EventDetailPro
             </div>
           </div>
 
-          {/* Languages */}
           <div className="flex items-start gap-3">
             <Globe className="mt-0.5 h-5 w-5 text-muted-foreground" />
             <div>
@@ -109,13 +120,11 @@ export function EventDetail({ event, showSuccessBanner = false }: EventDetailPro
             </div>
           </div>
 
-          {/* Description */}
           <div className="border-t pt-6">
             <h2 className="mb-3 text-xl font-semibold">About this event</h2>
             <p className="whitespace-pre-wrap text-muted-foreground leading-relaxed">{event.description}</p>
           </div>
 
-          {/* Website */}
           {event.websiteUrl && (
             <div className="border-t pt-6">
               <Button asChild>
@@ -126,8 +135,6 @@ export function EventDetail({ event, showSuccessBanner = false }: EventDetailPro
               </Button>
             </div>
           )}
-
-          {/* Organizer */}
         </CardContent>
       </Card>
     </div>

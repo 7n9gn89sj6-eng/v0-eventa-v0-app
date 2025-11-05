@@ -10,10 +10,9 @@ import { AISearchBar } from "@/components/search/ai-search-bar"
 import { ResultCard } from "@/components/search/result-card"
 import { DraftEventCard } from "@/components/events/draft-event-card"
 import { DraftsList } from "@/components/events/drafts-list"
-import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
-// import { useTranslations, useLocale } from "next-intl"
 import { speak, stopSpeaking } from "@/lib/tts"
+import { toast } from "@/hooks/use-toast"
 
 interface DraftEvent {
   id: string
@@ -39,12 +38,6 @@ export default function HomePage() {
   const [showDraftsList, setShowDraftsList] = useState(false)
   const [followUpQuestion, setFollowUpQuestion] = useState("")
   const [isSpeakingSearch, setIsSpeakingSearch] = useState(false)
-
-  const { toast } = useToast()
-  // const t = useTranslations("common")
-  // const tHome = useTranslations("home")
-  // const tToast = useTranslations("toast")
-
   const searchBarRef = useRef<{ setQuery: (q: string) => void } | null>(null)
 
   const handleSearch = (results: any[], paraphrase: string) => {
@@ -127,10 +120,7 @@ export default function HomePage() {
         title: "Draft Saved",
         description: `"${draft.title}" saved for ${new Date(draft.date).toLocaleDateString()} at ${draft.time} in ${draft.venue || draft.city}`,
       })
-
-      console.log("[v0] Draft saved:", newDraft)
     } catch (error) {
-      console.error("[v0] ERR_DRAFT_SAVE:", error)
       toast({
         title: "Error",
         description: "Failed to save draft. Please try again.",
@@ -222,6 +212,8 @@ export default function HomePage() {
           <p className="mb-8 text-lg text-muted-foreground text-balance">Find events or create your own.</p>
 
           <AISearchBar ref={searchBarRef} onSearch={handleSearch} onCreate={handleCreate} onError={handleError} />
+
+          <div className="mt-6">{/* SearchFiltersComponent removed */}</div>
 
           <div className="mt-8 flex flex-wrap justify-center gap-2">
             <p className="w-full text-sm text-muted-foreground mb-2">Try these examples:</p>

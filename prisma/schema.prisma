@@ -24,6 +24,7 @@ model User {
   emailVerifications  EmailVerification[]
   accounts            Account[]
   sessions            Session[]
+  favorites           Favorite[]
 }
 
 model Account {
@@ -119,6 +120,7 @@ model Event {
   embedding         Unsupported("vector(1536)")?
 
   editTokens      EventEditToken[]
+  favorites       Favorite[]
 
   @@index([city, country, startAt])
   @@index([startAt])
@@ -139,4 +141,18 @@ model EventEditToken {
   
   @@index([eventId])
   @@index([tokenHash])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  eventId   String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+  @@index([userId])
+  @@index([eventId])
 }
