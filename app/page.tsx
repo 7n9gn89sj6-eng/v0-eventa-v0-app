@@ -1,17 +1,17 @@
 "use client"
 
 import { useState, useRef } from "react"
-import { Button } from "@/components/ui/button"
+import { Button } from "../components/ui/button"
 import { Calendar, MapPin, Volume2, VolumeX } from "lucide-react"
-import { UserNav } from "@/components/auth/user-nav"
-import { VersionBadge } from "@/components/version-badge"
-import { AISearchBar } from "@/components/search/ai-search-bar"
-import { ResultCard } from "@/components/search/result-card"
-import { DraftEventCard } from "@/components/events/draft-event-card"
-import { DraftsList } from "@/components/events/drafts-list"
+import { UserNav } from "../components/auth/user-nav"
+import { VersionBadge } from "../components/version-badge"
+import { AISearchBar } from "../components/search/ai-search-bar"
+import { ResultCard } from "../components/search/result-card"
+import { DraftEventCard } from "../components/events/draft-event-card"
+import { DraftsList } from "../components/events/drafts-list"
 import Link from "next/link"
-import { speak, stopSpeaking } from "@/lib/tts"
-import { toast } from "@/hooks/use-toast"
+import { speak, stopSpeaking } from "../lib/tts"
+import { toast } from "../hooks/use-toast"
 
 interface DraftEvent {
   id: string
