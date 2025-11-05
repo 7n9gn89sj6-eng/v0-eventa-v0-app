@@ -100,18 +100,22 @@ export async function POST(request: NextRequest) {
 
     let emailedEditLink = false
     try {
+      console.log(`[v0] Attempting to send edit link email to ${validatedData.email}`)
       const token = await createEventEditToken(event.id, event.endAt)
+      console.log(`[v0] Edit token created: ${token.substring(0, 10)}...`)
       await sendEventEditLinkEmail(validatedData.email, event.title, event.id, token)
       emailedEditLink = true
-      console.log(`[v0] Edit link email sent to ${validatedData.email} for event ${event.id}`)
+      console.log(`[v0] ✓ Edit link email sent successfully to ${validatedData.email}`)
     } catch (emailError) {
-      console.error("[v0] Failed to send edit link email (non-fatal):", emailError)
+      console.error("[v0] ✗ Failed to send edit link email:", emailError)
+      console.error("[v0] Error details:", emailError instanceof Error ? emailError.message : String(emailError))
     }
 
     const code = Math.floor(100000 + Math.random() * 900000).toString()
     const hashedCode = await bcrypt.hash(code, 10)
     const expiresAt = new Date(Date.now() + 20 * 60 * 1000)
 
+    console.log(`[v0] Creating email verification record for user ${user.id}`)
     await db.emailVerification.create({
       data: {
         userId: user.id,
@@ -120,12 +124,16 @@ export async function POST(request: NextRequest) {
         expiresAt,
       },
     })
+    console.log(`[v0] ✓ Email verification record created`)
 
     try {
+      console.log(`[v0] Attempting to send verification email to ${user.email}`)
+      console.log(`[v0] Verification code: ${code}`)
       await sendVerificationEmail(user.email, code)
-      console.log("[v0] Verification email sent to:", user.email)
+      console.log(`[v0] ✓ Verification email sent successfully to ${user.email}`)
     } catch (emailError) {
-      console.error("[v0] Failed to send verification email (non-fatal):", emailError)
+      console.error("[v0] ✗ Failed to send verification email:", emailError)
+      console.error("[v0] Error details:", emailError instanceof Error ? emailError.message : String(emailError))
       console.log("[v0] Verification code for manual use:", code)
     }
 
