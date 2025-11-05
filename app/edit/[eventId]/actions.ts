@@ -9,13 +9,11 @@ export async function validateTokenAndGetEvent(eventId: string, token: string) {
   try {
     const tokenHash = hashToken(token)
 
-    // Check if token is valid
     const tokenResult = await sql`
       SELECT * FROM "EventEditToken"
       WHERE "eventId" = ${eventId}
       AND "tokenHash" = ${tokenHash}
       AND "expires" > NOW()
-      AND "usedAt" IS NULL
       LIMIT 1
     `
 
@@ -73,7 +71,7 @@ export async function updateEvent(eventId: string, token: string, data: EventFor
       WHERE id = ${eventId}
     `
 
-    // Mark token as used
+    // Update last used timestamp for tracking purposes
     await sql`
       UPDATE "EventEditToken"
       SET "usedAt" = NOW()
