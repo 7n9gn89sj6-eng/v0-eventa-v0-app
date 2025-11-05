@@ -1,5 +1,3 @@
-"use server"
-
 export async function hashToken(token: string): Promise<string> {
   const encoder = new TextEncoder()
   const data = encoder.encode(token)
