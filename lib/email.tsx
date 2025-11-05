@@ -20,15 +20,23 @@ console.log("[v0] Email configured:", isEmailConfigured ? "✓ YES" : "✗ NO")
 let transporter: nodemailer.Transporter | null = null
 
 if (isEmailConfigured) {
-  transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_SERVER_HOST,
-    port: Number(process.env.EMAIL_SERVER_PORT),
-    auth: {
-      user: process.env.EMAIL_SERVER_USER,
-      pass: process.env.EMAIL_SERVER_PASSWORD,
-    },
-  })
-  console.log("[v0] Nodemailer transporter created successfully")
+  try {
+    transporter = nodemailer.createTransport({
+      host: process.env.EMAIL_SERVER_HOST,
+      port: Number(process.env.EMAIL_SERVER_PORT),
+      secure: false,
+      auth: {
+        user: process.env.EMAIL_SERVER_USER,
+        pass: process.env.EMAIL_SERVER_PASSWORD,
+      },
+      logger: true,
+      debug: true,
+    })
+    console.log("[v0] Nodemailer transporter created successfully")
+  } catch (error) {
+    console.error("[v0] Failed to create email transporter:", error)
+    transporter = null
+  }
 }
 
 function escapeHtml(text: string): string {
