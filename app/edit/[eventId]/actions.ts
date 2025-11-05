@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache"
 
 export async function validateTokenAndGetEvent(eventId: string, token: string) {
   try {
-    const tokenHash = hashToken(token)
+    const tokenHash = await hashToken(token)
 
     const tokenResult = await sql`
       SELECT * FROM "EventEditToken"
@@ -56,8 +56,8 @@ export async function updateEvent(eventId: string, token: string, data: EventFor
       SET
         title = ${validatedData.title},
         description = ${validatedData.description},
-        "startAt" = ${validatedData.startAt}::timestamp,
-        "endAt" = ${validatedData.endAt ? `${validatedData.endAt}::timestamp` : null},
+        "startAt" = ${validatedData.startAt},
+        "endAt" = ${validatedData.endAt || null},
         "locationAddress" = ${validatedData.locationAddress || null},
         city = ${validatedData.city || null},
         country = ${validatedData.country || null},

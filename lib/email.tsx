@@ -1,26 +1,31 @@
+"use server"
+
 import { Resend } from "resend"
 import { sql } from "./db"
-import { randomBytes, createHash } from "crypto"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
 export function generateEditToken(): string {
-  return randomBytes(32).toString("hex")
+  return crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "")
 }
 
-export function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex")
+export async function hashToken(token: string): Promise<string> {
+  const encoder = new TextEncoder()
+  const data = encoder.encode(token)
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("")
 }
 
 export async function createEditTokenForEvent(eventId: string): Promise<string> {
   const token = generateEditToken()
-  const tokenHash = hashToken(token)
+  const tokenHash = await hashToken(token)
   const expires = new Date()
   expires.setDate(expires.getDate() + 30) // 30 days from now
 
   await sql`
     INSERT INTO "EventEditToken" (id, "eventId", "tokenHash", expires, "createdAt")
-    VALUES (${randomBytes(16).toString("hex")}, ${eventId}, ${tokenHash}, ${expires.toISOString()}, NOW())
+    VALUES (${crypto.randomUUID().replace(/-/g, "")}, ${eventId}, ${tokenHash}, ${expires.toISOString()}, NOW())
   `
 
   return token

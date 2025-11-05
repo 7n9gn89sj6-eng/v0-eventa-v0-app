@@ -3,7 +3,6 @@
 import { sql } from "@/lib/db"
 import { eventFormSchema, type EventFormData } from "@/lib/schemas/event"
 import { createEditTokenForEvent, sendEditLinkEmail } from "@/lib/email"
-import { randomBytes } from "crypto"
 
 export async function createEvent(data: EventFormData, email: string) {
   try {
@@ -12,8 +11,7 @@ export async function createEvent(data: EventFormData, email: string) {
     // Validate form data
     const validatedData = eventFormSchema.parse(data)
 
-    // Generate event ID
-    const eventId = randomBytes(16).toString("hex")
+    const eventId = crypto.randomUUID().replace(/-/g, "")
 
     console.log("[v0] Generated event ID:", eventId)
 
@@ -41,8 +39,8 @@ export async function createEvent(data: EventFormData, email: string) {
         ${eventId},
         ${validatedData.title},
         ${validatedData.description},
-        ${validatedData.startAt}::timestamp,
-        ${validatedData.endAt ? `${validatedData.endAt}::timestamp` : null},
+        ${validatedData.startAt},
+        ${validatedData.endAt || null},
         ${validatedData.locationAddress || null},
         ${validatedData.city || null},
         ${validatedData.country || null},
@@ -58,12 +56,12 @@ export async function createEvent(data: EventFormData, email: string) {
       )
     `
 
-    console.log("[v0] Event created successfully")
+    console.log("[v0] Event created successfully in database")
 
     // Generate edit token
     const token = await createEditTokenForEvent(eventId)
 
-    console.log("[v0] Edit token generated")
+    console.log("[v0] Edit token generated:", token.substring(0, 10) + "...")
 
     // Send email with magic link
     const emailResult = await sendEditLinkEmail(email, validatedData.title, eventId, token)
@@ -71,12 +69,16 @@ export async function createEvent(data: EventFormData, email: string) {
     console.log("[v0] Email send result:", emailResult)
 
     if (!emailResult.success) {
+      console.error("[v0] Email failed to send:", emailResult.error)
       return { error: "Event created but failed to send email. Please contact support." }
     }
 
     return { success: true, eventId }
   } catch (error) {
-    console.error("[v0] Error creating event:", error)
-    return { error: "Failed to create event. Please try again." }
+    console.error("[v0] Error creating event - Full error:", error)
+    console.error("[v0] Error name:", (error as Error).name)
+    console.error("[v0] Error message:", (error as Error).message)
+    console.error("[v0] Error stack:", (error as Error).stack)
+    return { error: `Failed to create event: ${(error as Error).message}` }
   }
 }
