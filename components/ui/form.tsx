@@ -14,9 +14,9 @@ import {
 import { cn } from "../../lib/utils"
 import { Label } from "./label"
 
-import type { FormFieldContextValue } from "@/components/ui/form-field-context"
-import type { FormItemContextValue } from "@/components/ui/form-item-context"
-import { useFormState } from "react-hook-form" // Import useFormState
+import type { FormFieldContextValue } from "./form-field-context"
+import type { FormItemContextValue } from "./form-item-context"
+import { useFormState } from "react-hook-form"
 
 const Form = FormProvider
 

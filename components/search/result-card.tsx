@@ -1,9 +1,9 @@
 "use client"
 
-import type { SearchResult } from "@/lib/types"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import type { SearchResult } from "../../lib/types"
+import { Card, CardContent, CardHeader } from "../ui/card"
+import { Badge } from "../ui/badge"
+import { Button } from "../ui/button"
 import { Calendar, MapPin, ExternalLink } from "lucide-react"
 import { DateTime } from "luxon"
 import Link from "next/link"
