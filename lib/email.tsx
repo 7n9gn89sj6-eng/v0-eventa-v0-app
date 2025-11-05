@@ -110,11 +110,13 @@ This code will expire in 20 minutes. If you didn't submit an event, you can safe
   `.trim()
 
   if (!transporter) {
-    console.log("[v0] Email not configured. Verification details:")
+    const errorMsg = "Email transporter not configured. Check EMAIL_SERVER_* environment variables."
+    console.error("[v0]", errorMsg)
+    console.log("[v0] Verification details for debugging:")
     console.log("[v0] To:", email)
     console.log("[v0] Code:", code)
     console.log("[v0] Magic Link:", magicLink)
-    return
+    throw new Error(errorMsg)
   }
 
   try {
@@ -190,11 +192,13 @@ This link expires 30 days after creation. Keep this email safe to make changes t
   `.trim()
 
   if (!transporter) {
-    console.log("[v0] Email not configured. Edit link details:")
+    const errorMsg = "Email transporter not configured. Check EMAIL_SERVER_* environment variables."
+    console.error("[v0]", errorMsg)
+    console.log("[v0] Edit link details for debugging:")
     console.log("[v0] To:", to)
     console.log("[v0] Event:", eventTitle)
     console.log("[v0] Edit URL:", editUrl)
-    return
+    throw new Error(errorMsg)
   }
 
   try {
