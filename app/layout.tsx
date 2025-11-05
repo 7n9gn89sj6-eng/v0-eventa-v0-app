@@ -1,38 +1,25 @@
-import type React from "react"
-import { Geist, Geist_Mono } from "next/font/google"
-import { Analytics } from "@vercel/analytics/next"
-import { NextIntlClientProvider } from "next-intl"
-import { getLocale, getMessages } from "next-intl/server"
-import { getLocalizedMetadata } from "@/lib/i18n/metadata"
-import { Toaster } from "@/components/ui/toaster"
-import { SessionProvider } from "@/components/auth/session-provider"
-import "./globals.css"
+import type { Metadata } from 'next'
+import { GeistSans } from 'geist/font/sans'
+import { GeistMono } from 'geist/font/mono'
+import { Analytics } from '@vercel/analytics/next'
+import './globals.css'
 
-const _geist = Geist({ subsets: ["latin"] })
-const _geistMono = Geist_Mono({ subsets: ["latin"] })
-
-export async function generateMetadata() {
-  return await getLocalizedMetadata("siteTitle", "siteDescription")
+export const metadata: Metadata = {
+  title: 'v0 App',
+  description: 'Created with v0',
+  generator: 'v0.app',
 }
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const locale = await getLocale()
-  const messages = await getMessages()
-
   return (
-    <html lang={locale}>
-      <body className={`font-sans antialiased`}>
-        <SessionProvider>
-          <NextIntlClientProvider locale={locale} messages={messages}>
-            {children}
-          </NextIntlClientProvider>
-        </SessionProvider>
+    <html lang="en">
+      <body className={`font-sans antialiased ${GeistSans.variable} ${GeistMono.variable}`}>
+        {children}
         <Analytics />
-        <Toaster />
       </body>
     </html>
   )
