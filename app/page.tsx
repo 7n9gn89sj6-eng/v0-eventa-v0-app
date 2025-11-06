@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Calendar, MapPin, Volume2, VolumeX } from "lucide-react"
+import { Calendar, MapPin, Volume2, VolumeX, List } from "lucide-react"
 import { UserNav } from "@/components/auth/user-nav"
 import { LanguageSwitcher } from "@/components/language-switcher"
 import { VersionBadge } from "@/components/version-badge"
@@ -34,11 +34,23 @@ export default function HomePage() {
   const [showDraftCard, setShowDraftCard] = useState(false)
   const [currentDraft, setCurrentDraft] = useState<Partial<DraftEvent> | null>(null)
   const [draftParaphrase, setDraftParaphrase] = useState("")
-  const [drafts, setDrafts] = useState<DraftEvent[]>([])
+  const [drafts, setDrafts] = useState<DraftEvent[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("eventa-drafts")
+      return saved ? JSON.parse(saved) : []
+    }
+    return []
+  })
   const [showDraftsList, setShowDraftsList] = useState(false)
   const [followUpQuestion, setFollowUpQuestion] = useState("")
   const [isSpeakingSearch, setIsSpeakingSearch] = useState(false)
   const searchBarRef = useRef<{ setQuery: (q: string) => void } | null>(null)
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("eventa-drafts", JSON.stringify(drafts))
+    }
+  }, [drafts])
 
   const handleSearch = (results: any[], paraphrase: string) => {
     setSearchResults(results)
@@ -189,6 +201,13 @@ export default function HomePage() {
             <div className="hidden md:block">
               <VersionBadge />
             </div>
+
+            <Button variant="outline" size="sm" className="gap-2 bg-transparent" asChild>
+              <Link href="/events">
+                <List className="h-4 w-4" />
+                <span className="hidden sm:inline">Browse</span>
+              </Link>
+            </Button>
 
             <Button variant="outline" size="sm" className="gap-2 bg-transparent" onClick={() => {}}>
               <MapPin className="h-4 w-4" />

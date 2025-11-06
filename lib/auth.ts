@@ -1,6 +1,7 @@
 import type { NextAuthOptions } from "next-auth"
 import EmailProvider from "next-auth/providers/email"
 import { isAuthConfigured } from "./auth-config"
+import { getServerSession } from "next-auth"
 
 let PrismaAdapter: any
 let prisma: any
@@ -107,5 +108,7 @@ export const authOptions: NextAuthOptions = {
   },
   debug: process.env.NODE_ENV === "development",
 }
+
+export const auth = () => getServerSession(authOptions)
 
 export { isAuthConfigured }

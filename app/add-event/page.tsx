@@ -1,4 +1,5 @@
-import { AddEventForm } from "@/components/events/add-event-form"
+import { Suspense } from "react"
+import { AddEventFormWrapper } from "@/components/events/add-event-form-wrapper"
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
 export default function AddEventPage({
   searchParams,
 }: {
-  searchParams: { title?: string; description?: string; location?: string; date?: string }
+  searchParams: { title?: string; description?: string; location?: string; date?: string; draft?: string }
 }) {
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">
@@ -20,7 +21,9 @@ export default function AddEventPage({
           finish publishing.
         </p>
       </div>
-      <AddEventForm initialData={searchParams} />
+      <Suspense fallback={<div>Loading...</div>}>
+        <AddEventFormWrapper initialData={searchParams} draftId={searchParams.draft} />
+      </Suspense>
     </div>
   )
 }

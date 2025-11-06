@@ -26,9 +26,16 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const category = searchParams.get("category")
     const free = searchParams.get("free")
+    const status = searchParams.get("status") // Added status filter
     const limit = Number.parseInt(searchParams.get("limit") || "50")
 
     const where: any = {}
+
+    if (status) {
+      where.status = status
+    } else {
+      where.status = "PUBLISHED"
+    }
 
     if (category) {
       where.categories = {

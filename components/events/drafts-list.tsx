@@ -2,7 +2,8 @@
 
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Calendar, Clock, MapPin, Pencil, Trash2 } from "lucide-react"
+import { Calendar, Clock, MapPin, Pencil, Trash2, Send } from "lucide-react"
+import Link from "next/link"
 
 interface DraftEvent {
   id: string
@@ -59,6 +60,12 @@ export function DraftsList({ drafts, onEdit, onDelete }: DraftsListProps) {
               {draft.description && <p className="text-sm text-muted-foreground line-clamp-2">{draft.description}</p>}
             </div>
             <div className="flex gap-2">
+              <Button size="sm" variant="default" asChild>
+                <Link href={`/add-event?draft=${draft.id}`}>
+                  <Send className="h-3 w-3 mr-1" />
+                  Submit
+                </Link>
+              </Button>
               <Button size="sm" variant="outline" onClick={() => onEdit(draft)}>
                 <Pencil className="h-3 w-3" />
               </Button>

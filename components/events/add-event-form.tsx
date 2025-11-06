@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form"
 import { Loader2, CheckCircle2, Sparkles } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 const addEventSchema = z
   .object({
@@ -53,10 +54,15 @@ interface AddEventFormProps {
     description?: string
     location?: string
     date?: string
+    city?: string
+    venue?: string
+    startAt?: string
+    endAt?: string
   }
 }
 
 export function AddEventForm({ initialData }: AddEventFormProps) {
+  const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -92,27 +98,44 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
         form.setValue("description", initialData.description)
       }
 
-      if (initialData.location) {
-        // Try to parse location into city/country
-        const parts = initialData.location.split(",").map((p) => p.trim())
-        if (parts.length >= 2) {
-          form.setValue("city", parts[0])
-          form.setValue("country", parts[parts.length - 1])
-        } else {
-          form.setValue("city", initialData.location)
+      if (initialData.venue) {
+        form.setValue("address", initialData.venue)
+      }
+
+      if (initialData.location || initialData.city) {
+        const city = initialData.city || initialData.location
+        if (city) {
+          const parts = city.split(",").map((p) => p.trim())
+          if (parts.length >= 2) {
+            form.setValue("city", parts[0])
+            form.setValue("country", parts[parts.length - 1])
+          } else {
+            form.setValue("city", city)
+          }
         }
       }
 
-      if (initialData.date) {
+      if (initialData.startAt) {
+        form.setValue("startAt", initialData.startAt)
+      } else if (initialData.date) {
         try {
           const date = new Date(initialData.date)
           const formatted = date.toISOString().slice(0, 16)
           form.setValue("startAt", formatted)
-          // Set end time to 2 hours after start
-          const endDate = new Date(date.getTime() + 2 * 60 * 60 * 1000)
-          form.setValue("endAt", endDate.toISOString().slice(0, 16))
         } catch (e) {
           console.error("[v0] Failed to parse date:", e)
+        }
+      }
+
+      if (initialData.endAt) {
+        form.setValue("endAt", initialData.endAt)
+      } else if (initialData.startAt || initialData.date) {
+        try {
+          const startDate = new Date(initialData.startAt || initialData.date)
+          const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000)
+          form.setValue("endAt", endDate.toISOString().slice(0, 16))
+        } catch (e) {
+          console.error("[v0] Failed to calculate end date:", e)
         }
       }
     }
@@ -135,7 +158,6 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
         const errorData = await response.json()
         console.error("[v0] Event submission failed:", errorData)
 
-        // Show validation errors if available
         if (errorData.details && Array.isArray(errorData.details)) {
           const errorMessages = errorData.details.map((err: any) => err.message).join(", ")
           throw new Error(errorMessages)
@@ -146,6 +168,19 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
 
       const result = await response.json()
       console.log("[v0] Event submitted successfully:", result)
+
+      if (typeof window !== "undefined" && initialData) {
+        const urlParams = new URLSearchParams(window.location.search)
+        const draftId = urlParams.get("draft")
+        if (draftId) {
+          const saved = localStorage.getItem("eventa-drafts")
+          if (saved) {
+            const drafts = JSON.parse(saved)
+            const filtered = drafts.filter((d: any) => d.id !== draftId)
+            localStorage.setItem("eventa-drafts", JSON.stringify(filtered))
+          }
+        }
+      }
 
       setIsSuccess(true)
       form.reset()
@@ -171,9 +206,12 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                 We've sent a verification link to your email address. Click the link to publish your event.
               </p>
             </div>
-            <Button onClick={() => setIsSuccess(false)} variant="outline" className="mt-4">
-              Submit another event
-            </Button>
+            <div className="flex gap-3 mt-4">
+              <Button onClick={() => router.push("/")} variant="outline">
+                Back to Home
+              </Button>
+              <Button onClick={() => setIsSuccess(false)}>Submit another event</Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -187,7 +225,7 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
           <Alert>
             <Sparkles className="h-4 w-4" />
             <AlertDescription>
-              We've prefilled some fields based on your request. Please review and complete the remaining details.
+              We've prefilled some fields based on your draft. Please review and complete the remaining details.
             </AlertDescription>
           </Alert>
         )}
