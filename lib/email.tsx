@@ -134,7 +134,7 @@ export async function sendEventEditLinkEmail(to: string, eventTitle: string, eve
     throw new Error(errorMsg)
   }
 
-  const baseUrl = process.env.APP_BASE_URL ?? "http://localhost:3000"
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
   const editUrl = `${baseUrl}/event/confirm?token=${encodeURIComponent(token)}`
   const subject = `Finalize Your Event: ${escapeHtml(eventTitle)}`
 
