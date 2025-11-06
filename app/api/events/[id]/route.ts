@@ -4,9 +4,9 @@ import { getSession } from "@/lib/jwt"
 import { validateEventEditToken } from "@/lib/eventEditToken"
 import { ok, fail } from "@/lib/http"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
+    const { id } = await params
 
     const event = await db.event.findUnique({
       where: { id },
@@ -31,14 +31,14 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession()
     if (!session) {
       return fail("Unauthorized", 401)
     }
 
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
 
     // Verify ownership
@@ -78,9 +78,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
 
     // Extract token from Authorization header or query parameter
@@ -173,14 +173,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession()
     if (!session) {
       return fail("Unauthorized", 401)
     }
 
-    const { id } = params
+    const { id } = await params
 
     // Verify ownership
     const event = await db.event.findUnique({
