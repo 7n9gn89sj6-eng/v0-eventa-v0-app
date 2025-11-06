@@ -11,10 +11,11 @@ export default async function EditEventPage({
   params,
   searchParams,
 }: {
-  params: { id: string }
-  searchParams: { token?: string }
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ token?: string }>
 }) {
-  const token = searchParams.token
+  const { id } = await params
+  const { token } = await searchParams
 
   if (!token) {
     return (
@@ -32,7 +33,7 @@ export default async function EditEventPage({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Link href={`/events/${params.id}`} className="text-primary hover:underline">
+              <Link href={`/events/${id}`} className="text-primary hover:underline">
                 View event details →
               </Link>
             </CardContent>
@@ -42,7 +43,7 @@ export default async function EditEventPage({
     )
   }
 
-  const validation = await validateEventEditToken(params.id, token)
+  const validation = await validateEventEditToken(id, token)
 
   if (validation === "expired") {
     return (
@@ -59,7 +60,7 @@ export default async function EditEventPage({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Link href={`/events/${params.id}`} className="text-primary hover:underline">
+              <Link href={`/events/${id}`} className="text-primary hover:underline">
                 View event details →
               </Link>
             </CardContent>
@@ -84,7 +85,7 @@ export default async function EditEventPage({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Link href={`/events/${params.id}`} className="text-primary hover:underline">
+              <Link href={`/events/${id}`} className="text-primary hover:underline">
                 View event details →
               </Link>
             </CardContent>
@@ -95,7 +96,7 @@ export default async function EditEventPage({
   }
 
   const event = await db.event.findUnique({
-    where: { id: params.id },
+    where: { id },
   })
 
   if (!event) {
