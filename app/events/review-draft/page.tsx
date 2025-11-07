@@ -66,23 +66,29 @@ export default function ReviewDraftPage() {
     setError(null)
 
     try {
+      const submitPayload = {
+        title,
+        description,
+        start: draftData.extraction.start,
+        end: draftData.extraction.end,
+        timezone: draftData.extraction.timezone,
+        location: draftData.extraction.location,
+        category: draftData.category !== "auto" ? draftData.category : draftData.extraction.category,
+        price: draftData.extraction.price,
+        organizer_name: organizerName,
+        organizer_contact: contactEmail || contactPhone || undefined,
+        source_text: draftData.sourceText,
+        imageUrl: draftData.imageUrl,
+        externalUrl: externalUrl || undefined,
+        tags: draftData.extraction.tags,
+        extractionConfidence: draftData.extraction.confidence,
+        // Get creatorEmail from session - will be added by middleware
+      }
+
       const response = await fetch("/api/events/create-simple", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sourceText: draftData.sourceText,
-          extraction: {
-            ...draftData.extraction,
-            title,
-            description,
-            organizer_name: organizerName,
-          },
-          category: draftData.category,
-          followUpAnswer: draftData.followUpAnswer,
-          imageUrl: draftData.imageUrl,
-          externalUrl: externalUrl || undefined,
-          contactInfo: contactEmail || contactPhone || undefined,
-        }),
+        body: JSON.stringify(submitPayload),
       })
 
       if (!response.ok) {

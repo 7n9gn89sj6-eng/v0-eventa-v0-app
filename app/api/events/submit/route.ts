@@ -1,8 +1,7 @@
+import "server-only"
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import bcrypt from "bcryptjs"
 import { db } from "@/lib/db"
-import { sendVerificationEmail } from "@/lib/email"
 import { createSearchTextFolded } from "@/lib/search/accent-fold"
 import { createEventEditToken } from "@/lib/eventEditToken"
 import { sendEventEditLinkEmail } from "@/lib/email"
@@ -11,39 +10,55 @@ import { notifyAdminOfFlaggedEvent } from "@/lib/admin-notifications"
 import { sendEmail } from "@/lib/email"
 import { checkRateLimit } from "@/lib/rate-limit"
 
-const submitEventSchema = z.object({
-  name: z.string().min(2),
-  email: z.string().email(),
-  humanCheck: z
-    .string()
-    .toLowerCase()
-    .refine((val) => val === "communities", {
-      message: "Human check failed",
-    }),
-  title: z.string().min(5),
-  description: z.string().min(20),
-  address: z.string().min(5),
-  postcode: z.string().optional(),
-  city: z.string().min(2),
-  country: z.string().min(2),
-  startAt: z.string(),
-  endAt: z.string(),
+export const runtime = "nodejs"
+
+const EventSubmitSchema = z.object({
+  title: z.string().min(2),
+  description: z.string().default(""),
+  start: z.string(), // ISO
+  end: z.string().optional(),
+  timezone: z.string().optional(),
+  location: z
+    .object({
+      name: z.string().optional(),
+      address: z.string().optional(),
+      lat: z.number().optional(),
+      lng: z.number().optional(),
+    })
+    .optional(),
+  category: z.string().optional(),
+  price: z.string().optional(),
+  organizer_name: z.string().optional(),
+  organizer_contact: z.string().optional(), // email or phone
+  source_text: z.string().optional(),
+  // must be present from either session or payload:
+  creatorEmail: z.string().email().optional(),
+  // Legacy fields for backward compatibility
   imageUrl: z.string().url().optional().or(z.literal("")),
   externalUrl: z.string().url().optional().or(z.literal("")),
+  // Optional Phase 3 fields
+  tags: z.array(z.string()).optional(),
+  extractionConfidence: z.string().optional(),
 })
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
 
-    console.log("[v0] Received event submission:", body)
+    console.log("[v0] CANONICAL submit: Received event submission")
 
-    const validatedData = submitEventSchema.parse(body)
+    const validatedData = EventSubmitSchema.parse(body)
 
+    const creatorEmail = validatedData.creatorEmail
+    if (!creatorEmail) {
+      return NextResponse.json({ error: "Creator email is required" }, { status: 400 })
+    }
+
+    // Find or create user
     let user
     try {
       user = await db.user.findUnique({
-        where: { email: validatedData.email },
+        where: { email: creatorEmail },
       })
     } catch (dbError) {
       console.error("[v0] Database error - tables may not exist:", dbError)
@@ -58,18 +73,14 @@ export async function POST(request: NextRequest) {
     if (!user) {
       user = await db.user.create({
         data: {
-          email: validatedData.email,
-          name: validatedData.name,
+          email: creatorEmail,
+          name: validatedData.organizer_name || creatorEmail.split("@")[0],
           isVerified: false,
         },
       })
-    } else if (validatedData.name && !user.name) {
-      user = await db.user.update({
-        where: { id: user.id },
-        data: { name: validatedData.name },
-      })
     }
 
+    // Rate limiting
     const rateLimit = await checkRateLimit(user.id, "event_submission", 5, 60 * 60 * 1000)
     if (!rateLimit.allowed) {
       return NextResponse.json(
@@ -84,37 +95,47 @@ export async function POST(request: NextRequest) {
     const searchParts = [
       validatedData.title,
       validatedData.description,
-      validatedData.address,
-      validatedData.city,
-      validatedData.country,
-    ]
-    const searchText = searchParts.filter(Boolean).join(" ")
+      validatedData.location?.name,
+      validatedData.location?.address,
+    ].filter(Boolean)
+    const searchText = searchParts.join(" ")
     const searchTextFolded = createSearchTextFolded(searchParts)
 
     const event = await db.event.create({
       data: {
         title: validatedData.title,
         description: validatedData.description,
-        locationAddress: validatedData.address,
-        postcode: validatedData.postcode || null,
-        city: validatedData.city,
-        country: validatedData.country,
-        startAt: new Date(validatedData.startAt),
-        endAt: new Date(validatedData.endAt),
+        startAt: new Date(validatedData.start),
+        endAt: validatedData.end ? new Date(validatedData.end) : new Date(validatedData.start),
+        timezone: validatedData.timezone || "UTC",
+        venueName: validatedData.location?.name || null,
+        locationAddress: validatedData.location?.address || null,
+        lat: validatedData.location?.lat || null,
+        lng: validatedData.location?.lng || null,
+        city: validatedData.location?.address?.split(",")[0]?.trim() || "Unknown",
+        country: "Australia", // Default, could be improved
+        priceFree: validatedData.price === "free",
+        priceAmount: validatedData.price === "paid" ? 0 : null,
         imageUrl: validatedData.imageUrl || null,
         externalUrl: validatedData.externalUrl || null,
+        category: validatedData.category as any,
+        tags: validatedData.tags || [],
+        extractionConfidence: validatedData.extractionConfidence as any,
+        organizerName: validatedData.organizer_name || null,
+        organizerContact: validatedData.organizer_contact || null,
+        sourceText: validatedData.source_text || null,
         createdById: user.id,
         status: "DRAFT",
+        moderationStatus: "PENDING",
         searchText,
         searchTextFolded,
         categories: [],
         languages: ["en"],
         imageUrls: validatedData.imageUrl ? [validatedData.imageUrl] : [],
-        moderationStatus: "PENDING",
       },
     })
 
-    console.log("[v0] Event created successfully:", event.id)
+    console.log("[v0] CANONICAL submit: Event created:", event.id)
 
     await db.eventAuditLog.create({
       data: {
@@ -123,34 +144,37 @@ export async function POST(request: NextRequest) {
         actorId: user.id,
         action: "created",
         newStatus: "PENDING",
-        notes: "Event submitted for moderation",
+        notes: validatedData.source_text
+          ? "Event created via AI-powered natural language interface"
+          : "Event submitted for moderation",
       },
     })
 
-    let emailedEditLink = false
+    let emailSent = false
     try {
-      console.log(`[v0] Attempting to send edit link email to ${validatedData.email}`)
+      console.log(`[v0] CANONICAL submit: Sending edit link email to ${creatorEmail}`)
       const token = await createEventEditToken(event.id, event.endAt)
-      console.log(`[v0] Edit token created: ${token.substring(0, 10)}...`)
-      await sendEventEditLinkEmail(validatedData.email, event.title, event.id, token)
-      emailedEditLink = true
-      console.log(`[v0] ✓ Edit link email sent successfully to ${validatedData.email}`)
+      await sendEventEditLinkEmail(creatorEmail, event.title, event.id, token)
+      emailSent = true
+      console.log(`[v0] CANONICAL submit: ✓ Edit link email sent successfully`)
     } catch (emailError) {
-      console.error("[v0] ✗ Failed to send edit link email:", emailError)
-      console.error("[v0] Error details:", emailError instanceof Error ? emailError.message : String(emailError))
+      console.error("[v0] CANONICAL submit: ✗ Failed to send edit link email:", emailError)
+      console.error(
+        "[v0] CANONICAL submit: Email error details:",
+        emailError instanceof Error ? emailError.message : String(emailError),
+      )
     }
 
     moderateEventContent({
       title: validatedData.title,
       description: validatedData.description,
-      city: validatedData.city,
-      country: validatedData.country,
-      externalUrl: validatedData.externalUrl,
+      city: validatedData.location?.address?.split(",")[0]?.trim() || "Unknown",
+      country: "Australia",
+      externalUrl: validatedData.externalUrl || undefined,
     })
       .then(async (moderationResult) => {
-        console.log("[v0] Moderation result:", moderationResult)
+        console.log("[v0] CANONICAL submit: Moderation result:", moderationResult)
 
-        const oldStatus = "PENDING"
         const newStatus = moderationResult.status.toUpperCase()
 
         await db.event.update({
@@ -174,14 +198,12 @@ export async function POST(request: NextRequest) {
                 : moderationResult.status === "rejected"
                   ? "rejected"
                   : "flagged",
-            oldStatus,
+            oldStatus: "PENDING",
             newStatus,
             reason: moderationResult.reason,
             notes: `AI moderation: ${moderationResult.policy_category} (${moderationResult.severity_level} severity)`,
           },
         })
-
-        console.log(`[v0] Event ${event.id} moderation status: ${moderationResult.status}`)
 
         if (moderationResult.status === "flagged" || moderationResult.status === "rejected") {
           await notifyAdminOfFlaggedEvent({
@@ -197,67 +219,39 @@ export async function POST(request: NextRequest) {
           if (moderationResult.status === "rejected") {
             try {
               await sendEmail({
-                to: validatedData.email,
+                to: creatorEmail,
                 subject: `Event Rejected: ${validatedData.title}`,
                 html: `
                   <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
                     <h2 style="color: #dc2626;">Event Rejected</h2>
-                    
-                    <p>Hello ${validatedData.name || "there"},</p>
-                    
+                    <p>Hello,</p>
                     <p>Unfortunately, your event submission has been rejected by our automated moderation system.</p>
-                    
                     <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; margin: 16px 0;">
                       <p style="margin: 0; font-weight: bold;">Event: ${validatedData.title}</p>
                       <p style="margin: 8px 0 0 0;">Reason: ${moderationResult.reason}</p>
                       <p style="margin: 8px 0 0 0;">Category: ${moderationResult.policy_category}</p>
                     </div>
-                    
-                    <p>If you believe this decision was made in error, you can edit your event and resubmit it. When you edit and resubmit, the event will be reviewed again.</p>
-                    
-                    <p>Thank you for your understanding.</p>
+                    <p>If you believe this decision was made in error, you can edit your event and resubmit it.</p>
                   </div>
                 `,
               })
             } catch (emailError) {
-              console.error("[v0] Failed to send rejection email to creator:", emailError)
+              console.error("[v0] CANONICAL submit: Failed to send rejection email:", emailError)
             }
           }
         }
       })
       .catch((error) => {
-        console.error("[v0] ✗ Moderation failed:", error)
+        console.error("[v0] CANONICAL submit: ✗ Moderation failed:", error)
       })
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString()
-    const hashedCode = await bcrypt.hash(code, 10)
-    const expiresAt = new Date(Date.now() + 20 * 60 * 1000)
-
-    console.log(`[v0] Creating email verification record for user ${user.id}`)
-    await db.emailVerification.create({
-      data: {
-        userId: user.id,
-        email: user.email,
-        code: hashedCode,
-        expiresAt,
-      },
+    return NextResponse.json({
+      ok: true,
+      eventId: event.id,
+      emailSent,
     })
-    console.log(`[v0] ✓ Email verification record created`)
-
-    try {
-      console.log(`[v0] Attempting to send verification email to ${user.email}`)
-      console.log(`[v0] Verification code: ${code}`)
-      await sendVerificationEmail(user.email, code)
-      console.log(`[v0] ✓ Verification email sent successfully to ${user.email}`)
-    } catch (emailError) {
-      console.error("[v0] ✗ Failed to send verification email:", emailError)
-      console.error("[v0] Error details:", emailError instanceof Error ? emailError.message : String(emailError))
-      console.log("[v0] Verification code for manual use:", code)
-    }
-
-    return NextResponse.json({ ok: true, emailedEditLink })
   } catch (error) {
-    console.error("[v0] Error submitting event:", error)
+    console.error("[v0] CANONICAL submit: Error:", error)
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(

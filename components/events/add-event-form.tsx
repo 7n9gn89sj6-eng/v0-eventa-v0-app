@@ -155,10 +155,26 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
     try {
       console.log("[v0] Submitting event data:", data)
 
+      const submitPayload = {
+        title: data.title,
+        description: data.description,
+        start: new Date(data.startAt).toISOString(),
+        end: new Date(data.endAt).toISOString(),
+        location: {
+          address: data.address,
+          name: data.address, // Use address as venue name for now
+        },
+        imageUrl: data.imageUrl || undefined,
+        externalUrl: data.externalUrl || undefined,
+        organizer_name: data.name,
+        organizer_contact: data.email,
+        creatorEmail: data.email,
+      }
+
       const response = await fetch("/api/events/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(submitPayload),
       })
 
       if (!response.ok) {
