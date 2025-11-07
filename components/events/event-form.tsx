@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -39,7 +39,17 @@ const LANGUAGES = [
   { code: "fr", label: "Français" },
 ]
 
-export function EventForm() {
+interface EventFormProps {
+  initialData?: {
+    title?: string
+    description?: string
+    location?: string
+    date?: string
+  }
+  draftId?: string
+}
+
+export function EventForm({ initialData, draftId }: EventFormProps = {}) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -60,6 +70,44 @@ export function EventForm() {
     languages: ["en"] as string[],
     imageUrls: [] as string[],
   })
+
+  useEffect(() => {
+    if (draftId && typeof window !== "undefined") {
+      const saved = localStorage.getItem("eventa-drafts")
+      if (saved) {
+        const drafts = JSON.parse(saved)
+        const draft = drafts.find((d: any) => d.id === draftId)
+        if (draft) {
+          const startDateTime = `${draft.date}T${draft.time || "12:00"}`
+          const endDate = new Date(new Date(startDateTime).getTime() + 2 * 60 * 60 * 1000)
+
+          setFormData({
+            title: draft.title || "",
+            description: draft.description || "",
+            categories: draft.category ? [draft.category.toLowerCase()] : [],
+            startAt: startDateTime,
+            endAt: endDate.toISOString().slice(0, 16),
+            timezone: DateTime.local().zoneName,
+            venueName: draft.venue || "",
+            address: draft.city || "",
+            priceFree: true,
+            priceAmount: "",
+            websiteUrl: "",
+            languages: ["en"],
+            imageUrls: [],
+          })
+        }
+      }
+    } else if (initialData) {
+      setFormData((prev) => ({
+        ...prev,
+        title: initialData.title || prev.title,
+        description: initialData.description || prev.description,
+        address: initialData.location || prev.address,
+        startAt: initialData.date || prev.startAt,
+      }))
+    }
+  }, [draftId, initialData])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -84,7 +132,7 @@ export function EventForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
-          priceAmount: formData.priceFree ? null : Number.parseInt(formData.priceAmount) * 100, // Convert to cents
+          priceAmount: formData.priceFree ? null : Number.parseInt(formData.priceAmount) * 100,
         }),
       })
 
@@ -94,6 +142,16 @@ export function EventForm() {
       }
 
       const { event } = await response.json()
+
+      if (draftId && typeof window !== "undefined") {
+        const saved = localStorage.getItem("eventa-drafts")
+        if (saved) {
+          const drafts = JSON.parse(saved)
+          const updatedDrafts = drafts.filter((d: any) => d.id !== draftId)
+          localStorage.setItem("eventa-drafts", JSON.stringify(updatedDrafts))
+        }
+      }
+
       router.push(`/events/${event.id}?created=true`)
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred")

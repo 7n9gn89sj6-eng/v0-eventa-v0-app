@@ -6,13 +6,13 @@ import { Calendar, MapPin, Volume2, VolumeX, List } from "lucide-react"
 import { UserNav } from "@/components/auth/user-nav"
 import { LanguageSwitcher } from "@/components/language-switcher"
 import { VersionBadge } from "@/components/version-badge"
-import { AISearchBar } from "@/components/search/ai-search-bar"
 import { ResultCard } from "@/components/search/result-card"
 import { DraftEventCard } from "@/components/events/draft-event-card"
 import { DraftsList } from "@/components/events/drafts-list"
 import Link from "next/link"
 import { speak, stopSpeaking } from "@/lib/tts"
 import { toast } from "@/hooks/use-toast"
+import { SmartInputBar } from "@/components/search/smart-input-bar"
 
 interface DraftEvent {
   id: string
@@ -23,6 +23,7 @@ interface DraftEvent {
   date: string
   time: string
   description: string
+  sourceText?: string
 }
 
 export default function HomePage() {
@@ -187,6 +188,133 @@ export default function HomePage() {
     }
   }
 
+  const handleSmartSearch = async (query: string) => {
+    console.log("[v0] Smart search:", query)
+
+    try {
+      // Call intent API
+      const intentResponse = await fetch("/api/search/intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query,
+          mode: "text",
+          step: 4,
+          uiLang: locale,
+        }),
+      })
+
+      const intentData = await intentResponse.json()
+
+      if (intentData.paraphrase) {
+        setSearchParaphrase(intentData.paraphrase)
+      }
+
+      // Call dual search
+      const searchResponse = await fetch("/api/search/dual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query,
+          entities: intentData.extracted,
+          input_mode: "text",
+          uiLang: locale,
+        }),
+      })
+
+      const searchData = await searchResponse.json()
+
+      if (searchData.count === 0) {
+        toast({
+          title: "No Results",
+          description: "No events found. Try different keywords or create your own.",
+        })
+      } else {
+        setSearchResults(searchData.results || [])
+        setShowResults(true)
+        setShowDraftCard(false)
+      }
+    } catch (error) {
+      console.error("[v0] Search error:", error)
+      toast({
+        title: "Search Failed",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleSmartCreate = async (query: string) => {
+    console.log("[v0] Smart create:", query)
+
+    try {
+      // Call AI extraction
+      const extractResponse = await fetch("/api/ai/extract-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: query }),
+      })
+
+      if (!extractResponse.ok) {
+        throw new Error("Extraction failed")
+      }
+
+      const extracted = await extractResponse.json()
+
+      // Check confidence
+      const avgConfidence =
+        (extracted.confidence.datetime + extracted.confidence.location + extracted.confidence.title) / 3
+
+      if (avgConfidence < 0.6) {
+        // Low confidence - ask follow-up or route to advanced form
+        const lowConfidenceFields = []
+        if (extracted.confidence.datetime < 0.6) lowConfidenceFields.push("date/time")
+        if (extracted.confidence.location < 0.6) lowConfidenceFields.push("location")
+
+        toast({
+          title: "Need More Details",
+          description: `Please clarify: ${lowConfidenceFields.join(", ")}`,
+        })
+
+        // Route to advanced form with prefilled data
+        const params = new URLSearchParams({
+          title: extracted.title || "",
+          description: extracted.description || "",
+          location: extracted.location?.address || "",
+        })
+        window.location.href = `/events/new?${params.toString()}`
+        return
+      }
+
+      // Create draft and redirect to review
+      const draftId = `draft-${Date.now()}`
+      const draft = {
+        id: draftId,
+        title: extracted.title || "",
+        category: extracted.category || "",
+        city: extracted.location?.city || "",
+        venue: extracted.location?.venue || "",
+        date: extracted.datetime?.date || "",
+        time: extracted.datetime?.time || "",
+        description: extracted.description || "",
+        sourceText: query,
+      }
+
+      // Save to localStorage
+      const existingDrafts = JSON.parse(localStorage.getItem("eventa-drafts") || "[]")
+      localStorage.setItem("eventa-drafts", JSON.stringify([...existingDrafts, draft]))
+
+      // Redirect to advanced form with draft
+      window.location.href = `/events/new?draftId=${draftId}`
+    } catch (error) {
+      console.error("[v0] Create error:", error)
+
+      // Route to advanced form on failure
+      const params = new URLSearchParams({ description: query })
+      window.location.href = `/events/new?${params.toString()}`
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -228,9 +356,21 @@ export default function HomePage() {
       <main className="container mx-auto px-4 py-8">
         <div className="mx-auto max-w-3xl py-16 text-center">
           <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance sm:text-5xl">Discover & Create Events</h2>
-          <p className="mb-8 text-lg text-muted-foreground text-balance">Find events or create your own.</p>
+          <p className="mb-8 text-lg text-muted-foreground text-balance">
+            Search for events or create your own with AI assistance
+          </p>
 
-          <AISearchBar ref={searchBarRef} onSearch={handleSearch} onCreate={handleCreate} onError={handleError} />
+          <SmartInputBar
+            onSearch={handleSmartSearch}
+            onCreate={handleSmartCreate}
+            onError={(error) => {
+              toast({
+                title: "Error",
+                description: error,
+                variant: "destructive",
+              })
+            }}
+          />
 
           <div className="mt-6">{/* SearchFiltersComponent removed */}</div>
 

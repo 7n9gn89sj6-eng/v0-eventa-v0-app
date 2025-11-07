@@ -8,20 +8,28 @@ export const metadata: Metadata = {
   description: "Share your event with the community",
 }
 
-export default async function NewEventPage() {
+export default async function NewEventPage({
+  searchParams,
+}: {
+  searchParams: { title?: string; description?: string; location?: string; date?: string; draftId?: string }
+}) {
   const user = await getCurrentUser()
 
   if (!user) {
-    redirect("/auth/signin?callbackUrl=/add-event")
+    redirect("/auth/signin?callbackUrl=/events/new")
   }
 
   return (
     <div className="container mx-auto max-w-3xl px-4 py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Post an Event</h1>
-        <p className="mt-2 text-muted-foreground">Share your event with the community. Fill in the details below.</p>
+        <p className="mt-2 text-muted-foreground">
+          {searchParams.draftId
+            ? "Review and complete your AI-generated event details"
+            : "Share your event with the community. Fill in the details below."}
+        </p>
       </div>
-      <EventForm />
+      <EventForm initialData={searchParams} draftId={searchParams.draftId} />
     </div>
   )
 }
