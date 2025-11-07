@@ -26,6 +26,7 @@ const addEventSchema = z
     title: z.string().min(5, "Event title must be at least 5 characters"),
     description: z.string().min(20, "Description must be at least 20 characters"),
     address: z.string().min(5, "Address is required"),
+    postcode: z.string().optional(),
     city: z.string().min(2, "City is required"),
     country: z.string().min(2, "Country is required"),
     startAt: z.string().min(1, "Start date and time is required"),
@@ -58,6 +59,7 @@ interface AddEventFormProps {
     venue?: string
     startAt?: string
     endAt?: string
+    postcode?: string
   }
 }
 
@@ -77,6 +79,7 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
       title: "",
       description: "",
       address: "",
+      postcode: "",
       city: "",
       country: "",
       startAt: "",
@@ -137,6 +140,10 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
         } catch (e) {
           console.error("[v0] Failed to calculate end date:", e)
         }
+      }
+
+      if (initialData.postcode) {
+        form.setValue("postcode", initialData.postcode)
       }
     }
   }, [initialData, form])
@@ -335,6 +342,21 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                     <FormControl>
                       <Input placeholder="123 Main Street" {...field} disabled={isSubmitting} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="postcode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Postcode / ZIP Code</FormLabel>
+                    <FormControl>
+                      <Input placeholder="12345" {...field} disabled={isSubmitting} />
+                    </FormControl>
+                    <FormDescription>Optional</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

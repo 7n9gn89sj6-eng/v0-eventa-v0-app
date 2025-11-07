@@ -200,7 +200,6 @@ This link will expire in 30 days from now. Keep it safe for any future updates t
       from: process.env.EMAIL_FROM,
       to,
       subject,
-      text,
       html,
     })
     console.log("[v0] ✓ Edit link email sent successfully to:", to)

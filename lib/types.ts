@@ -17,6 +17,17 @@ export type EventCategory =
   | "cooking"
   | "free"
 
+export type BroadEventCategory =
+  | "arts_culture"
+  | "music_nightlife"
+  | "food_drink"
+  | "family_kids"
+  | "sports_outdoors"
+  | "community_causes"
+  | "learning_talks"
+  | "markets_fairs"
+  | "online_virtual"
+
 export type SearchSource = "eventa" | "web"
 
 export interface SearchResult {
@@ -51,4 +62,41 @@ export interface SearchFilters {
   radiusKm?: number
   lat?: number
   lng?: number
+}
+
+export interface EventExtractionInput {
+  source_text: string
+  image_meta?: string
+  link?: string
+  contact?: string
+}
+
+export interface LocationExtraction {
+  name: string | null
+  address: string | null
+  lat: number | null
+  lng: number | null
+}
+
+export interface ExtractionConfidence {
+  datetime: number // 0..1
+  location: number // 0..1
+  title: number // 0..1
+  category: number // 0..1
+}
+
+export interface EventExtractionOutput {
+  title: string
+  start: string // ISO8601
+  end: string | null // ISO8601
+  timezone: string | null // IANA
+  location: LocationExtraction
+  description: string
+  price: "free" | "donation" | "paid" | null
+  organizer_name: string | null
+  organizer_contact: string | null
+  category: BroadEventCategory | "auto"
+  tags: string[] // max 5
+  confidence: ExtractionConfidence
+  notes_for_user: string[] // short clarifications
 }

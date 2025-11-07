@@ -8,6 +8,8 @@ import { createEventEditToken } from "@/lib/eventEditToken"
 import { sendEventEditLinkEmail } from "@/lib/email"
 import { moderateEventContent } from "@/lib/ai-moderation"
 import { notifyAdminOfFlaggedEvent } from "@/lib/admin-notifications"
+import { sendEmail } from "@/lib/email"
+import { checkRateLimit } from "@/lib/rate-limit"
 
 const submitEventSchema = z.object({
   name: z.string().min(2),
@@ -21,6 +23,7 @@ const submitEventSchema = z.object({
   title: z.string().min(5),
   description: z.string().min(20),
   address: z.string().min(5),
+  postcode: z.string().optional(),
   city: z.string().min(2),
   country: z.string().min(2),
   startAt: z.string(),
@@ -67,6 +70,17 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    const rateLimit = await checkRateLimit(user.id, "event_submission", 5, 60 * 60 * 1000)
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: "Rate limit exceeded. You can submit up to 5 events per hour.",
+          resetAt: rateLimit.resetAt.toISOString(),
+        },
+        { status: 429 },
+      )
+    }
+
     const searchParts = [
       validatedData.title,
       validatedData.description,
@@ -82,6 +96,7 @@ export async function POST(request: NextRequest) {
         title: validatedData.title,
         description: validatedData.description,
         locationAddress: validatedData.address,
+        postcode: validatedData.postcode || null,
         city: validatedData.city,
         country: validatedData.country,
         startAt: new Date(validatedData.startAt),
@@ -100,6 +115,17 @@ export async function POST(request: NextRequest) {
     })
 
     console.log("[v0] Event created successfully:", event.id)
+
+    await db.eventAuditLog.create({
+      data: {
+        eventId: event.id,
+        actor: "user",
+        actorId: user.id,
+        action: "created",
+        newStatus: "PENDING",
+        notes: "Event submitted for moderation",
+      },
+    })
 
     let emailedEditLink = false
     try {
@@ -124,14 +150,34 @@ export async function POST(request: NextRequest) {
       .then(async (moderationResult) => {
         console.log("[v0] Moderation result:", moderationResult)
 
+        const oldStatus = "PENDING"
+        const newStatus = moderationResult.status.toUpperCase()
+
         await db.event.update({
           where: { id: event.id },
           data: {
-            moderationStatus: moderationResult.status.toUpperCase() as any,
+            moderationStatus: newStatus as any,
             moderationReason: moderationResult.reason,
             moderationSeverity: moderationResult.severity_level.toUpperCase() as any,
             moderationCategory: moderationResult.policy_category,
             moderatedAt: new Date(),
+          },
+        })
+
+        await db.eventAuditLog.create({
+          data: {
+            eventId: event.id,
+            actor: "ai",
+            action:
+              moderationResult.status === "approved"
+                ? "approved"
+                : moderationResult.status === "rejected"
+                  ? "rejected"
+                  : "flagged",
+            oldStatus,
+            newStatus,
+            reason: moderationResult.reason,
+            notes: `AI moderation: ${moderationResult.policy_category} (${moderationResult.severity_level} severity)`,
           },
         })
 
@@ -147,6 +193,36 @@ export async function POST(request: NextRequest) {
             moderationSeverity: moderationResult.severity_level.toUpperCase(),
             moderationCategory: moderationResult.policy_category,
           })
+
+          if (moderationResult.status === "rejected") {
+            try {
+              await sendEmail({
+                to: validatedData.email,
+                subject: `Event Rejected: ${validatedData.title}`,
+                html: `
+                  <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #dc2626;">Event Rejected</h2>
+                    
+                    <p>Hello ${validatedData.name || "there"},</p>
+                    
+                    <p>Unfortunately, your event submission has been rejected by our automated moderation system.</p>
+                    
+                    <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; margin: 16px 0;">
+                      <p style="margin: 0; font-weight: bold;">Event: ${validatedData.title}</p>
+                      <p style="margin: 8px 0 0 0;">Reason: ${moderationResult.reason}</p>
+                      <p style="margin: 8px 0 0 0;">Category: ${moderationResult.policy_category}</p>
+                    </div>
+                    
+                    <p>If you believe this decision was made in error, you can edit your event and resubmit it. When you edit and resubmit, the event will be reviewed again.</p>
+                    
+                    <p>Thank you for your understanding.</p>
+                  </div>
+                `,
+              })
+            } catch (emailError) {
+              console.error("[v0] Failed to send rejection email to creator:", emailError)
+            }
+          }
         }
       })
       .catch((error) => {

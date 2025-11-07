@@ -25,6 +25,8 @@ model User {
   accounts            Account[]
   sessions            Session[]
   favorites           Favorite[]
+  moderatedEvents     Event[]           @relation("ModeratedEvents")
+  appeals             EventAppeal[]
 }
 
 model Account {
@@ -96,6 +98,18 @@ enum ModerationSeverity {
   HIGH
 }
 
+enum EventCategory {
+  ARTS_CULTURE
+  MUSIC_NIGHTLIFE
+  FOOD_DRINK
+  FAMILY_KIDS
+  SPORTS_OUTDOORS
+  COMMUNITY_CAUSES
+  LEARNING_TALKS
+  MARKETS_FAIRS
+  ONLINE_VIRTUAL
+}
+
 model Event {
   id              String      @id @default(cuid())
   title           String
@@ -103,11 +117,19 @@ model Event {
   startAt         DateTime
   endAt           DateTime
   locationAddress String?
+  postcode        String?
   city            String
   country         String
   imageUrl        String?
   externalUrl     String?
   status          EventStatus @default(DRAFT)
+  
+  sourceText          String?           @db.Text  // Original user input
+  category            EventCategory?              // Single category (AI assigned if null)
+  tags                String[]          @default([])  // AI-generated tags (max 5)
+  extractionConfidence Json?                      // Confidence scores from AI extraction
+  organizerName       String?                     // Extracted organizer
+  organizerContact    String?                     // Extracted contact info
   
   // Additional fields from existing schema
   categories      String[]
@@ -132,6 +154,8 @@ model Event {
   moderationSeverity  ModerationSeverity?
   moderationCategory  String?
   moderatedAt         DateTime?
+  moderatedBy         String?
+  moderatedByAdmin    User?             @relation("ModeratedEvents", fields: [moderatedBy], references: [id])
   
   // Search fields
   searchText        String      @db.Text
@@ -140,10 +164,13 @@ model Event {
 
   editTokens      EventEditToken[]
   favorites       Favorite[]
+  auditLogs       EventAuditLog[]
+  appeals         EventAppeal[]
 
   @@index([city, country, startAt])
   @@index([startAt])
   @@index([categories])
+  @@index([category])
   @@index([lat, lng])
   @@index([status])
 }
@@ -174,4 +201,46 @@ model Favorite {
   @@unique([userId, eventId])
   @@index([userId])
   @@index([eventId])
+}
+
+model EventAuditLog {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  actor       String   // "user" | "ai" | "admin"
+  actorId     String?  // User ID if admin/user
+  action      String   // "created" | "edited" | "approved" | "rejected" | "flagged" | "appealed"
+  
+  oldStatus   String?
+  newStatus   String?
+  
+  notes       String?  @db.Text
+  reason      String?  @db.Text
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([eventId])
+  @@index([createdAt])
+}
+
+model EventAppeal {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  reason      String   @db.Text
+  status      String   @default("pending") // "pending" | "approved" | "rejected"
+  
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  reviewNotes String?  @db.Text
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([eventId])
+  @@index([status])
 }

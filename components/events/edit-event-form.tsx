@@ -18,6 +18,7 @@ const editEventSchema = z
     title: z.string().min(3, "Title must be at least 3 characters"),
     description: z.string().min(10, "Description must be at least 10 characters"),
     locationAddress: z.string().min(1, "Address is required"),
+    postcode: z.string().optional(),
     city: z.string().min(1, "City is required"),
     country: z.string().min(1, "Country is required"),
     startAt: z.string().min(1, "Start date/time is required"),
@@ -46,6 +47,7 @@ interface EditEventFormProps {
     title: string
     description: string
     locationAddress: string | null
+    postcode: string | null
     city: string | null
     country: string | null
     startAt: Date
@@ -72,6 +74,7 @@ export function EditEventForm({ event, token }: EditEventFormProps) {
       title: event.title,
       description: event.description,
       locationAddress: event.locationAddress || "",
+      postcode: event.postcode || "",
       city: event.city || "",
       country: event.country || "",
       startAt: new Date(event.startAt).toISOString().slice(0, 16),
@@ -155,6 +158,13 @@ export function EditEventForm({ event, token }: EditEventFormProps) {
             <Label htmlFor="locationAddress">Address *</Label>
             <Input id="locationAddress" {...register("locationAddress")} />
             {errors.locationAddress && <p className="text-sm text-red-600">{errors.locationAddress.message}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="postcode">Postcode / ZIP Code</Label>
+            <Input id="postcode" placeholder="12345" {...register("postcode")} />
+            <p className="text-xs text-muted-foreground">Optional</p>
+            {errors.postcode && <p className="text-sm text-red-600">{errors.postcode.message}</p>}
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">

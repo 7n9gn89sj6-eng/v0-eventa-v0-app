@@ -11,6 +11,12 @@ A multilingual community events platform with AI-powered hybrid search.
 - **Multilingual**: UI in English, Italian, Greek, Spanish, and French
 - **Filters**: Date, category, price, and distance-based filtering
 - **Event Edit Links**: Users receive an edit link via email to update event details without logging in
+- **AI Moderation**: Automatic content screening for harmful content and policy violations
+- **Admin Dashboard**: Review and moderate flagged events with detailed analysis
+- **Appeal System**: Users can appeal rejected events for admin review
+- **Audit Logging**: Complete transparency with detailed action history
+- **Rate Limiting**: Spam prevention with 5 events per hour limit
+- **Calendar Export**: Download events as .ics files for Google/Apple/Outlook calendars
 
 ## Tech Stack
 
@@ -23,6 +29,7 @@ A multilingual community events platform with AI-powered hybrid search.
 - **Web Search**: Google Programmable Search Engine
 - **i18n**: next-intl
 - **AI**: Vercel AI SDK with OpenAI
+- **Rate Limiting**: Upstash Redis
 
 ## Getting Started
 
@@ -71,6 +78,17 @@ cp .env.example .env
    - Password: Your Resend API key
 4. **Set `NEXT_PUBLIC_AUTH_ENABLED="true"`** to enable authentication
 
+#### AI Moderation (Required for Phase 2)
+- `OPENAI_API_KEY`: OpenAI API key for AI-powered content moderation
+  - Get from: https://platform.openai.com/api-keys
+  - Used for: Automatic event screening, harmful content detection
+
+#### Redis (Required for Rate Limiting)
+- `UPSTASH_KV_KV_REST_API_URL`: Upstash Redis REST API URL
+- `UPSTASH_KV_KV_REST_API_TOKEN`: Upstash Redis REST API token
+  - Get from: https://upstash.com
+  - Used for: Rate limiting event submissions (5 per hour per user)
+
 ### 3. Set up database
 
 **Local Development:**
@@ -85,6 +103,8 @@ npm run db:push
 # Execute SQL scripts for pgvector and search indexes
 npx prisma db execute --file scripts/01-enable-pgvector.sql
 npx prisma db execute --file scripts/02-create-search-indexes.sql
+npx prisma db execute --file scripts/03-add-moderation-fields.sql
+npx prisma db execute --file scripts/04-add-audit-and-appeals.sql
 npx prisma db execute --file scripts/03-seed-sample-events.sql
 \`\`\`
 
@@ -127,6 +147,7 @@ Visit [http://localhost:3000](http://localhost:3000)
    - **For authentication**: Add all email service variables AND set `NEXT_PUBLIC_AUTH_ENABLED="true"`
    - **Optional**: Add Mapbox, Google PSE, and OpenAI keys for enhanced features
      - `OPENAI_API_KEY`: Required for `/api/search/intent` AI-powered intent extraction
+     - `UPSTASH_KV_KV_REST_API_URL` and `UPSTASH_KV_KV_REST_API_TOKEN`: Required for rate limiting
 
 4. **Deploy**: Vercel will automatically deploy your app
    - The `postinstall` script will automatically run `prisma generate` and `prisma migrate deploy`
@@ -219,36 +240,157 @@ eventa-v0/
 ## Database Schema
 
 - **User**: Basic user info (email, name) + NextAuth tables
-- **Event**: Full event details with geocoding, categories, pricing, images
+- **Event**: Full event details with geocoding, categories, pricing, images, moderation status, audit logs
 - **Search**: Full-text search with pg_trgm + optional vector embeddings
 
 ## API Endpoints
 
-- `GET /api/events` - List/search events
-- `POST /api/events` - Create event (auth required)
+### Public Endpoints
+- `GET /api/events` - List/search events (only APPROVED events)
+- `POST /api/events/submit` - Create event (rate limited: 5/hour)
 - `GET /api/events/:id` - Get event details
+- `PUT /api/events/:id` - Update event (requires edit token, triggers re-moderation)
+- `GET /api/events/:id/calendar` - Download event as .ics file
+- `POST /api/events/:id/appeal` - Submit appeal for rejected event
 - `POST /api/search` - AI-powered hybrid search
 - `POST /api/auth/*` - NextAuth endpoints
 - `GET /api/cron/events-maintenance` - Automated event maintenance
-- `POST /api/events/:id/edit` - Update event details using edit link
 - `GET /api/status` - Health endpoint
 
-## Search Flow
+### Admin Endpoints (Authentication Required)
+- `GET /api/admin/events` - List all events with moderation details
+- `GET /api/admin/events/:id` - Get event with audit logs and appeals
+- `POST /api/admin/events/:id/moderate` - Approve or reject event
+- `POST /api/admin/events/:id/appeal` - Respond to appeal
+- `GET /api/admin/summary` - Get moderation statistics
 
-1. User enters query in any language
-2. AI detects language (en/it/el/es/fr) - requires `OPENAI_API_KEY` for `/api/search/intent`
-3. Query is normalized with synonym expansion
-4. Database search with full-text + vector similarity
-5. If < 6 results, automatically search Google PSE
-6. Results are merged and deduplicated
-7. Display with source badges (Eventa vs Web)
+## Phase 2: Moderation & Admin System
 
-## Build Safety
+### Overview
 
-- Auth is disabled by default (`NEXT_PUBLIC_AUTH_ENABLED=false`).
-- CI fails fast if critical envs are missing (`npm run check:env`).
-- Smoke test: `npm run smoke` (set `APP_BASE_URL` if testing a deployed URL).
-- Database scripts are NEVER auto-run; use `npm run db:setup` only when ready.
+Phase 2 adds comprehensive content moderation with AI-powered screening and human admin oversight to ensure event quality and safety.
+
+### Key Features
+
+**AI Moderation:**
+- Automatic content analysis for all submitted events
+- Detects harmful content: grooming, hate gatherings, exploitation, criminal activity, extremism
+- Three-tier decision system: APPROVED, FLAGGED (needs review), REJECTED
+- Severity levels: low, medium, high, critical
+
+**Admin Dashboard:**
+- View all events with moderation status filters
+- Detailed event review pages with AI analysis
+- Approve or reject events with custom reasons
+- Review and respond to user appeals
+- Complete audit history for each event
+
+**Appeal Workflow:**
+- Users can appeal rejected events
+- Admins receive email notifications of appeals
+- Admins can approve or reject appeals with notes
+- Users receive email notifications of appeal decisions
+
+**Audit Logging:**
+- Complete transparency of all moderation actions
+- Tracks event creation, edits, AI decisions, admin actions, appeals
+- Searchable history with timestamps and actors
+- Metadata storage for AI analysis results
+
+**Rate Limiting:**
+- 5 event submissions per hour per email address
+- Prevents spam and abuse
+- Uses Upstash Redis for distributed rate limiting
+
+**Enhanced Calendar Export:**
+- Improved .ics file format with proper timezone support
+- Compatible with Google Calendar, Apple Calendar, Outlook
+- Includes organizer information and event URLs
+
+### Documentation
+
+Comprehensive documentation is available in the `/docs` directory:
+
+- **[Moderation Workflow](./docs/moderation-workflow.md)** - Complete moderation process, status states, notification flows
+- **[Database Schema](./docs/database-schema.md)** - Database models, fields, relationships, indexes
+- **[API Endpoints](./docs/api-endpoints.md)** - All API routes with request/response examples
+- **[Testing](./docs/testing.md)** - Testing strategy, test cases, edge cases
+- **[Audit Logs](./docs/audit-logs.md)** - Audit log system, action types, usage examples
+
+### Admin Access
+
+To access the admin dashboard:
+
+1. Navigate to `/admin/events`
+2. Sign in with admin credentials (requires authentication enabled)
+3. View and moderate events
+
+**Note**: Admin role assignment is currently manual. Set user role to "ADMIN" in the database.
+
+### Testing
+
+Phase 2 includes comprehensive automated tests using Playwright:
+
+\`\`\`bash
+# Run all tests
+npm test
+
+# Run specific test suite
+npm test tests/moderation.spec.ts
+npm test tests/appeal-workflow.spec.ts
+npm test tests/rate-limiting.spec.ts
+npm test tests/calendar-export.spec.ts
+
+# Run tests in headed mode (see browser)
+npm test -- --headed
+
+# Generate test report
+npm test -- --reporter=html
+\`\`\`
+
+### Event Visibility Rules
+
+Events are only shown publicly when BOTH conditions are met:
+- Event status: `PUBLISHED` (user-controlled)
+- Moderation status: `APPROVED` (system-controlled)
+
+Events with status `PENDING`, `FLAGGED`, or `REJECTED` are hidden from public view.
+
+### Moderation Flow
+
+1. **User submits event** → Status: PENDING
+2. **Verification email sent** → User receives edit link
+3. **AI moderation runs** → Analyzes content automatically
+4. **AI decision**:
+   - APPROVED → Event becomes public
+   - FLAGGED → Admin receives notification for review
+   - REJECTED → Creator receives notification with reason
+5. **Admin review** (for flagged events):
+   - Admin approves → Event becomes public
+   - Admin rejects → Creator receives notification
+6. **Appeal process** (for rejected events):
+   - Creator submits appeal → Admin receives notification
+   - Admin reviews appeal → Creator receives decision
+
+### Migration from Phase 1
+
+If upgrading from Phase 1:
+
+1. Run the new migration scripts:
+   \`\`\`bash
+   npx prisma db execute --file scripts/03-add-moderation-fields.sql
+   npx prisma db execute --file scripts/04-add-audit-and-appeals.sql
+   \`\`\`
+
+2. Add required environment variables:
+   - `OPENAI_API_KEY` for AI moderation
+   - `UPSTASH_KV_KV_REST_API_URL` and `UPSTASH_KV_KV_REST_API_TOKEN` for rate limiting
+
+3. Existing events will have `moderationStatus: PENDING` by default
+4. Run a one-time script to approve existing events (optional):
+   \`\`\`bash
+   npm run scripts:approve-existing-events
+   \`\`\`
 
 ## License
 
