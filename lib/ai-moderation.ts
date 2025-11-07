@@ -10,6 +10,15 @@ export interface EventAnalysis {
   shouldAutoApprove: boolean
 }
 
+export interface ModerationResult {
+  status: "approved" | "flagged" | "rejected"
+  reason: string
+  severity_level: "low" | "medium" | "high"
+  policy_category: string
+  confidence: number // 0-1
+  details: string[]
+}
+
 export async function analyzeEventContent(event: {
   title: string
   description: string
@@ -131,4 +140,83 @@ Return any events that might be duplicates with similarity scores (0-1) and reas
   })
 
   return (object as any).duplicates
+}
+
+export async function moderateEventContent(event: {
+  title: string
+  description: string
+  city: string
+  country: string
+  externalUrl?: string
+}): Promise<ModerationResult> {
+  const { object } = await generateObject({
+    model: "openai/gpt-4o-mini",
+    schema: {
+      type: "object",
+      properties: {
+        status: {
+          type: "string",
+          enum: ["approved", "flagged", "rejected"],
+          description: "Moderation decision",
+        },
+        reason: {
+          type: "string",
+          description: "Explanation of the moderation decision",
+        },
+        severity_level: {
+          type: "string",
+          enum: ["low", "medium", "high"],
+          description: "Severity of any issues found",
+        },
+        policy_category: {
+          type: "string",
+          description:
+            "Category of policy violation if any (e.g., grooming, hate_event, exploitation, criminal_activity, extremism, spam, inappropriate_content, safe)",
+        },
+        confidence: {
+          type: "number",
+          description: "Confidence level in the moderation decision (0-1)",
+        },
+        details: {
+          type: "array",
+          items: { type: "string" },
+          description: "Specific details about any issues found",
+        },
+      },
+      required: ["status", "reason", "severity_level", "policy_category", "confidence", "details"],
+    },
+    prompt: `You are a content moderation AI protecting a community events platform. Analyze this event submission for harmful, inappropriate, or policy-violating content.
+
+Event Details:
+Title: ${event.title}
+Description: ${event.description}
+Location: ${event.city}, ${event.country}
+${event.externalUrl ? `External URL: ${event.externalUrl}` : ""}
+
+CRITICAL POLICY VIOLATIONS TO DETECT:
+1. **Grooming or Child Exploitation** - Any content that could be used to exploit, groom, or harm minors
+2. **Hate Gatherings** - Events promoting hate speech, discrimination, or violence against protected groups
+3. **Exploitation of Vulnerable Persons** - Events targeting or exploiting vulnerable populations
+4. **Criminal Activity** - Events promoting illegal activities, scams, fraud, or violence
+5. **Extremism** - Events promoting extremist ideologies, terrorism, or radicalization
+6. **Spam/Scams** - Obvious spam, phishing, or fraudulent events
+7. **Inappropriate Content** - Explicit sexual content, graphic violence, or other inappropriate material
+
+MODERATION GUIDELINES:
+- **REJECTED**: Clear policy violations (grooming, hate, exploitation, criminal activity, extremism) - HIGH severity
+- **FLAGGED**: Suspicious content that needs human review - MEDIUM severity
+- **APPROVED**: Safe, legitimate community events - LOW severity
+
+Provide:
+1. Status: approved | flagged | rejected
+2. Reason: Clear explanation of your decision
+3. Severity Level: low | medium | high
+4. Policy Category: The specific category (grooming, hate_event, exploitation, criminal_activity, extremism, spam, inappropriate_content, or safe)
+5. Confidence: How confident you are in this decision (0-1)
+6. Details: Specific issues or red flags found
+
+Be thorough but fair. Legitimate events should be approved. When in doubt, flag for human review rather than auto-rejecting.`,
+  })
+
+  return object as ModerationResult
 }

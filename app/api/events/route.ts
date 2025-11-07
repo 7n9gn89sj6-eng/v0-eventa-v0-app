@@ -37,6 +37,8 @@ export async function GET(request: NextRequest) {
       where.status = "PUBLISHED"
     }
 
+    where.moderationStatus = "APPROVED"
+
     if (category) {
       where.categories = {
         has: category,

@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
     // Build search query
     const where: any = {
       status: "PUBLISHED", // Only search published events
+      moderationStatus: "APPROVED", // Only show APPROVED events in search results
       startAt: dateFilter || { gte: new Date() }, // Future events only
     }
 

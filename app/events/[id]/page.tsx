@@ -27,10 +27,10 @@ export default async function EventPage({
   searchParams,
 }: {
   params: { id: string }
-  searchParams: { created?: string }
+  searchParams: { created?: string; edited?: string }
 }) {
   const { id } = await params
-  const { created } = await searchParams
+  const { created, edited } = await searchParams
 
   const session = await getSession()
 
@@ -50,6 +50,15 @@ export default async function EventPage({
     notFound()
   }
 
+  // Only show events that are APPROVED or PENDING (for creator preview)
+  if (event.moderationStatus === "FLAGGED" || event.moderationStatus === "REJECTED") {
+    // Allow event creator to view their own flagged/rejected events
+    const isCreator = session && session.userId === event.createdById
+    if (!isCreator) {
+      notFound()
+    }
+  }
+
   let isFavorited = false
   if (session) {
     const favorite = await prisma.favorite.findUnique({
@@ -67,6 +76,7 @@ export default async function EventPage({
     <EventDetail
       event={event}
       showSuccessBanner={created === "true"}
+      showEditedBanner={edited === "true"}
       isFavorited={isFavorited}
       hasSession={!!session}
     />

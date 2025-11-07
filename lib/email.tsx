@@ -209,3 +209,34 @@ This link will expire in 30 days from now. Keep it safe for any future updates t
     throw new Error("Failed to send edit link email")
   }
 }
+
+export async function sendEmail({
+  to,
+  subject,
+  html,
+}: {
+  to: string
+  subject: string
+  html: string
+}) {
+  console.log("[v0] Attempting to send email to:", to)
+
+  if (!transporter) {
+    const errorMsg = initError || "Email system not configured"
+    console.error("[v0] Cannot send email:", errorMsg)
+    throw new Error(errorMsg)
+  }
+
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM,
+      to,
+      subject,
+      html,
+    })
+    console.log("[v0] ✓ Email sent successfully to:", to)
+  } catch (error) {
+    console.error("[v0] ✗ Failed to send email:", error)
+    throw new Error("Failed to send email")
+  }
+}

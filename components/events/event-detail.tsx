@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Calendar, MapPin, Globe, DollarSign, ExternalLink, CheckCircle2, Edit } from "lucide-react"
+import { Calendar, MapPin, Globe, DollarSign, ExternalLink, CheckCircle2 } from "lucide-react"
 import { DateTime } from "luxon"
 import Link from "next/link"
 import { useState } from "react"
@@ -17,6 +17,7 @@ interface EventDetailProps {
     createdBy: Pick<User, "name" | "email">
   }
   showSuccessBanner?: boolean
+  showEditedBanner?: boolean // Add edited banner prop
   isFavorited?: boolean
   hasSession?: boolean
 }
@@ -24,10 +25,12 @@ interface EventDetailProps {
 export function EventDetail({
   event,
   showSuccessBanner = false,
+  showEditedBanner = false, // Add edited banner prop
   isFavorited = false,
   hasSession = false,
 }: EventDetailProps) {
   const [showBanner, setShowBanner] = useState(showSuccessBanner)
+  const [showEditBanner, setShowEditBanner] = useState(showEditedBanner) // Add state for edit banner
 
   const startDate = DateTime.fromJSDate(new Date(event.startAt)).setZone(event.timezone)
   const endDate = DateTime.fromJSDate(new Date(event.endAt)).setZone(event.timezone)
@@ -50,14 +53,26 @@ export function EventDetail({
               </p>
             </div>
             <div className="flex gap-2 shrink-0">
-              <Button size="sm" variant="outline" asChild>
-                <Link href={`/events/${event.id}`}>View event</Link>
+              <Button size="sm" variant="outline" onClick={() => setShowBanner(false)}>
+                Dismiss
               </Button>
-              <Button size="sm" asChild>
-                <Link href={`/my/events/${event.id}/edit`}>
-                  <Edit className="mr-2 h-4 w-4" />
-                  Edit this event
-                </Link>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {showEditBanner && (
+        <Alert className="mb-6 border-green-500/50 bg-green-50 dark:bg-green-950">
+          <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+          <AlertDescription className="flex items-center justify-between gap-4">
+            <div className="flex-1">
+              <p className="font-medium text-green-900 dark:text-green-100">
+                Your changes have been saved successfully!
+              </p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button size="sm" variant="outline" onClick={() => setShowEditBanner(false)}>
+                Dismiss
               </Button>
             </div>
           </AlertDescription>

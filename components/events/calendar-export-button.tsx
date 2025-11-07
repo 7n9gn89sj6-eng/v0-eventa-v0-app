@@ -19,7 +19,7 @@ export function CalendarExportButton({
 }: CalendarExportButtonProps) {
   const handleExport = async () => {
     try {
-      const response = await fetch(`/api/events/${eventId}/ical`)
+      const response = await fetch(`/api/events/${eventId}/calendar`)
 
       if (!response.ok) {
         throw new Error("Failed to export calendar")

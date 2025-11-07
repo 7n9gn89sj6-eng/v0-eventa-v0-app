@@ -83,6 +83,19 @@ enum EventStatus {
   ARCHIVED
 }
 
+enum ModerationStatus {
+  PENDING
+  APPROVED
+  FLAGGED
+  REJECTED
+}
+
+enum ModerationSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 model Event {
   id              String      @id @default(cuid())
   title           String
@@ -113,6 +126,12 @@ model Event {
   createdBy       User        @relation(fields: [createdById], references: [id], onDelete: Cascade)
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
+  
+  moderationStatus    ModerationStatus  @default(PENDING)
+  moderationReason    String?           @db.Text
+  moderationSeverity  ModerationSeverity?
+  moderationCategory  String?
+  moderatedAt         DateTime?
   
   // Search fields
   searchText        String      @db.Text

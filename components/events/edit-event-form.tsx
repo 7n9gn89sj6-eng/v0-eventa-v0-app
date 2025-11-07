@@ -108,7 +108,7 @@ export function EditEventForm({ event, token }: EditEventFormProps) {
       })
 
       if (token) {
-        router.push(`/events/${event.id}`)
+        router.push(`/events/${event.id}?edited=true`)
       } else {
         router.push("/my/events")
       }

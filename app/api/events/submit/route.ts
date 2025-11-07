@@ -6,6 +6,8 @@ import { sendVerificationEmail } from "@/lib/email"
 import { createSearchTextFolded } from "@/lib/search/accent-fold"
 import { createEventEditToken } from "@/lib/eventEditToken"
 import { sendEventEditLinkEmail } from "@/lib/email"
+import { moderateEventContent } from "@/lib/ai-moderation"
+import { notifyAdminOfFlaggedEvent } from "@/lib/admin-notifications"
 
 const submitEventSchema = z.object({
   name: z.string().min(2),
@@ -93,6 +95,7 @@ export async function POST(request: NextRequest) {
         categories: [],
         languages: ["en"],
         imageUrls: validatedData.imageUrl ? [validatedData.imageUrl] : [],
+        moderationStatus: "PENDING",
       },
     })
 
@@ -110,6 +113,45 @@ export async function POST(request: NextRequest) {
       console.error("[v0] ✗ Failed to send edit link email:", emailError)
       console.error("[v0] Error details:", emailError instanceof Error ? emailError.message : String(emailError))
     }
+
+    moderateEventContent({
+      title: validatedData.title,
+      description: validatedData.description,
+      city: validatedData.city,
+      country: validatedData.country,
+      externalUrl: validatedData.externalUrl,
+    })
+      .then(async (moderationResult) => {
+        console.log("[v0] Moderation result:", moderationResult)
+
+        await db.event.update({
+          where: { id: event.id },
+          data: {
+            moderationStatus: moderationResult.status.toUpperCase() as any,
+            moderationReason: moderationResult.reason,
+            moderationSeverity: moderationResult.severity_level.toUpperCase() as any,
+            moderationCategory: moderationResult.policy_category,
+            moderatedAt: new Date(),
+          },
+        })
+
+        console.log(`[v0] Event ${event.id} moderation status: ${moderationResult.status}`)
+
+        if (moderationResult.status === "flagged" || moderationResult.status === "rejected") {
+          await notifyAdminOfFlaggedEvent({
+            id: event.id,
+            title: validatedData.title,
+            description: validatedData.description,
+            moderationStatus: moderationResult.status.toUpperCase(),
+            moderationReason: moderationResult.reason,
+            moderationSeverity: moderationResult.severity_level.toUpperCase(),
+            moderationCategory: moderationResult.policy_category,
+          })
+        }
+      })
+      .catch((error) => {
+        console.error("[v0] ✗ Moderation failed:", error)
+      })
 
     const code = Math.floor(100000 + Math.random() * 900000).toString()
     const hashedCode = await bcrypt.hash(code, 10)
