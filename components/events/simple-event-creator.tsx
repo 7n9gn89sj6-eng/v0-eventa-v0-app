@@ -102,33 +102,24 @@ export function SimpleEventCreator() {
     setError(null)
 
     try {
-      // Submit event to API
-      const response = await fetch("/api/events/create-simple", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sourceText,
-          extraction: extractedData,
-          category: selectedCategory,
-          followUpAnswer: followUpAnswer || undefined,
-          imageUrl: imageUrl || undefined,
-          externalUrl: externalLink || undefined,
-          contactInfo: contactInfo || undefined,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to create event")
+      // Store extracted data in session storage for the review form
+      const reviewData = {
+        sourceText,
+        extraction: extractedData,
+        category: selectedCategory,
+        followUpAnswer: followUpAnswer || undefined,
+        imageUrl: imageUrl || undefined,
+        externalUrl: externalLink || undefined,
+        contactInfo: contactInfo || undefined,
       }
 
-      const result = await response.json()
+      sessionStorage.setItem("ai-event-draft", JSON.stringify(reviewData))
 
-      // Redirect to confirmation page
-      router.push(`/event/confirm?id=${result.eventId}`)
+      // Redirect to review form
+      router.push("/events/review-draft")
     } catch (err: any) {
-      setError(err.message || "Failed to create event. Please try again.")
-      console.error("[v0] Submission error:", err)
+      setError(err.message || "Failed to proceed. Please try again.")
+      console.error("[v0] Navigation error:", err)
     } finally {
       setIsSubmitting(false)
     }

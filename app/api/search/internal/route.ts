@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/db"
+import { db } from "@/lib/db"
 import { DateTime } from "luxon"
 
 export async function POST(request: NextRequest) {
@@ -12,17 +12,15 @@ export async function POST(request: NextRequest) {
 
     console.log(`[v0] Internal search request - uiLang: ${uiLang}`, { entities, query })
 
-    // Parse date phrase
     let dateFilter: { gte?: Date; lte?: Date } | undefined
     if (entities.date) {
       dateFilter = parseDatePhrase(entities.date)
     }
 
-    // Build search query
     const where: any = {
-      status: "PUBLISHED", // Only search published events
-      moderationStatus: "APPROVED", // Only show APPROVED events in search results
-      startAt: dateFilter || { gte: new Date() }, // Future events only
+      status: "PUBLISHED",
+      moderationStatus: "APPROVED",
+      startAt: dateFilter || { gte: new Date() },
     }
 
     // City filter
@@ -41,23 +39,29 @@ export async function POST(request: NextRequest) {
       ]
     }
 
-    // Category filter with synonyms
     if (entities.type || entities.category) {
-      const category = entities.type || entities.category
-      const synonyms = getCategorySynonyms(category)
-      where.categories = {
-        hasSome: synonyms,
-      }
+      const searchCategory = entities.type || entities.category
+      const categoryEnum = mapToEventCategory(searchCategory)
+
+      // Search in both category (new) and categories (old) fields
+      where.OR = [
+        ...(where.OR || []),
+        { category: categoryEnum },
+        { categories: { hasSome: [searchCategory, categoryEnum] } },
+      ]
     }
 
+    console.log("[v0] Search query where clause:", JSON.stringify(where, null, 2))
+
     // Execute search
-    const events = await prisma.event.findMany({
+    const events = await db.event.findMany({
       where,
       orderBy: [{ startAt: "asc" }],
       take: 20,
     })
 
-    // Rank results by field match weight
+    console.log(`[v0] Found ${events.length} events`)
+
     const rankedEvents = events.map((event) => {
       let score = 0
       const searchTerms = [query, entities.title, entities.type, entities.category]
@@ -65,13 +69,15 @@ export async function POST(request: NextRequest) {
         .join(" ")
         .toLowerCase()
 
-      // Title/tags match (weight: 3)
+      // Title match (weight: 3)
       if (event.title.toLowerCase().includes(searchTerms)) {
         score += 3
       }
 
       // Category match (weight: 2)
-      if (event.categories.some((cat) => searchTerms.includes(cat.toLowerCase()))) {
+      const eventCategories = [...(event.categories || []), event.category].filter(Boolean)
+
+      if (eventCategories.some((cat) => searchTerms.includes(cat.toLowerCase()))) {
         score += 2
       }
 
@@ -161,6 +167,42 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     )
   }
+}
+
+function mapToEventCategory(searchTerm: string): string | null {
+  const categoryMap: Record<string, string> = {
+    arts: "ARTS_CULTURE",
+    culture: "ARTS_CULTURE",
+    art: "ARTS_CULTURE",
+    music: "MUSIC_NIGHTLIFE",
+    nightlife: "MUSIC_NIGHTLIFE",
+    concert: "MUSIC_NIGHTLIFE",
+    jazz: "MUSIC_NIGHTLIFE",
+    food: "FOOD_DRINK",
+    drink: "FOOD_DRINK",
+    restaurant: "FOOD_DRINK",
+    family: "FAMILY_KIDS",
+    kids: "FAMILY_KIDS",
+    children: "FAMILY_KIDS",
+    sports: "SPORTS_OUTDOORS",
+    outdoors: "SPORTS_OUTDOORS",
+    fitness: "SPORTS_OUTDOORS",
+    community: "COMMUNITY_CAUSES",
+    causes: "COMMUNITY_CAUSES",
+    charity: "COMMUNITY_CAUSES",
+    learning: "LEARNING_TALKS",
+    talks: "LEARNING_TALKS",
+    workshop: "LEARNING_TALKS",
+    education: "LEARNING_TALKS",
+    markets: "MARKETS_FAIRS",
+    fairs: "MARKETS_FAIRS",
+    market: "MARKETS_FAIRS",
+    online: "ONLINE_VIRTUAL",
+    virtual: "ONLINE_VIRTUAL",
+  }
+
+  const lowerTerm = searchTerm.toLowerCase()
+  return categoryMap[lowerTerm] || null
 }
 
 function parseDatePhrase(phrase: string): { gte?: Date; lte?: Date } | undefined {
