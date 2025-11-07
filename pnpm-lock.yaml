@@ -10,13 +10,13 @@ importers:
     dependencies:
       '@ai-sdk/openai':
         specifier: latest
-        version: 2.0.63(zod@4.1.12)
+        version: 2.0.64(zod@4.1.12)
       '@auth/core':
         specifier: 0.41.0
         version: 0.41.0(nodemailer@7.0.10)
       '@auth/prisma-adapter':
-        specifier: 2.11.0
-        version: 2.11.0(@prisma/client@6.19.0(prisma@6.18.0(typescript@5.0.2))(typescript@5.0.2))(nodemailer@7.0.10)
+        specifier: latest
+        version: 2.11.1(@prisma/client@6.19.0(prisma@6.18.0(typescript@5.0.2))(typescript@5.0.2))(nodemailer@7.0.10)
       '@edge-runtime/vm':
         specifier: latest
         version: 5.0.0
@@ -136,7 +136,7 @@ importers:
         version: 4.0.7(vitest@2.1.8)
       ai:
         specifier: latest
-        version: 5.0.87(zod@4.1.12)
+        version: 5.0.89(zod@4.1.12)
       bcryptjs:
         specifier: latest
         version: 3.0.3
@@ -285,14 +285,14 @@ packages:
   '@acemir/cssom@0.9.19':
     resolution: {integrity: sha512-Pp2gAQXPZ2o7lt4j0IMwNRXqQ3pagxtDj5wctL5U2Lz4oV0ocDNlkgx4DpxfyKav4S/bePuI+SMqcBSUHLy9kg==}
 
-  '@ai-sdk/gateway@2.0.6':
-    resolution: {integrity: sha512-FmhR6Tle09I/RUda8WSPpJ57mjPWzhiVVlB50D+k+Qf/PBW0CBtnbAUxlNSR5v+NIZNLTK3C56lhb23ntEdxhQ==}
+  '@ai-sdk/gateway@2.0.7':
+    resolution: {integrity: sha512-/AI5AKi4vOK9SEb8Z1dfXkhsJ5NAfWsoJQc96B/mzn2KIrjw5occOjIwD06scuhV9xWlghCoXJT1sQD9QH/tyg==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/openai@2.0.63':
-    resolution: {integrity: sha512-J7XJaTOvorCDWxfEmDOPahRyXkt4207OCPp/JcjWYAux/8FCh2xUgjQivrcM4AxHQWYCSOWChGtCw7F5mNmLkA==}
+  '@ai-sdk/openai@2.0.64':
+    resolution: {integrity: sha512-+1mqxn42uB32DPZ6kurSyGAmL3MgCaDpkYU7zNDWI4NLy3Zg97RxTsI1jBCGIqkEVvRZKJlIMYtb89OvMnq3AQ==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -338,8 +338,22 @@ packages:
       nodemailer:
         optional: true
 
-  '@auth/prisma-adapter@2.11.0':
-    resolution: {integrity: sha512-gp1vpO7R7HxqQIDVFG4FXpjd9WsXg+vZsaqXOYyNCWugcx0scU2XNfhEiw3FnGyIaqRD4fexBf40LMJH8HmZ8A==}
+  '@auth/core@0.41.1':
+    resolution: {integrity: sha512-t9cJ2zNYAdWMacGRMT6+r4xr1uybIdmYa49calBPeTqwgAFPV/88ac9TEvCR85pvATiSPt8VaNf+Gt24JIT/uw==}
+    peerDependencies:
+      '@simplewebauthn/browser': ^9.0.1
+      '@simplewebauthn/server': ^9.0.2
+      nodemailer: ^7.0.7
+    peerDependenciesMeta:
+      '@simplewebauthn/browser':
+        optional: true
+      '@simplewebauthn/server':
+        optional: true
+      nodemailer:
+        optional: true
+
+  '@auth/prisma-adapter@2.11.1':
+    resolution: {integrity: sha512-Ke7DXP0Fy0Mlmjz/ZJLXwQash2UkA4621xCM0rMtEczr1kppLc/njCbUkHkIQ/PnmILjqSPEKeTjDPsYruvkug==}
     peerDependencies:
       '@prisma/client': '>=2.26.0 || >=3 || >=4 || >=5 || >=6'
 
@@ -2313,8 +2327,8 @@ packages:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
     engines: {node: '>= 14'}
 
-  ai@5.0.87:
-    resolution: {integrity: sha512-9Cjx7o8IY9zAczigX0Tk/BaQwjPe/M6DpEjejKSBNrf8mOPIvyM+pJLqJSC10IsKci3FPsnaizJeJhoetU1Wfw==}
+  ai@5.0.89:
+    resolution: {integrity: sha512-8Nq+ZojGacQrupoJEQLrTDzT5VtR3gyp5AaqFSV3tzsAXlYQ9Igb7QE3yeoEdzOk5IRfDwWL7mDCUD+oBg1hDA==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -4226,14 +4240,14 @@ snapshots:
 
   '@acemir/cssom@0.9.19': {}
 
-  '@ai-sdk/gateway@2.0.6(zod@4.1.12)':
+  '@ai-sdk/gateway@2.0.7(zod@4.1.12)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
       '@ai-sdk/provider-utils': 3.0.16(zod@4.1.12)
       '@vercel/oidc': 3.0.3
       zod: 4.1.12
 
-  '@ai-sdk/openai@2.0.63(zod@4.1.12)':
+  '@ai-sdk/openai@2.0.64(zod@4.1.12)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
       '@ai-sdk/provider-utils': 3.0.16(zod@4.1.12)
@@ -4285,9 +4299,19 @@ snapshots:
     optionalDependencies:
       nodemailer: 7.0.10
 
-  '@auth/prisma-adapter@2.11.0(@prisma/client@6.19.0(prisma@6.18.0(typescript@5.0.2))(typescript@5.0.2))(nodemailer@7.0.10)':
+  '@auth/core@0.41.1(nodemailer@7.0.10)':
     dependencies:
-      '@auth/core': 0.41.0(nodemailer@7.0.10)
+      '@panva/hkdf': 1.2.1
+      jose: 6.1.0
+      oauth4webapi: 3.8.2
+      preact: 10.24.3
+      preact-render-to-string: 6.5.11(preact@10.24.3)
+    optionalDependencies:
+      nodemailer: 7.0.10
+
+  '@auth/prisma-adapter@2.11.1(@prisma/client@6.19.0(prisma@6.18.0(typescript@5.0.2))(typescript@5.0.2))(nodemailer@7.0.10)':
+    dependencies:
+      '@auth/core': 0.41.1(nodemailer@7.0.10)
       '@prisma/client': 6.19.0(prisma@6.18.0(typescript@5.0.2))(typescript@5.0.2)
     transitivePeerDependencies:
       - '@simplewebauthn/browser'
@@ -6058,9 +6082,9 @@ snapshots:
 
   agent-base@7.1.4: {}
 
-  ai@5.0.87(zod@4.1.12):
+  ai@5.0.89(zod@4.1.12):
     dependencies:
-      '@ai-sdk/gateway': 2.0.6(zod@4.1.12)
+      '@ai-sdk/gateway': 2.0.7(zod@4.1.12)
       '@ai-sdk/provider': 2.0.0
       '@ai-sdk/provider-utils': 3.0.16(zod@4.1.12)
       '@opentelemetry/api': 1.9.0

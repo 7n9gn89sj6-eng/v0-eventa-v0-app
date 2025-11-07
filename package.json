@@ -33,7 +33,7 @@
   "dependencies": {
     "@ai-sdk/openai": "latest",
     "@auth/core": "0.41.0",
-    "@auth/prisma-adapter": "2.11.0",
+    "@auth/prisma-adapter": "latest",
     "@edge-runtime/vm": "latest",
     "@hookform/resolvers": "latest",
     "@neondatabase/serverless": "latest",
