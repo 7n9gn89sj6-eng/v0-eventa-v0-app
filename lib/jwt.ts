@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken"
 import { cookies } from "next/headers"
+import "server-only"
 
 const JWT_SECRET = process.env.NEXTAUTH_SECRET || "fallback-secret-change-in-production"
 const JWT_COOKIE_NAME = "eventa-session"

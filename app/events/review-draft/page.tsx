@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2, ArrowLeft, Mail, Phone, Globe, User } from "lucide-react"
 import type { EventExtractionOutput, BroadEventCategory } from "@/lib/types"
-import { CATEGORY_LABELS } from "@/lib/ai-extraction"
+import { CATEGORY_LABELS } from "@/lib/ai-extraction-constants"
 
 interface DraftData {
   sourceText: string

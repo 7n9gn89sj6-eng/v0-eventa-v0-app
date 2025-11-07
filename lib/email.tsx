@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer"
+import "server-only"
 
 let transporter: nodemailer.Transporter | null = null
 let initError: string | null = null
@@ -239,3 +240,5 @@ export async function sendEmail({
     throw new Error("Failed to send email")
   }
 }
+
+// Additional updates can be made here if needed

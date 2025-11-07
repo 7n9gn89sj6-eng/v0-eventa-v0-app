@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { ChevronDown, ChevronUp, Loader2, Sparkles } from "lucide-react"
 import type { EventExtractionOutput, BroadEventCategory } from "@/lib/types"
-import { CATEGORY_LABELS } from "@/lib/ai-extraction"
+import { CATEGORY_LABELS } from "@/lib/ai-extraction-constants"
 import { useRouter } from "next/navigation"
 
 const EXAMPLE_PLACEHOLDER = `Sat 12 April, 2–5pm at St Kilda Library. Poetry open mic, gold coin donation, family-friendly. Host: Irene. Register via email.`

@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { CheckCircle2, XCircle, AlertTriangle, Clock, Sparkles, User, Mail, Tag } from "lucide-react"
-import { CATEGORY_LABELS } from "@/lib/ai-extraction"
+import { CATEGORY_LABELS } from "@/lib/ai-extraction-constants"
 import type { BroadEventCategory } from "@/lib/types"
 
 interface AdminEventReviewProps {

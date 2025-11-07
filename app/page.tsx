@@ -252,7 +252,7 @@ export default function HomePage() {
       const extractResponse = await fetch("/api/ai/extract-event", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: query }),
+        body: JSON.stringify({ source_text: query }),
       })
 
       if (!extractResponse.ok) {

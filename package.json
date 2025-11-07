@@ -96,6 +96,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "latest",
+    "server-only": "latest",
     "sonner": "latest",
     "swr": "latest",
     "tailwind-merge": "^2.5.5",

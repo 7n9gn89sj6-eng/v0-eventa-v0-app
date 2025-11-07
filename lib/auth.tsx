@@ -1,3 +1,4 @@
+import "server-only"
 import NextAuth, { type NextAuthOptions } from "next-auth"
 import EmailProvider from "next-auth/providers/email"
 import { PrismaAdapter } from "@auth/prisma-adapter"
