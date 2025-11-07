@@ -9,15 +9,15 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  async redirects() {
-    return [
-      {
-        source: "/events/new",
-        destination: "/add-event",
-        permanent: false,
-      },
-    ]
-  },
+  // async redirects() {
+  //   return [
+  //     {
+  //       source: "/events/new",
+  //       destination: "/add-event",
+  //       permanent: false,
+  //     },
+  //   ]
+  // },
 }
 
 export default nextConfig
