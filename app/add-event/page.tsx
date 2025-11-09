@@ -1,31 +1,29 @@
-import { Suspense } from "react";
-import AddEventFormWrapper from "@/components/events/add-event-form-wrapper";
+import { Suspense } from "react"
+import { AddEventFormWrapper } from "@/components/events/add-event-form-wrapper"
+import type { Metadata } from "next"
 
-export default async function AddEventPage({
+export const metadata: Metadata = {
+  title: "Add an Event - Eventa",
+  description: "Share your event with the community",
+}
+
+export default function AddEventPage({
   searchParams,
 }: {
-  // Next.js 16: searchParams is a Promise
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: { title?: string; description?: string; location?: string; date?: string; draft?: string }
 }) {
-  const sp = await searchParams;
-
-  const draftId =
-    typeof sp?.draft === "string"
-      ? sp.draft
-      : Array.isArray(sp?.draft)
-      ? sp.draft[0]
-      : undefined;
-
   return (
-    <div className="mx-auto max-w-5xl p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-semibold">Create an event</h1>
-        <p className="text-muted-foreground">Fill in the details below.</p>
+    <div className="container mx-auto max-w-2xl px-4 py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold tracking-tight text-balance">Add an Event</h1>
+        <p className="mt-2 text-muted-foreground text-pretty">
+          Share your event with the community. Fill in the details below and we'll send you a verification email to
+          finish publishing.
+        </p>
       </div>
-
       <Suspense fallback={<div>Loading...</div>}>
-        <AddEventFormWrapper initialData={sp ?? {}} draftId={draftId} />
+        <AddEventFormWrapper initialData={searchParams} draftId={searchParams.draft} />
       </Suspense>
     </div>
-  );
+  )
 }

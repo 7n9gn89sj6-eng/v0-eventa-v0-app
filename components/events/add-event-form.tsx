@@ -153,19 +153,18 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
     setError(null)
 
     try {
-      console.log("[v0] Submitting event data:", data)
-
       const submitPayload = {
         title: data.title,
         description: data.description,
         start: new Date(data.startAt).toISOString(),
         end: new Date(data.endAt).toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         location: {
-          address: data.address,
-          name: data.address, // Use address as venue name for now
+          address: `${data.address}, ${data.city}, ${data.country}`,
+          name: data.address,
         },
-        imageUrl: data.imageUrl || undefined,
-        externalUrl: data.externalUrl || undefined,
+        imageUrl: data.imageUrl || "",
+        externalUrl: data.externalUrl || "",
         organizer_name: data.name,
         organizer_contact: data.email,
         creatorEmail: data.email,
@@ -178,18 +177,25 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        console.error("[v0] Event submission failed:", errorData)
+        const text = await response.text()
+        let errorMessage = `Server error (${response.status})`
 
-        if (errorData.details && Array.isArray(errorData.details)) {
-          const errorMessages = errorData.details.map((err: any) => err.message).join(", ")
-          throw new Error(errorMessages)
+        try {
+          const json = JSON.parse(text)
+          errorMessage = json.error || json.message || errorMessage
+        } catch {
+          errorMessage =
+            text
+              .substring(0, 200)
+              .replace(/<[^>]*>/g, "")
+              .trim() || errorMessage
         }
 
-        throw new Error(errorData.error || "Failed to submit event")
+        throw new Error(errorMessage)
       }
 
       const result = await response.json()
+
       console.log("[v0] Event submitted successfully:", result)
 
       if (typeof window !== "undefined" && initialData) {
@@ -266,7 +272,15 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                   <FormItem>
                     <FormLabel>Your Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="John Doe" {...field} disabled={isSubmitting} />
+                      <Input
+                        placeholder="John Doe"
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        disabled={isSubmitting}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -280,7 +294,16 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                   <FormItem>
                     <FormLabel>Contact Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="you@example.com" {...field} disabled={isSubmitting} />
+                      <Input
+                        type="email"
+                        placeholder="you@example.com"
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        disabled={isSubmitting}
+                      />
                     </FormControl>
                     <FormDescription>We'll send a verification link to this email</FormDescription>
                     <FormMessage />
@@ -296,7 +319,15 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                     <FormLabel>Human Check</FormLabel>
                     <FormDescription>Type the last word of this sentence: eventa connects communities</FormDescription>
                     <FormControl>
-                      <Input placeholder="Type the last word..." {...field} disabled={isSubmitting} />
+                      <Input
+                        placeholder="Type the last word..."
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        disabled={isSubmitting}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -315,7 +346,15 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                   <FormItem>
                     <FormLabel>Event Title</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Athens Farmers Market" {...field} disabled={isSubmitting} />
+                      <Input
+                        placeholder="e.g., Athens Farmers Market"
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        disabled={isSubmitting}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -332,7 +371,11 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                       <Textarea
                         placeholder="Describe your event in detail..."
                         rows={5}
-                        {...field}
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
                         disabled={isSubmitting}
                       />
                     </FormControl>
@@ -356,7 +399,15 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                   <FormItem>
                     <FormLabel>Address</FormLabel>
                     <FormControl>
-                      <Input placeholder="123 Main Street" {...field} disabled={isSubmitting} />
+                      <Input
+                        placeholder="123 Main Street"
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        disabled={isSubmitting}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -370,7 +421,15 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                   <FormItem>
                     <FormLabel>Postcode / ZIP Code</FormLabel>
                     <FormControl>
-                      <Input placeholder="12345" {...field} disabled={isSubmitting} />
+                      <Input
+                        placeholder="12345"
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        disabled={isSubmitting}
+                      />
                     </FormControl>
                     <FormDescription>Optional</FormDescription>
                     <FormMessage />
@@ -386,7 +445,15 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                     <FormItem>
                       <FormLabel>City</FormLabel>
                       <FormControl>
-                        <Input placeholder="Athens" {...field} disabled={isSubmitting} />
+                        <Input
+                          placeholder="Athens"
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          disabled={isSubmitting}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -400,7 +467,15 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                     <FormItem>
                       <FormLabel>Country</FormLabel>
                       <FormControl>
-                        <Input placeholder="Greece" {...field} disabled={isSubmitting} />
+                        <Input
+                          placeholder="Greece"
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          disabled={isSubmitting}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -421,7 +496,15 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                     <FormItem>
                       <FormLabel>Start Date & Time</FormLabel>
                       <FormControl>
-                        <Input type="datetime-local" {...field} disabled={isSubmitting} />
+                        <Input
+                          type="datetime-local"
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          disabled={isSubmitting}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -435,7 +518,15 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                     <FormItem>
                       <FormLabel>End Date & Time</FormLabel>
                       <FormControl>
-                        <Input type="datetime-local" {...field} disabled={isSubmitting} />
+                        <Input
+                          type="datetime-local"
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          disabled={isSubmitting}
+                        />
                       </FormControl>
                       <FormDescription>Events auto-hide after the end time.</FormDescription>
                       <FormMessage />
@@ -459,7 +550,11 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                       <Input
                         type="url"
                         placeholder="https://example.com/image.jpg"
-                        {...field}
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
                         disabled={isSubmitting}
                       />
                     </FormControl>
@@ -476,7 +571,16 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                   <FormItem>
                     <FormLabel>External URL (optional)</FormLabel>
                     <FormControl>
-                      <Input type="url" placeholder="https://example.com" {...field} disabled={isSubmitting} />
+                      <Input
+                        type="url"
+                        placeholder="https://example.com"
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        disabled={isSubmitting}
+                      />
                     </FormControl>
                     <FormDescription>Link to your event website or registration page</FormDescription>
                     <FormMessage />

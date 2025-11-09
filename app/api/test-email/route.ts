@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import nodemailer from "nodemailer"
 
+export const runtime = "nodejs"
+
 export async function GET() {
   try {
     console.log("[v0] Testing email configuration...")

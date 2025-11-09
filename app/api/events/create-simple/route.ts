@@ -1,20 +1,10 @@
-import "server-only"
 import { NextResponse } from "next/server"
-import { auth } from "@/lib/auth"
 
 export const runtime = "nodejs"
 
-// and internally calls the canonical /api/events/submit handler
+// ALIAS endpoint that transforms AI extraction data and internally calls the canonical /api/events/submit handler
 export async function POST(req: Request) {
   try {
-    const session = await auth()
-
-    console.log("[v0] Create-simple ALIAS: Auth check", { hasSession: !!session, email: session?.user?.email })
-
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     const body = await req.json()
 
     console.log("[v0] Create-simple ALIAS: Received payload, transforming to canonical schema")
@@ -35,7 +25,7 @@ export async function POST(req: Request) {
       externalUrl: body.externalUrl,
       tags: body.tags || body.extraction?.tags,
       extractionConfidence: body.extractionConfidence || body.extraction?.confidence,
-      creatorEmail: session.user.email,
+      creatorEmail: body.creatorEmail,
     }
 
     console.log("[v0] Create-simple ALIAS: Calling canonical /api/events/submit")

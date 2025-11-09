@@ -1,10 +1,12 @@
+export const runtime = "nodejs"
+
 import { type NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/jwt"
 import { db } from "@/lib/db"
 import { createAuditLog } from "@/lib/audit-log"
 import { sendEmail } from "@/lib/email"
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await getSession()
 
@@ -21,7 +23,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 })
     }
 
-    const { id } = await params
+    const { id } = params
     const { appealId, action, reviewNotes } = await request.json()
 
     if (!["approve", "reject"].includes(action)) {

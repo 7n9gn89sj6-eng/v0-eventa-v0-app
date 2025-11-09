@@ -1,3 +1,5 @@
+export const runtime = "nodejs"
+
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/db"
@@ -8,18 +10,23 @@ import { createEventEditToken } from "@/lib/eventEditToken"
 import { sendEventEditLinkEmail } from "@/lib/email"
 import { ok, fail, validationError } from "@/lib/http"
 
-const EventCreate = z.object({
-  title: z.string().min(3).max(120),
-  description: z.string().max(5000).optional(),
-  startAt: z.string().datetime(),
-  endAt: z.string().datetime(),
-  url: z.string().url().optional(),
-  categories: z.array(z.string()).max(10).optional(),
-  images: z.array(z.string().url()).max(10).optional(),
-  lat: z.number().min(-90).max(90).optional(),
-  lng: z.number().min(-180).max(180).optional(),
-  contactEmail: z.string().email().optional(),
-})
+const EventCreate = z
+  .object({
+    title: z.string().min(3).max(120),
+    description: z.string().max(5000).optional(),
+    startAt: z.coerce.date({ required_error: "Start date is required" }),
+    endAt: z.coerce.date({ required_error: "End date is required" }),
+    url: z.string().url().optional(),
+    categories: z.array(z.string()).max(10).optional(),
+    images: z.array(z.string().url()).max(10).optional(),
+    lat: z.number().min(-90).max(90).optional(),
+    lng: z.number().min(-180).max(180).optional(),
+    contactEmail: z.string().email().optional(),
+  })
+  .refine((d) => d.endAt > d.startAt, {
+    path: ["endAt"],
+    message: "End date must be after start date",
+  })
 
 export async function GET(request: NextRequest) {
   try {
@@ -79,10 +86,6 @@ export async function POST(request: NextRequest) {
 
     const data = EventCreate.parse(body)
 
-    if (new Date(data.endAt) < new Date(data.startAt)) {
-      return fail("endAt must be after startAt", 400)
-    }
-
     const { title, description, categories, startAt, endAt } = data
 
     let lat: number | undefined = data.lat
@@ -110,8 +113,8 @@ export async function POST(request: NextRequest) {
         title,
         description: description || "",
         categories: categories || [],
-        startAt: new Date(startAt),
-        endAt: new Date(endAt),
+        startAt: startAt.toISOString(),
+        endAt: endAt.toISOString(),
         timezone: body.timezone || "UTC",
         venueName: body.venueName,
         address: geocodedAddress || address,

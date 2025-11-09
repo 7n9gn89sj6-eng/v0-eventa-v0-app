@@ -1,3 +1,5 @@
+export const runtime = "nodejs"
+
 import type { NextRequest } from "next/server"
 import { db } from "@/lib/db"
 import { getSession } from "@/lib/jwt"
@@ -8,9 +10,9 @@ import { moderateEventContent } from "@/lib/ai-moderation"
 import { notifyAdminOfFlaggedEvent } from "@/lib/admin-notifications"
 import { sendEmail } from "@/lib/email"
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { id } = await params
+    const { id } = params
 
     const event = await db.event.findUnique({
       where: { id },
@@ -35,14 +37,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await getSession()
     if (!session) {
       return fail("Unauthorized", 401)
     }
 
-    const { id } = await params
+    const { id } = params
     const body = await request.json()
 
     // Verify ownership
@@ -82,9 +84,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { id } = await params
+    const { id } = params
     const body = await request.json()
 
     const authHeader = request.headers.get("authorization")
@@ -277,14 +279,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await getSession()
     if (!session) {
       return fail("Unauthorized", 401)
     }
 
-    const { id } = await params
+    const { id } = params
 
     // Verify ownership
     const event = await db.event.findUnique({

@@ -374,31 +374,6 @@ export default function HomePage() {
 
           <div className="mt-6">{/* SearchFiltersComponent removed */}</div>
 
-          <div className="mt-8 flex flex-wrap justify-center gap-2">
-            <p className="w-full text-sm text-muted-foreground mb-2">Try these examples:</p>
-            {[
-              "Create an open mic at The Dock next Saturday 8pm",
-              "Create yoga in Lisbon on Saturday",
-              "Create jazz night Friday 7pm, start 8pm",
-              "Create community picnic yesterday 2pm",
-              "Create photography meetup next Thursday 6pm",
-              "What's on in Athens this weekend?",
-            ].map((example) => (
-              <button
-                key={example}
-                type="button"
-                onClick={() => {
-                  if (searchBarRef.current) {
-                    searchBarRef.current.setQuery(example)
-                  }
-                }}
-                className="rounded-full bg-secondary px-4 py-2 text-sm text-secondary-foreground transition-colors hover:bg-secondary/80"
-              >
-                {example}
-              </button>
-            ))}
-          </div>
-
           {drafts.length > 0 && (
             <Button
               variant="outline"
