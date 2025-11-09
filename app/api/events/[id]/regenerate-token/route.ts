@@ -1,10 +1,7 @@
-export const runtime = "nodejs"
-
 import { type NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/jwt"
 import { db } from "@/lib/db"
 import { createEventEditToken } from "@/lib/eventEditToken"
-import { sendEventEditLinkEmail } from "@/lib/email"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -46,18 +43,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const baseUrl = process.env.APP_BASE_URL || "http://localhost:3000"
     const editUrl = `${baseUrl}/my/events/${event.id}/edit?token=${token}`
 
-    // Parse request body to check if email should be sent
-    const body = await request.json().catch(() => ({ sendEmail: false }))
-    let emailSent = false
-
-    if (body.sendEmail) {
-      try {
-        await sendEventEditLinkEmail(event.createdBy.email, event.title, event.id, token)
-        emailSent = true
-      } catch (error) {
-        console.error("[v0] Failed to send regenerated edit link email:", error)
-      }
-    }
+    console.log("[v0] Email disabled - Token regenerated but not emailed")
+    const emailSent = false
 
     return NextResponse.json({
       token,

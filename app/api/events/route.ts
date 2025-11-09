@@ -1,5 +1,3 @@
-export const runtime = "nodejs"
-
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma } from "@/lib/db"
@@ -7,7 +5,6 @@ import { requireAuth } from "@/lib/auth-helpers"
 import { geocodeAddress } from "@/lib/geocoding"
 import { createSearchTextFolded } from "@/lib/search/accent-fold"
 import { createEventEditToken } from "@/lib/eventEditToken"
-import { sendEventEditLinkEmail } from "@/lib/email"
 import { ok, fail, validationError } from "@/lib/http"
 
 const EventCreate = z
@@ -142,18 +139,10 @@ export async function POST(request: NextRequest) {
     let emailedEditLink = false
     try {
       const token = await createEventEditToken(event.id, event.endAt)
-
-      const recipientEmail = data.contactEmail || user.email || process.env.EVENT_CREATOR_FALLBACK_EMAIL
-
-      if (recipientEmail) {
-        await sendEventEditLinkEmail(recipientEmail, event.title, event.id, token)
-        emailedEditLink = true
-        console.log(`[v0] Edit link email sent to ${recipientEmail} for event ${event.id}`)
-      } else {
-        console.warn(`[v0] No recipient email available for event ${event.id}`)
-      }
-    } catch (emailError) {
-      console.error("[v0] Failed to send edit link email:", emailError)
+      console.log("[v0] Email disabled - Edit link token created but not emailed for event:", event.id)
+      emailedEditLink = false // Email functionality disabled
+    } catch (error) {
+      console.error("[v0] Failed to create edit link token:", error)
     }
 
     return NextResponse.json({ event, emailedEditLink }, { status: 201 })

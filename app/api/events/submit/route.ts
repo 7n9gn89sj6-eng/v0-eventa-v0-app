@@ -1,16 +1,13 @@
-export const runtime = "nodejs"
-
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { neon } from "@neondatabase/serverless"
-import { sendEventEditLinkEmail } from "@/lib/email"
 import { env } from "@/lib/env"
 
 const EventSubmitSchema = z
   .object({
     title: z.string().min(2),
     description: z.string().default(""),
-    start: z.coerce.date({ required_error: "Start date is required" }),
+    start: z.coerce.date({ required_error: "Start date and time is required" }),
     end: z.coerce.date().optional(),
     timezone: z.string().optional(),
     location: z
@@ -119,11 +116,7 @@ export async function POST(request: NextRequest) {
       VALUES (${generateId()}, ${eventId}, ${token}, ${expires.toISOString()}, NOW())
     `
 
-    try {
-      await sendEventEditLinkEmail(creatorEmail, validatedData.title, eventId, token)
-    } catch (emailError) {
-      console.error("Failed to send email, but event was created:", emailError)
-    }
+    console.log("[v0] Email disabled - Event created successfully, token generated but not emailed")
 
     const editUrl = `${env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/event/confirm?token=${token}`
 
