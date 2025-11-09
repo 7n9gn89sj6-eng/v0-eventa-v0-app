@@ -137,6 +137,9 @@ importers:
       ai:
         specifier: latest
         version: 5.0.89(zod@4.1.12)
+      axe-playwright:
+        specifier: latest
+        version: 2.2.2(playwright@1.56.1)
       bcryptjs:
         specifier: latest
         version: 3.0.3
@@ -255,9 +258,6 @@ importers:
       '@types/react-dom':
         specifier: 19.0.0
         version: 19.0.0
-      axe-playwright:
-        specifier: 2.0.3
-        version: 2.0.3(playwright@1.56.1)
       postcss:
         specifier: ^8.5
         version: 8.5.0
@@ -2172,8 +2172,8 @@ packages:
     peerDependencies:
       axe-core: '>=3'
 
-  axe-playwright@2.0.3:
-    resolution: {integrity: sha512-s7iI2okyHHsD3XZK4RMJtTy2UASkNWLQtnzLuaHiK3AWkERf+cqZJqkxb7O4b56fnbib9YnZVRByTl92ME3o6g==}
+  axe-playwright@2.2.2:
+    resolution: {integrity: sha512-h350/grzDCPgpuWV7eEOqr/f61Xn07Gi9f9B3Ew4rW6/nFtpdEJYW6jgRATorgAGXjEAYFTnaY3sEys39wDw4A==}
     peerDependencies:
       playwright: '>1.0.0'
 
@@ -5747,7 +5747,7 @@ snapshots:
       axe-core: 4.11.0
       mustache: 4.2.0
 
-  axe-playwright@2.0.3(playwright@1.56.1):
+  axe-playwright@2.2.2(playwright@1.56.1):
     dependencies:
       '@types/junit-report-builder': 3.0.2
       axe-core: 4.11.0

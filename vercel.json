@@ -4,5 +4,6 @@
       "path": "/api/cron/events-maintenance",
       "schedule": "0 0 * * *"
     }
-  ]
+  ],
+  "buildCommand": "pnpm install --no-frozen-lockfile && pnpm run build"
 }
