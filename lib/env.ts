@@ -1,16 +1,13 @@
 import { z } from "zod"
 
 const envSchema = z.object({
-  // Database
+  // Database (required)
   DATABASE_URL: z.string().url("DATABASE_URL must be a valid URL"),
   NEON_DATABASE_URL: z.string().url("NEON_DATABASE_URL must be a valid URL"),
 
-  // Email (Mailtrap)
-  EMAIL_SERVER_HOST: z.string().min(1, "EMAIL_SERVER_HOST is required"),
-  EMAIL_SERVER_PORT: z.string().regex(/^\d+$/, "EMAIL_SERVER_PORT must be a number"),
-  EMAIL_SERVER_USER: z.string().min(1, "EMAIL_SERVER_USER is required"),
-  EMAIL_SERVER_PASSWORD: z.string().min(1, "EMAIL_SERVER_PASSWORD is required"),
-  EMAIL_FROM: z.string().email("EMAIL_FROM must be a valid email"),
+  // Email via Resend (required for sending emails)
+  RESEND_API_KEY: z.string().min(1, "RESEND_API_KEY is required for email functionality"),
+  EMAIL_FROM: z.string().email("EMAIL_FROM must be a valid email address").optional(),
 
   // Application
   NEXT_PUBLIC_APP_URL: z.string().url("NEXT_PUBLIC_APP_URL must be a valid URL").optional(),
@@ -29,17 +26,16 @@ export function getEnv(): Env {
   }
 
   try {
-    cachedEnv = envSchema.parse({
+    const rawEnv = {
       DATABASE_URL: process.env.DATABASE_URL,
       NEON_DATABASE_URL: process.env.NEON_DATABASE_URL,
-      EMAIL_SERVER_HOST: process.env.EMAIL_SERVER_HOST,
-      EMAIL_SERVER_PORT: process.env.EMAIL_SERVER_PORT,
-      EMAIL_SERVER_USER: process.env.EMAIL_SERVER_USER,
-      EMAIL_SERVER_PASSWORD: process.env.EMAIL_SERVER_PASSWORD,
+      RESEND_API_KEY: process.env.RESEND_API_KEY,
       EMAIL_FROM: process.env.EMAIL_FROM,
-      NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
-      NODE_ENV: process.env.NODE_ENV,
-    })
+      NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || undefined,
+      NODE_ENV: process.env.NODE_ENV as "development" | "production" | "test" | undefined,
+    }
+
+    cachedEnv = envSchema.parse(rawEnv)
 
     return cachedEnv
   } catch (error) {
@@ -53,3 +49,19 @@ export function getEnv(): Env {
 
 // Export a convenient env object
 export const env = getEnv()
+
+export function assertEnv(keys: string[]): { ok: true } | { ok: false; missing: string[] } {
+  const missing: string[] = []
+
+  for (const key of keys) {
+    if (!process.env[key]) {
+      missing.push(key)
+    }
+  }
+
+  if (missing.length > 0) {
+    return { ok: false, missing }
+  }
+
+  return { ok: true }
+}

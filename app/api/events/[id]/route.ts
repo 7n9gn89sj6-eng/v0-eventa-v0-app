@@ -1,5 +1,4 @@
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const runtime = "nodejs"
 
 import type { NextRequest } from "next/server"
 import { db } from "@/lib/db"
@@ -9,7 +8,7 @@ import { ok, fail } from "@/lib/http"
 import { createAuditLog } from "@/lib/audit-log"
 import { moderateEventContent } from "@/lib/ai-moderation"
 import { notifyAdminOfFlaggedEvent } from "@/lib/admin-notifications"
-import { sendEmail } from "@/lib/email.server"
+import { sendEmail } from "@/lib/email"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {

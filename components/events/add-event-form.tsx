@@ -13,6 +13,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Loader2, CheckCircle2, Sparkles } from "lucide-react"
 import { useRouter } from "next/navigation"
 
+const API_URL = "/api/submit"
+
 const addEventSchema = z
   .object({
     name: z.string().min(2, "Name must be at least 2 characters"),
@@ -170,33 +172,31 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
         creatorEmail: data.email,
       }
 
-      const response = await fetch("/api/events/submit", {
+      const response = await fetch(API_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "content-type": "application/json" },
         body: JSON.stringify(submitPayload),
       })
 
-      if (!response.ok) {
-        const text = await response.text()
-        let errorMessage = `Server error (${response.status})`
+      const text = await response.text()
+      let json: any = null
+      try {
+        json = JSON.parse(text)
+      } catch {}
 
-        try {
-          const json = JSON.parse(text)
-          errorMessage = json.error || json.message || errorMessage
-        } catch {
-          errorMessage =
-            text
-              .substring(0, 200)
-              .replace(/<[^>]*>/g, "")
-              .trim() || errorMessage
+      if (!response.ok) {
+        const requestId = response.headers.get("x-request-id")
+        let errorMessage = json?.error || response.statusText || "An error occurred"
+
+        if (requestId) {
+          errorMessage += ` (req: ${requestId})`
         }
 
         throw new Error(errorMessage)
       }
 
-      const result = await response.json()
-
-      console.log("[v0] Event submitted successfully:", result)
+      setIsSuccess(true)
+      form.reset()
 
       if (typeof window !== "undefined" && initialData) {
         const urlParams = new URLSearchParams(window.location.search)
@@ -210,11 +210,7 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
           }
         }
       }
-
-      setIsSuccess(true)
-      form.reset()
     } catch (err: any) {
-      console.error("[v0] Error in form submission:", err)
       setError(err.message || "An unexpected error occurred")
     } finally {
       setIsSubmitting(false)

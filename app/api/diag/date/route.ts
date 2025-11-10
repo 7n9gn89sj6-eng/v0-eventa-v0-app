@@ -1,5 +1,3 @@
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server"
 import { DateTime } from "luxon"
 import { parseNaturalDate } from "../../../../lib/i18n/date-parser-inline"

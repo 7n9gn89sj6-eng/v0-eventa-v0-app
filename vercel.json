@@ -6,5 +6,5 @@
     }
   ],
   "installCommand": "pnpm install --no-frozen-lockfile",
-  "buildCommand": "next build"
+  "buildCommand": "vercel build"
 }

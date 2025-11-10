@@ -9,8 +9,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
 
 interface SmartInputBarProps {
-  onSearch?: (query: string) => void
-  onCreate?: (query: string) => void
+  onSearch?: (query: string) => Promise<void>
+  onCreate?: (query: string) => Promise<void>
   onError?: (error: string) => void
   className?: string
 }
@@ -35,6 +35,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
     const [detectedMode, setDetectedMode] = useState<"create" | null>(null)
     const [isProcessing, setIsProcessing] = useState(false)
     const [showExamples, setShowExamples] = useState(true)
+    const [error, setError] = useState<string | null>(null)
 
     useImperativeHandle(ref, () => ({
       setQuery: (newQuery: string) => {
@@ -43,7 +44,6 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
       },
     }))
 
-    // Load last mode from localStorage
     useEffect(() => {
       if (typeof window !== "undefined") {
         const savedMode = localStorage.getItem("eventa-input-mode") as "search" | "create" | null
@@ -53,7 +53,6 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
       }
     }, [])
 
-    // Save mode to localStorage
     useEffect(() => {
       if (typeof window !== "undefined") {
         localStorage.setItem("eventa-input-mode", mode)
@@ -93,18 +92,21 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
     const handleSubmit = async () => {
       if (!query.trim()) return
 
+      setError(null)
       setIsProcessing(true)
       setShowExamples(false)
 
       try {
         if (mode === "search") {
-          onSearch?.(query)
+          await onSearch?.(query)
         } else {
-          onCreate?.(query)
+          await onCreate?.(query)
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("[v0] Smart input error:", error)
-        onError?.("Something went wrong. Please try again.")
+        const errorMessage = error?.message || "Something went wrong. Please try again."
+        setError(errorMessage)
+        onError?.(errorMessage)
       } finally {
         setIsProcessing(false)
       }
@@ -123,9 +125,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
 
     return (
       <div className={cn("w-full space-y-3", className)}>
-        {/* Input with mode control */}
         <div className="relative flex flex-col gap-2 sm:flex-row">
-          {/* Text Input */}
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -140,10 +140,10 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
             />
           </div>
 
-          {/* Mode Control - Desktop */}
           <div className="hidden sm:flex items-center gap-2">
             <div className="inline-flex rounded-lg border bg-background p-1">
               <button
+                type="button"
                 onClick={() => setMode("search")}
                 className={cn(
                   "rounded-md px-4 py-2 text-sm font-medium transition-colors",
@@ -156,6 +156,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
                 Search
               </button>
               <button
+                type="button"
                 onClick={() => setMode("create")}
                 className={cn(
                   "rounded-md px-4 py-2 text-sm font-medium transition-colors",
@@ -169,7 +170,13 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
               </button>
             </div>
 
-            <Button onClick={handleSubmit} disabled={!query.trim() || isProcessing} size="lg" className="gap-2">
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={!query.trim() || isProcessing}
+              size="lg"
+              className="gap-2"
+            >
               {isProcessing ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -190,10 +197,10 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
           </div>
         </div>
 
-        {/* Mode Control - Mobile */}
         <div className="flex sm:hidden items-center justify-between gap-2">
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={() => setMode("search")}
               className={cn(
                 "rounded-full px-4 py-2 text-sm font-medium transition-colors border",
@@ -206,6 +213,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
               Search
             </button>
             <button
+              type="button"
               onClick={() => setMode("create")}
               className={cn(
                 "rounded-full px-4 py-2 text-sm font-medium transition-colors border",
@@ -219,7 +227,12 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
             </button>
           </div>
 
-          <Button onClick={handleSubmit} disabled={!query.trim() || isProcessing} className="flex-1 gap-2">
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!query.trim() || isProcessing}
+            className="flex-1 gap-2"
+          >
             {isProcessing ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -233,7 +246,13 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
           </Button>
         </div>
 
-        {/* Intent Detection Alert */}
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="text-sm">{error}</AlertDescription>
+          </Alert>
+        )}
+
         {detectedMode === "create" && mode === "search" && (
           <Alert className="border-primary/50 bg-primary/10">
             <AlertCircle className="h-4 w-4 text-primary" />
@@ -252,7 +271,6 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
           </Alert>
         )}
 
-        {/* Examples */}
         {showExamples && (
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">Try these:</p>

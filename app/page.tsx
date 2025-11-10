@@ -192,7 +192,6 @@ export default function HomePage() {
     console.log("[v0] Smart search:", query)
 
     try {
-      // Call intent API
       const intentResponse = await fetch("/api/search/intent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -204,13 +203,19 @@ export default function HomePage() {
         }),
       })
 
+      if (!intentResponse.ok) {
+        const errorText = await intentResponse.text()
+        console.error("[v0] Intent API failed:", intentResponse.status, errorText)
+        throw new Error(`Intent recognition failed (${intentResponse.status})`)
+      }
+
       const intentData = await intentResponse.json()
+      console.log("[v0] Intent data:", intentData)
 
       if (intentData.paraphrase) {
         setSearchParaphrase(intentData.paraphrase)
       }
 
-      // Call dual search
       const searchResponse = await fetch("/api/search/dual", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -222,25 +227,35 @@ export default function HomePage() {
         }),
       })
 
+      if (!searchResponse.ok) {
+        const errorText = await searchResponse.text()
+        console.error("[v0] Search API failed:", searchResponse.status, errorText)
+        throw new Error(`Search failed (${searchResponse.status})`)
+      }
+
       const searchData = await searchResponse.json()
+      console.log("[v0] Search results:", searchData)
 
       if (searchData.count === 0) {
         toast({
           title: "No Results",
           description: "No events found. Try different keywords or create your own.",
         })
+        setSearchResults([])
+        setShowResults(false)
       } else {
         setSearchResults(searchData.results || [])
         setShowResults(true)
         setShowDraftCard(false)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("[v0] Search error:", error)
       toast({
         title: "Search Failed",
-        description: "Something went wrong. Please try again.",
+        description: error?.message || "Something went wrong. Please try again.",
         variant: "destructive",
       })
+      throw error
     }
   }
 
@@ -248,7 +263,6 @@ export default function HomePage() {
     console.log("[v0] Smart create:", query)
 
     try {
-      // Call AI extraction
       const extractResponse = await fetch("/api/ai/extract-event", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -256,10 +270,13 @@ export default function HomePage() {
       })
 
       if (!extractResponse.ok) {
-        throw new Error("Extraction failed")
+        const errorText = await extractResponse.text()
+        console.error("[v0] Extract API failed:", extractResponse.status, errorText)
+        throw new Error(`Event extraction failed (${extractResponse.status})`)
       }
 
       const extracted = await extractResponse.json()
+      console.log("[v0] Extracted data:", extracted)
 
       // Check confidence
       const avgConfidence =
@@ -306,12 +323,20 @@ export default function HomePage() {
 
       // Redirect to advanced form with draft
       window.location.href = `/events/new?draftId=${draftId}`
-    } catch (error) {
+    } catch (error: any) {
       console.error("[v0] Create error:", error)
+
+      toast({
+        title: "Creation Failed",
+        description: error?.message || "Failed to extract event details. Redirecting to form...",
+        variant: "destructive",
+      })
 
       // Route to advanced form on failure
       const params = new URLSearchParams({ description: query })
       window.location.href = `/events/new?${params.toString()}`
+
+      throw error
     }
   }
 

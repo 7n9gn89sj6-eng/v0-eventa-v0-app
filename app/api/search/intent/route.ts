@@ -1,7 +1,6 @@
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
 import { type NextRequest, NextResponse } from "next/server"
 import { generateObject } from "ai"
+import { openai } from "@ai-sdk/openai"
 import { z } from "zod"
 import {
   parseDatePhrase,
@@ -76,7 +75,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { object } = await generateObject({
-      model: "openai/gpt-4o-mini",
+      model: openai("gpt-4o-mini"),
       schema: intentSchema,
       prompt: `You are a multilingual event assistant. The user's interface language is ${languageNames[uiLang] || "English"} (${uiLang}).
 

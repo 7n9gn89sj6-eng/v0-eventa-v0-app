@@ -1,13 +1,11 @@
-import 'server-only'
+import "server-only"
 import NextAuth, { type NextAuthOptions } from "next-auth"
 import EmailProvider from "next-auth/providers/email"
-import { PrismaAdapter } from "@auth/prisma-adapter"
-import { db } from "@/lib/db"
-import type { Adapter } from "next-auth/adapters"
-import { sendEmail } from "@/lib/email.server"
+import { adapter, adapterReady } from "@/lib/adapter"
+import { sendEmail } from "@/lib/email"
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(db) as Adapter,
+  adapter,
   providers: [
     EmailProvider({
       server: {
@@ -95,5 +93,5 @@ export const authOptions: NextAuthOptions = {
 }
 
 const handler = NextAuth(authOptions)
-export { handler as auth }
+export { handler as auth, adapterReady }
 export default handler
