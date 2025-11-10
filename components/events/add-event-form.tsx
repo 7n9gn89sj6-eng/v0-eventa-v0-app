@@ -13,7 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDes
 import { Loader2, CheckCircle2, Sparkles } from "lucide-react"
 import { useRouter } from "next/navigation"
 
-const API_URL = "/api/submit"
+const API_URL = "/api/events/submit"
 
 const addEventSchema = z
   .object({
