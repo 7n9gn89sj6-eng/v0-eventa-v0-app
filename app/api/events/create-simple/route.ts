@@ -2,7 +2,6 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server"
 
-export const runtime = "nodejs"
 
 // ALIAS endpoint that transforms AI extraction data and internally calls the canonical /api/events/submit handler
 export async function POST(req: Request) {

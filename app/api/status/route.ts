@@ -2,7 +2,6 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server"
 
-export const dynamic = "force-dynamic"
 
 export async function GET() {
   const authEnabled = process.env.NEXT_PUBLIC_AUTH_ENABLED === "true"
