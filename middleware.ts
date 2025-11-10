@@ -1,29 +1,33 @@
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server"
 
-export function middleware(req: NextRequest) {
-  const res = NextResponse.next();
+const locales = ["en"] as const
+type Locale = (typeof locales)[number]
 
-  res.headers.set(
-    "Content-Security-Policy",
-    [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-scripts.com https://api.v0.app",
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https: blob:",
-      "font-src 'self' data:",
-      "connect-src 'self' https://api.v0.app https://va.vercel-scripts.com",
-      "frame-src 'self'",
-      "object-src 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-      "frame-ancestors 'none'",
-      "upgrade-insecure-requests",
-    ].join("; ")
-  );
-
-  return res;
+function parseAcceptLanguage(acceptLanguage: string | null): Locale {
+  return "en"
 }
 
-export const config = { matcher: "/:path*" };
+export function middleware(request: NextRequest) {
+  const locale: Locale = "en"
 
+  // Create response without modifying URL
+  const response = NextResponse.next()
+
+  // Expose locale to server components via custom header
+  response.headers.set("x-locale", locale)
+
+  // Ensure cookie is set for future requests
+  if (!request.cookies.get("NEXT_LOCALE")) {
+    response.cookies.set("NEXT_LOCALE", locale, {
+      path: "/",
+      maxAge: 31536000, // 1 year
+    })
+  }
+
+  return response
+}
+
+export const config = {
+  // Match all paths except static files and API routes
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)"],
+}

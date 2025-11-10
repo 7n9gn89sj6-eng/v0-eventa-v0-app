@@ -1,5 +1,10 @@
 {
-  "buildCommand": "pnpm build",
-  "framework": "nextjs"
+  "crons": [
+    {
+      "path": "/api/cron/events-maintenance",
+      "schedule": "0 0 * * *"
+    }
+  ],
+  "installCommand": "pnpm install --no-frozen-lockfile",
+  "buildCommand": "vercel build"
 }
-

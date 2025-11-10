@@ -10,6 +10,7 @@ import { Calendar, MapPin, Search, SlidersHorizontal, X } from "lucide-react"
 import Link from "next/link"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { Badge } from "@/components/ui/badge"
+import ClientOnly from "@/components/ClientOnly"
 
 const CATEGORIES = [
   "All",
@@ -291,22 +292,31 @@ export function EventsListingContent() {
                 <div className="space-y-2 text-sm text-muted-foreground">
                   <div className="flex items-start gap-2">
                     <Calendar className="h-4 w-4 mt-0.5 shrink-0" />
-                    <div>
-                      <p className="font-medium text-foreground">
-                        {new Date(event.startAt).toLocaleDateString("en-US", {
-                          weekday: "short",
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </p>
-                      <p className="text-xs">
-                        {new Date(event.startAt).toLocaleTimeString("en-US", {
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </div>
+                    <ClientOnly
+                      placeholder={
+                        <div>
+                          <p className="font-medium text-foreground">—</p>
+                          <p className="text-xs">—</p>
+                        </div>
+                      }
+                    >
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {new Date(event.startAt).toLocaleDateString("en-US", {
+                            weekday: "short",
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })}
+                        </p>
+                        <p className="text-xs">
+                          {new Date(event.startAt).toLocaleTimeString("en-US", {
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                    </ClientOnly>
                   </div>
 
                   <div className="flex items-start gap-2">

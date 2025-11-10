@@ -13,6 +13,7 @@ import Link from "next/link"
 import { speak, stopSpeaking } from "@/lib/tts"
 import { toast } from "@/hooks/use-toast"
 import { SmartInputBar } from "@/components/search/smart-input-bar"
+import ClientOnly from "@/components/ClientOnly"
 
 interface DraftEvent {
   id: string
@@ -129,9 +130,10 @@ export default function HomePage() {
       setCurrentDraft(null)
       setFollowUpQuestion("")
 
+      const dateDisplay = <ClientOnly>{new Date(draft.date).toLocaleDateString()}</ClientOnly>
       toast({
         title: "Draft Saved",
-        description: `"${draft.title}" saved for ${new Date(draft.date).toLocaleDateString()} at ${draft.time} in ${draft.venue || draft.city}`,
+        description: `"${draft.title}" saved for ${dateDisplay} at ${draft.time} in ${draft.venue || draft.city}`,
       })
     } catch (error) {
       toast({

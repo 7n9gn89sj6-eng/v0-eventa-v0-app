@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Calendar, Clock, MapPin, Pencil, Trash2, Send } from "lucide-react"
 import Link from "next/link"
+import ClientOnly from "@/components/ClientOnly"
 
 interface DraftEvent {
   id: string
@@ -40,14 +41,22 @@ export function DraftsList({ drafts, onEdit, onDelete }: DraftsListProps) {
             <div className="flex-1 space-y-2">
               <h3 className="font-semibold">{draft.title}</h3>
               <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  {new Date(draft.date).toLocaleDateString("en-AU", {
-                    weekday: "short",
-                    day: "numeric",
-                    month: "short",
-                  })}
-                </span>
+                <ClientOnly
+                  placeholder={
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />—
+                    </span>
+                  }
+                >
+                  <span className="flex items-center gap-1">
+                    <Calendar className="h-3 w-3" />
+                    {new Date(draft.date).toLocaleDateString("en-AU", {
+                      weekday: "short",
+                      day: "numeric",
+                      month: "short",
+                    })}
+                  </span>
+                </ClientOnly>
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
                   {draft.time}
