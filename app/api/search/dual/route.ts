@@ -1,3 +1,5 @@
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 import { type NextRequest, NextResponse } from "next/server"
 
 function levenshteinDistance(a: string, b: string): number {

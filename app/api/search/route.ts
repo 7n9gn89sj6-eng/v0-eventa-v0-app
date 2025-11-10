@@ -1,3 +1,5 @@
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 import type { NextRequest } from "next/server"
 import { detectLanguage } from "@/lib/search/language-detection"
 import { normalizeQuery } from "@/lib/search/query-normalization"

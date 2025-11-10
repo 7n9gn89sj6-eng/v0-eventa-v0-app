@@ -1,3 +1,5 @@
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 import { ok } from "@/lib/http"
 
 export function GET() {

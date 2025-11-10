@@ -1,3 +1,5 @@
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 import { type NextRequest, NextResponse } from "next/server"
 import { PROVIDER_WHITELIST, type ProviderName } from "@/lib/external-search/provider-whitelist"
 import { validateAndNormalizeExternalEvent } from "@/lib/external-search/schema-validator"

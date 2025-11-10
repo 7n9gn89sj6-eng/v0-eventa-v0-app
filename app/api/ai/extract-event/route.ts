@@ -1,3 +1,5 @@
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 import { NextResponse } from "next/server"
 import { extractEventFromText } from "@/lib/ai-extraction"
 import type { EventExtractionInput } from "@/lib/types"
