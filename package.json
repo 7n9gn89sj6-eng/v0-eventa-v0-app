@@ -16,7 +16,6 @@
     "db:setup": "tsx scripts/run-all-setup.ts",
     "db:studio": "prisma studio",
     "dev": "next dev",
-    "postinstall": "prisma generate",
     "lint": "next lint",
     "smoke": "node tests/smoke.mjs",
     "smoke:prod": "node ./scripts/smoke-prod.mjs",
