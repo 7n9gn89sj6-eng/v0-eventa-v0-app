@@ -1,8 +1,7 @@
+export const runtime = 'nodejs'
 import NextAuth from "next-auth"
 import EmailProvider from "next-auth/providers/email"
-import { sendEmail } from "@/lib/email"
-
-export const runtime = "nodejs"
+import { sendEmail } from "@/lib/email.server"
 
 const AUTH_ENABLED = process.env.NEXT_PUBLIC_AUTH_ENABLED === "true"
 const emailReady =

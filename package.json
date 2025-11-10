@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "postbuild": "tsx scripts/run-all-setup.ts",
+"postinstall": "prisma generate",
     "build:ci": "npm run check:env && next build && npm run typecheck && npm run lint",
     "build:local": "next build",
     "check:env": "tsx scripts/check-env-strict.ts",
@@ -117,7 +117,7 @@
     "@types/react": "19.0.0",
     "@types/react-dom": "19.0.0",
     "postcss": "^8.5",
-    "prisma": "6.18.0",
+    "prisma": "6.19.0",
     "tailwindcss": "^4.1.9",
     "ts-node": "10.9.2",
     "tsx": "4.19.2",

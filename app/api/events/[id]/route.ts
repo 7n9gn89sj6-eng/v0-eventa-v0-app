@@ -8,7 +8,7 @@ import { ok, fail } from "@/lib/http"
 import { createAuditLog } from "@/lib/audit-log"
 import { moderateEventContent } from "@/lib/ai-moderation"
 import { notifyAdminOfFlaggedEvent } from "@/lib/admin-notifications"
-import { sendEmail } from "@/lib/email"
+import { sendEmail } from "@/lib/email.server"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {

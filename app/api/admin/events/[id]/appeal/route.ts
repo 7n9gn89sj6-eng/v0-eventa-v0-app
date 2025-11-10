@@ -1,10 +1,11 @@
-export const runtime = "nodejs"
+export const runtime = 'nodejs'
+import 'server-only'
 
 import { type NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/jwt"
 import { db } from "@/lib/db"
 import { createAuditLog } from "@/lib/audit-log"
-import { sendEmail } from "@/lib/email"
+import { sendEmail } from "@/lib/email.server"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
