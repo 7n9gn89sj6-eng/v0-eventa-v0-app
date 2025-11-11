@@ -5,6 +5,8 @@ import { env } from "@/lib/env"
 import { sendEventEditLinkEmail } from "@/lib/email"
 
 export const runtime = "nodejs"
+/** Ensure Next/Turbopack doesn't try to pre-render/optimize this API route */
+export const dynamic = "force-dynamic"
 
 const EventSubmitSchema = z
   .object({
@@ -41,7 +43,10 @@ export async function POST(request: NextRequest) {
     console.log("[v0] POST /api/events/submit - starting")
 
     const body = await request.json()
-    console.log("[v0] Request body received:", { title: body.title, hasEmail: !!body.creatorEmail })
+    console.log("[v0] Request body received:", {
+      title: body?.title,
+      hasEmail: !!body?.creatorEmail,
+    })
 
     const validatedData = EventSubmitSchema.parse(body)
 
@@ -54,18 +59,17 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Connecting to database...")
     const sql = neon(env.NEON_DATABASE_URL)
 
+    // Ensure user exists (create if needed)
     let userId: string
     const existingUsers = await sql`
       SELECT id FROM "User" WHERE email = ${creatorEmail} LIMIT 1
     `
-
     if (existingUsers.length > 0) {
       userId = existingUsers[0].id
       console.log("[v0] Found existing user:", userId)
     } else {
       const userName = validatedData.organizer_name || creatorEmail.split("@")[0]
       const newUserId = generateId()
-
       await sql`
         INSERT INTO "User" (id, email, name, "createdAt", "updatedAt")
         VALUES (${newUserId}, ${creatorEmail}, ${userName}, NOW(), NOW())
@@ -75,10 +79,20 @@ export async function POST(request: NextRequest) {
     }
 
     const eventId = generateId()
-    const address = validatedData.location?.address || ""
-    const addressParts = address.split(",").map((p) => p.trim())
+
+    // --- SAFE ADDRESS PARSING (prevents undefined.map) ---
+    const addressRaw =
+      typeof validatedData.location?.address === "string"
+        ? validatedData.location.address
+        : ""
+
+    const addressParts = addressRaw
+      ? addressRaw.split(",").map((p) => p.trim()).filter(Boolean)
+      : []
+
     const city = addressParts[1] || addressParts[0] || "Unknown"
     const country = addressParts[addressParts.length - 1] || "Australia"
+    // -----------------------------------------------------
 
     console.log("[v0] Creating event:", { eventId, title: validatedData.title })
 
@@ -109,7 +123,7 @@ export async function POST(request: NextRequest) {
         ${validatedData.end ? validatedData.end.toISOString() : validatedData.start.toISOString()},
         ${validatedData.timezone || "UTC"},
         ${validatedData.location?.name || null},
-        ${address || null},
+        ${addressRaw || null},
         ${city},
         ${country},
         ${validatedData.imageUrl || null},
@@ -123,6 +137,7 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] Event created successfully")
 
+    // Create edit token (simple random id stored as-is)
     const token = generateId()
     const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
 
@@ -131,14 +146,15 @@ export async function POST(request: NextRequest) {
       VALUES (${generateId()}, ${eventId}, ${token}, ${expires.toISOString()}, NOW())
     `
 
-    const editUrl = `${env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/event/confirm?token=${token}`
+    const baseUrl = env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+    const editUrl = `${baseUrl}/event/confirm?token=${token}`
 
     try {
       await sendEventEditLinkEmail(creatorEmail, validatedData.title, eventId, token)
       console.log("[v0] Edit link email sent successfully to:", creatorEmail)
     } catch (emailError) {
       console.error("[v0] Failed to send email, but event was created:", emailError)
-      // Don't fail the request if email fails - still return success with the URL
+      // Still return success with the URL
     }
 
     return NextResponse.json({
@@ -166,9 +182,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Failed to submit event",
-      },
+      { error: error instanceof Error ? error.message : "Failed to submit event" },
       { status: 500 },
     )
   }
