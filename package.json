@@ -117,6 +117,7 @@
     "@types/react": "19.0.0",
     "@types/react-dom": "19.0.0",
     "postcss": "^8.5",
+    "prettier": "^3.6.2",
     "prisma": "6.18.0",
     "tailwindcss": "^4.1.9",
     "ts-node": "10.9.2",
