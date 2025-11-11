@@ -7,6 +7,7 @@ import Link from "next/link"
 import { AdminEventActions } from "@/components/admin/admin-event-actions"
 import { AIModerationSummary } from "@/components/admin/ai-moderation-summary"
 import { AIEventAnalysis } from "@/components/admin/ai-event-analysis"
+import ClientOnly from "@/components/ClientOnly"
 
 export const dynamic = "force-dynamic"
 
@@ -122,10 +123,12 @@ export default async function AdminPage() {
                   <span className="font-medium">Location:</span> {event.city}, {event.country}
                 </div>
                 <div>
-                  <span className="font-medium">Start:</span> {new Date(event.startAt).toLocaleDateString()}
+                  <span className="font-medium">Start:</span>{" "}
+                  <ClientOnly>{new Date(event.startAt).toLocaleDateString()}</ClientOnly>
                 </div>
                 <div>
-                  <span className="font-medium">Created:</span> {new Date(event.createdAt).toLocaleDateString()}
+                  <span className="font-medium">Created:</span>{" "}
+                  <ClientOnly>{new Date(event.createdAt).toLocaleDateString()}</ClientOnly>
                 </div>
               </div>
             </CardContent>

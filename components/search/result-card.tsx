@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Calendar, MapPin, ExternalLink } from "lucide-react"
 import { DateTime } from "luxon"
 import Link from "next/link"
+import ClientOnly from "@/components/ClientOnly"
 
 interface ResultCardProps {
   result: SearchResult
@@ -42,10 +43,19 @@ export function ResultCard({ result }: ResultCardProps) {
         {/* Date */}
         <div className="flex items-start gap-2 text-sm">
           <Calendar className="mt-0.5 h-4 w-4 text-muted-foreground" />
-          <div>
-            <p className="font-medium">{startDate.toLocaleString(DateTime.DATE_FULL)}</p>
-            <p className="text-muted-foreground">{startDate.toLocaleString(DateTime.TIME_SIMPLE)}</p>
-          </div>
+          <ClientOnly
+            placeholder={
+              <div>
+                <p className="font-medium">—</p>
+                <p className="text-muted-foreground">—</p>
+              </div>
+            }
+          >
+            <div>
+              <p className="font-medium">{startDate.toLocaleString(DateTime.DATE_FULL)}</p>
+              <p className="text-muted-foreground">{startDate.toLocaleString(DateTime.TIME_SIMPLE)}</p>
+            </div>
+          </ClientOnly>
         </div>
 
         {/* Location */}

@@ -1,9 +1,7 @@
-// app/api/events/submit/route.ts
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { neon } from "@neondatabase/serverless"
 
-// ensure Next doesn’t try to pre-render/analyze this statically
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
@@ -55,20 +53,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Creator email is required" }, { status: 400 })
     }
 
-    // read env lazily at runtime (avoid crashing build on import)
     const NEON_DATABASE_URL = process.env.NEON_DATABASE_URL
     if (!NEON_DATABASE_URL) {
       console.error("[v0] NEON_DATABASE_URL is missing")
-      return NextResponse.json(
-        { error: "Server configuration error. Please contact support." },
-        { status: 500 },
-      )
+      return NextResponse.json({ error: "Server configuration error. Please contact support." }, { status: 500 })
     }
 
     console.log("[v0] Connecting to database…")
     const sql = neon(NEON_DATABASE_URL)
 
-    // upsert user
     let userId: string
     const existingUsers = await sql`
       SELECT id FROM "User" WHERE email = ${creatorEmail} LIMIT 1
@@ -87,16 +80,20 @@ export async function POST(request: NextRequest) {
       console.log("[v0] Created new user:", userId)
     }
 
-    // safe, defensive address parsing
     const addressRaw = validatedData.location?.address ?? ""
     const addressParts = addressRaw
-      ? addressRaw.split(",").map((p) => p.trim()).filter(Boolean)
+      ? addressRaw
+          .split(",")
+          .map((p) => p.trim())
+          .filter(Boolean)
       : []
     const city = addressParts[1] || addressParts[0] || "Unknown"
     const country = addressParts[addressParts.length - 1] || "Australia"
 
     const eventId = generateId()
     console.log("[v0] Creating event:", { eventId, title: validatedData.title })
+
+    const searchText = `${validatedData.title} ${validatedData.description} ${city} ${country}`.toLowerCase()
 
     await sql`
       INSERT INTO "Event" (
@@ -112,6 +109,7 @@ export async function POST(request: NextRequest) {
         country,
         "imageUrl",
         "externalUrl",
+        "searchText",
         "createdById",
         status,
         "createdAt",
@@ -130,6 +128,7 @@ export async function POST(request: NextRequest) {
         ${country},
         ${validatedData.imageUrl || null},
         ${validatedData.externalUrl || null},
+        ${searchText},
         ${userId},
         'DRAFT',
         NOW(),
@@ -139,7 +138,6 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] Event created successfully")
 
-    // generate edit token
     const token = generateId()
     const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
     await sql`
@@ -150,7 +148,6 @@ export async function POST(request: NextRequest) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
     const editUrl = `${appUrl}/event/confirm?token=${token}`
 
-    // lazily import the email helper to avoid build-time import issues
     try {
       const { sendEventEditLinkEmail } = await import("@/lib/email")
       await sendEventEditLinkEmail(creatorEmail, validatedData.title, eventId, token)

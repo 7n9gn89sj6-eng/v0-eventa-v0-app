@@ -7,11 +7,13 @@ export const metadata: Metadata = {
   description: "Share your event with the community",
 }
 
-export default function AddEventPage({
+export default async function AddEventPage({
   searchParams,
 }: {
-  searchParams: { title?: string; description?: string; location?: string; date?: string; draft?: string }
+  searchParams: Promise<{ title?: string; description?: string; location?: string; date?: string; draft?: string }>
 }) {
+  const params = await searchParams
+
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">
       <div className="mb-8">
@@ -22,7 +24,7 @@ export default function AddEventPage({
         </p>
       </div>
       <Suspense fallback={<div>Loading...</div>}>
-        <AddEventFormWrapper initialData={searchParams} draftId={searchParams.draft} />
+        <AddEventFormWrapper initialData={params} draftId={params.draft} />
       </Suspense>
     </div>
   )

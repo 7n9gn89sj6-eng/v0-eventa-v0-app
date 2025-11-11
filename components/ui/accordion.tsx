@@ -14,9 +14,13 @@ function Accordion({
   ...props
 }: React.ComponentProps<typeof AccordionPrimitive.Root>) {
   // Initialize with defaultValue if provided, otherwise empty for single or empty array for multiple
-  const [internalValue, setInternalValue] = React.useState<string | string[] | undefined>(
-    defaultValue ?? (type === "single" ? undefined : []),
-  )
+  const getInitialValue = () => {
+    if (controlledValue !== undefined) return controlledValue
+    if (defaultValue !== undefined) return defaultValue
+    return type === "single" ? "" : []
+  }
+
+  const [internalValue, setInternalValue] = React.useState<string | string[] | undefined>(getInitialValue)
 
   // Always use controlled pattern - either external control or internal state
   const value = controlledValue !== undefined ? controlledValue : internalValue

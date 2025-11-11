@@ -9,6 +9,7 @@ import { DateTime } from "luxon"
 import Link from "next/link"
 import { EventActions } from "@/components/events/event-actions"
 import { RegenerateEditLinkButton } from "@/components/events/regenerate-edit-link-button"
+import ClientOnly from "@/components/ClientOnly"
 
 export const dynamic = "force-dynamic"
 
@@ -112,8 +113,10 @@ export default async function MyEventDetailPage({ params }: { params: { id: stri
           <div className="flex items-start gap-3">
             <Calendar className="mt-0.5 h-5 w-5 text-muted-foreground" />
             <div>
-              <p className="font-medium">{startDate.toLocaleString(DateTime.DATETIME_FULL)}</p>
-              <p className="text-sm text-muted-foreground">to {endDate.toLocaleString(DateTime.DATETIME_FULL)}</p>
+              <ClientOnly>
+                <p className="font-medium">{startDate.toLocaleString(DateTime.DATETIME_FULL)}</p>
+                <p className="text-sm text-muted-foreground">to {endDate.toLocaleString(DateTime.DATETIME_FULL)}</p>
+              </ClientOnly>
             </div>
           </div>
 

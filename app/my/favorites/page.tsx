@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { FavoriteButton } from "@/components/events/favorite-button"
+import ClientOnly from "@/components/ClientOnly"
 
 export const dynamic = "force-dynamic"
 
@@ -79,7 +80,8 @@ export default async function FavoritesPage() {
                     <span className="font-medium">Location:</span> {event.city}, {event.country}
                   </p>
                   <p>
-                    <span className="font-medium">Start:</span> {new Date(event.startAt).toLocaleDateString()}
+                    <span className="font-medium">Start:</span>{" "}
+                    <ClientOnly>{new Date(event.startAt).toLocaleDateString()}</ClientOnly>
                   </p>
                   <Button asChild className="w-full mt-4">
                     <Link href={`/events/${event.id}`}>View Details</Link>

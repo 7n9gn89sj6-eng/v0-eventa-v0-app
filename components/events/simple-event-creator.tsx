@@ -10,6 +10,7 @@ import { ChevronDown, ChevronUp, Loader2, Sparkles } from "lucide-react"
 import type { EventExtractionOutput, BroadEventCategory } from "@/lib/types"
 import { CATEGORY_LABELS } from "@/lib/ai-extraction-constants"
 import { useRouter } from "next/navigation"
+import ClientOnly from "@/components/ClientOnly"
 
 const EXAMPLE_PLACEHOLDER = `Sat 12 April, 2–5pm at St Kilda Library. Poetry open mic, gold coin donation, family-friendly. Host: Irene. Register via email.`
 
@@ -253,8 +254,10 @@ export function SimpleEventCreator() {
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Date & Time</p>
                   <p className="text-base">
-                    {new Date(extractedData.start).toLocaleString()}
-                    {extractedData.end && ` - ${new Date(extractedData.end).toLocaleString()}`}
+                    <ClientOnly>
+                      {new Date(extractedData.start).toLocaleString()}
+                      {extractedData.end && ` - ${new Date(extractedData.end).toLocaleString()}`}
+                    </ClientOnly>
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Confidence: {Math.round(extractedData.confidence.datetime * 100)}%

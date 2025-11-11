@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { CheckCircle2, XCircle, AlertTriangle, Clock, Sparkles, User, Mail, Tag } from "lucide-react"
 import { CATEGORY_LABELS } from "@/lib/ai-extraction-constants"
 import type { BroadEventCategory } from "@/lib/types"
+import ClientOnly from "@/components/ClientOnly"
 
 interface AdminEventReviewProps {
   event: any
@@ -297,9 +298,11 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
             <div>
               <Label>Date & Time</Label>
               <p className="text-sm text-muted-foreground">
-                Start: {new Date(event.startAt).toLocaleString()}
-                <br />
-                End: {new Date(event.endAt).toLocaleString()}
+                <ClientOnly>
+                  Start: {new Date(event.startAt).toLocaleString()}
+                  <br />
+                  End: {new Date(event.endAt).toLocaleString()}
+                </ClientOnly>
               </p>
             </div>
           </div>
@@ -334,7 +337,9 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
                   <Badge variant={appeal.status === "pending" ? "secondary" : "outline"}>{appeal.status}</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground">{appeal.reason}</p>
-                <p className="text-xs text-muted-foreground">{new Date(appeal.createdAt).toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">
+                  <ClientOnly>{new Date(appeal.createdAt).toLocaleString()}</ClientOnly>
+                </p>
 
                 {appeal.status === "pending" && (
                   <div className="flex gap-2 mt-3">
@@ -375,7 +380,9 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
             <div className="space-y-2">
               {event.auditLogs.map((log: any) => (
                 <div key={log.id} className="flex items-start gap-3 text-sm">
-                  <span className="text-muted-foreground">{new Date(log.createdAt).toLocaleString()}</span>
+                  <span className="text-muted-foreground">
+                    <ClientOnly>{new Date(log.createdAt).toLocaleString()}</ClientOnly>
+                  </span>
                   <span className="font-medium">{log.actor}</span>
                   <span>{log.action}</span>
                   {log.notes && <span className="text-muted-foreground">- {log.notes}</span>}

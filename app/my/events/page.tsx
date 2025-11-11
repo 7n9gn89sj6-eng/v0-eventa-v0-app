@@ -8,6 +8,7 @@ import { EventActions } from "@/components/events/event-actions"
 import { RegenerateEditLinkButton } from "@/components/events/regenerate-edit-link-button"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { Suspense } from "react"
+import ClientOnly from "@/components/ClientOnly"
 
 export const dynamic = "force-dynamic"
 
@@ -99,7 +100,8 @@ export default async function MyEventsPage() {
                       <span className="font-medium">Location:</span> {event.city}, {event.country}
                     </p>
                     <p>
-                      <span className="font-medium">Start:</span> {new Date(event.startAt).toLocaleDateString()}
+                      <span className="font-medium">Start:</span>{" "}
+                      <ClientOnly>{new Date(event.startAt).toLocaleDateString()}</ClientOnly>
                     </p>
                     <EventActions eventId={event.id} status={event.status} />
                     {user.isAdmin && (

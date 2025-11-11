@@ -1,25 +1,3 @@
-<<<<<<< HEAD
-const onSubmit = async (values: AddEventFormData) => {
-  // Build a single address string the API can parse
-  const addressBits = [
-    values.address?.trim(),
-    values.city?.trim(),
-    values.postcode?.trim(),
-    values.country?.trim(),
-  ].filter(Boolean);
-  const address = addressBits.join(", ");
-
-  // API expects: title, description, start, end, timezone?, location?, organizer_name?, creatorEmail (required)
-  const payload = {
-    title: values.title,
-    description: values.description || "",
-    start: new Date(values.startAt),          // server uses z.coerce.date()
-    end: values.endAt ? new Date(values.endAt) : undefined,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    location: {
-      name: undefined,                        // you can map a venue field here if you add one
-      address: address || undefined,
-=======
 "use client"
 
 import { useState, useEffect } from "react"
@@ -68,33 +46,621 @@ const addEventSchema = z
     {
       message: "End must be after start.",
       path: ["endAt"],
->>>>>>> fix: export AddEventForm; correct wrapper import
     },
-    organizer_name: values.name || undefined,
-    organizer_contact: undefined,             // map a contact field if you add one
-    creatorEmail: values.email,               // ⚠ required by the route
-    imageUrl: values.imageUrl || "",
-    externalUrl: values.externalUrl || "",
-  };
+  )
 
-  try {
-    const res = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+type AddEventFormData = z.infer<typeof addEventSchema>
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `Submit failed (${res.status})`);
-    }
-
-    const data = await res.json();
-    // Optional: route to the edit/confirm page returned by the API
-    // router.push(data.editUrl);  // you already import useRouter
-    alert("Event created! Check your email for the edit link.");
-  } catch (e:any) {
-    console.error("Submit error:", e);
-    alert(e.message || "Failed to submit event");
+interface AddEventFormProps {
+  initialData?: {
+    title?: string
+    description?: string
+    location?: string
+    date?: string
+    city?: string
+    venue?: string
+    startAt?: string
+    endAt?: string
+    postcode?: string
   }
-};
+}
+
+export function AddEventForm({ initialData }: AddEventFormProps) {
+  const router = useRouter()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSuccess, setIsSuccess] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [isPrefilled, setIsPrefilled] = useState(false)
+
+  const form = useForm<AddEventFormData>({
+    resolver: zodResolver(addEventSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      humanCheck: "",
+      title: "",
+      description: "",
+      address: "",
+      postcode: "",
+      city: "",
+      country: "",
+      startAt: "",
+      endAt: "",
+      imageUrl: "",
+      externalUrl: "",
+    },
+  })
+
+  useEffect(() => {
+    if (initialData && (initialData.title || initialData.description || initialData.location || initialData.date)) {
+      setIsPrefilled(true)
+
+      if (initialData.title) {
+        form.setValue("title", initialData.title)
+      }
+
+      if (initialData.description) {
+        form.setValue("description", initialData.description)
+      }
+
+      if (initialData.venue) {
+        form.setValue("address", initialData.venue)
+      }
+
+      if (initialData.location || initialData.city) {
+        const city = initialData.city || initialData.location
+        if (city) {
+          const parts = city.split(",").map((p) => p.trim())
+          if (parts.length >= 2) {
+            form.setValue("city", parts[0])
+            form.setValue("country", parts[parts.length - 1])
+          } else {
+            form.setValue("city", city)
+          }
+        }
+      }
+
+      if (initialData.startAt) {
+        form.setValue("startAt", initialData.startAt)
+      } else if (initialData.date) {
+        try {
+          const date = new Date(initialData.date)
+          const formatted = date.toISOString().slice(0, 16)
+          form.setValue("startAt", formatted)
+        } catch (e) {
+          console.error("[v0] Failed to parse date:", e)
+        }
+      }
+
+      if (initialData.endAt) {
+        form.setValue("endAt", initialData.endAt)
+      } else if (initialData.startAt || initialData.date) {
+        try {
+          const startDate = new Date(initialData.startAt || initialData.date)
+          const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000)
+          form.setValue("endAt", endDate.toISOString().slice(0, 16))
+        } catch (e) {
+          console.error("[v0] Failed to calculate end date:", e)
+        }
+      }
+
+      if (initialData.postcode) {
+        form.setValue("postcode", initialData.postcode)
+      }
+    }
+  }, [initialData, form])
+
+  const onSubmit = async (data: AddEventFormData) => {
+    setIsSubmitting(true)
+    setError(null)
+
+    try {
+      console.log("[v0] Starting form submission...")
+      console.log("[v0] Form data:", {
+        title: data.title,
+        email: data.email,
+        startAt: data.startAt,
+        endAt: data.endAt,
+        city: data.city,
+        country: data.country,
+      })
+
+      const submitPayload = {
+        title: data.title,
+        description: data.description,
+        start: new Date(data.startAt).toISOString(),
+        end: new Date(data.endAt).toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        location: {
+          address: `${data.address}, ${data.city}, ${data.country}`,
+          name: data.address,
+        },
+        imageUrl: data.imageUrl || "",
+        externalUrl: data.externalUrl || "",
+        organizer_name: data.name,
+        organizer_contact: data.email,
+        creatorEmail: data.email,
+      }
+
+      console.log("[v0] Payload to send:", submitPayload)
+      console.log("[v0] Sending POST request to:", API_URL)
+
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(submitPayload),
+      })
+
+      console.log("[v0] Response status:", response.status)
+      console.log("[v0] Response ok:", response.ok)
+
+      const contentType = response.headers.get("content-type")
+      console.log("[v0] Response content-type:", contentType)
+
+      const text = await response.text()
+      console.log("[v0] Response text:", text)
+
+      let json: any = null
+      if (contentType?.includes("application/json")) {
+        try {
+          json = JSON.parse(text)
+          console.log("[v0] Parsed JSON:", json)
+        } catch (parseError) {
+          console.error("[v0] Failed to parse response as JSON:", parseError)
+          // If response claims to be JSON but isn't parseable, treat as error
+          if (!response.ok) {
+            throw new Error(text || `Server error (${response.status})`)
+          }
+        }
+      } else {
+        console.log("[v0] Non-JSON response received")
+        // Plain text response - if error status, throw it
+        if (!response.ok) {
+          throw new Error(text || `Server error (${response.status})`)
+        }
+      }
+
+      if (!response.ok) {
+        const requestId = response.headers.get("x-request-id")
+        let errorMessage = json?.error || json?.details || text || response.statusText || "An error occurred"
+
+        if (requestId) {
+          errorMessage += ` (req: ${requestId})`
+        }
+
+        console.error("[v0] Request failed with error:", errorMessage)
+        throw new Error(errorMessage)
+      }
+
+      console.log("[v0] Form submission successful!")
+      setIsSuccess(true)
+      form.reset()
+
+      if (typeof window !== "undefined" && initialData) {
+        const urlParams = new URLSearchParams(window.location.search)
+        const draftId = urlParams.get("draft")
+        if (draftId) {
+          const saved = localStorage.getItem("eventa-drafts")
+          if (saved) {
+            const drafts = JSON.parse(saved)
+            const filtered = drafts.filter((d: any) => d.id !== draftId)
+            localStorage.setItem("eventa-drafts", JSON.stringify(filtered))
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error("[v0] Error in form submission:", err)
+      console.error("[v0] Error name:", err.name)
+      console.error("[v0] Error message:", err.message)
+      console.error("[v0] Error stack:", err.stack)
+
+      let errorMessage = err.message || "An unexpected error occurred"
+      if (errorMessage.includes("Environment validation failed") || errorMessage.includes("Server configuration")) {
+        errorMessage =
+          "The server is not properly configured. Please contact support or check that all required environment variables are set in the Vars section."
+      }
+      setError(errorMessage)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const onInvalid = (errors: any) => {
+    console.error("[v0] Form validation errors:", errors)
+    // Find the first error message to display
+    const firstError = Object.values(errors)[0] as any
+    if (firstError?.message) {
+      setError(firstError.message)
+    }
+  }
+
+  if (isSuccess) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-col items-center gap-4 py-8 text-center">
+            <div className="rounded-full bg-primary/10 p-3">
+              <CheckCircle2 className="size-8 text-primary" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-2xl font-semibold">Check your email to verify & finish</h2>
+              <p className="text-muted-foreground text-pretty">
+                We've sent a verification link to your email address. Click the link to publish your event.
+              </p>
+            </div>
+            <div className="flex gap-3 mt-4">
+              <Button onClick={() => router.push("/")} variant="outline">
+                Back to Home
+              </Button>
+              <Button onClick={() => setIsSuccess(false)}>Submit another event</Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
+        {isPrefilled && (
+          <Alert>
+            <Sparkles className="h-4 w-4" />
+            <AlertDescription>
+              We've prefilled some fields based on your draft. Please review and complete the remaining details.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <Card>
+          <CardContent className="pt-6 space-y-6">
+            {/* Your Information */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Your Information</h3>
+
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Your Name</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="John Doe"
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Contact Email</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="email"
+                        placeholder="you@example.com"
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormDescription>We'll send a verification link to this email</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="humanCheck"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Human Check</FormLabel>
+                    <FormDescription>Type the last word of this sentence: eventa connects communities</FormDescription>
+                    <FormControl>
+                      <Input
+                        placeholder="Type the last word..."
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Event Details */}
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="text-lg font-semibold">Event Details</h3>
+
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Event Title</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="e.g., Athens Farmers Market"
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Describe your event in detail..."
+                        rows={5}
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Include what makes your event special, what attendees can expect, and any important details
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Location */}
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="text-lg font-semibold">Location</h3>
+
+              <FormField
+                control={form.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="123 Main Street"
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="postcode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Postcode / ZIP Code</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="12345"
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormDescription>Optional</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="city"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>City</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Athens"
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="country"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Country</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Greece"
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Date & Time */}
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="text-lg font-semibold">Date & Time</h3>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="startAt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Start Date & Time</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="datetime-local"
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="endAt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>End Date & Time</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="datetime-local"
+                          value={field.value}
+                          onChange={field.onChange}
+                          onBlur={field.onBlur}
+                          name={field.name}
+                          ref={field.ref}
+                          disabled={isSubmitting}
+                        />
+                      </FormControl>
+                      <FormDescription>Events auto-hide after the end time.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* Optional Information */}
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="text-lg font-semibold">Optional Information</h3>
+
+              <FormField
+                control={form.control}
+                name="imageUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Image URL (optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="url"
+                        placeholder="https://example.com/image.jpg"
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormDescription>Link to an image for your event</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="externalUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>External URL (optional)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="url"
+                        placeholder="https://example.com"
+                        value={field.value}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormDescription>Link to your event website or registration page</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        <Button type="submit" disabled={isSubmitting} className="w-full" size="lg">
+          {isSubmitting ? (
+            <>
+              <Loader2 className="mr-2 size-4 animate-spin" />
+              Submitting event...
+            </>
+          ) : (
+            "Submit Event"
+          )}
+        </Button>
+      </form>
+    </Form>
+  )
+}

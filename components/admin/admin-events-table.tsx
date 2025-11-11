@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import ClientOnly from "@/components/ClientOnly"
 
 interface Event {
   id: string
@@ -168,7 +169,7 @@ export function AdminEventsTable({ events, stats, currentFilter }: AdminEventsTa
                     </TableCell>
                     <TableCell>
                       <span className="text-sm text-muted-foreground">
-                        {new Date(event.createdAt).toLocaleDateString()}
+                        <ClientOnly>{new Date(event.createdAt).toLocaleDateString()}</ClientOnly>
                       </span>
                     </TableCell>
                     <TableCell className="text-right">

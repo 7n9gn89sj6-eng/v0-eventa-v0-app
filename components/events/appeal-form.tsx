@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
+import ClientOnly from "@/components/ClientOnly"
 
 interface AppealFormProps {
   eventId: string
@@ -93,7 +94,9 @@ export function AppealForm({ eventId, existingAppeal }: AppealFormProps) {
 
           <div>
             <Label>Submitted</Label>
-            <p className="text-sm text-muted-foreground mt-1">{new Date(existingAppeal.createdAt).toLocaleString()}</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              <ClientOnly>{new Date(existingAppeal.createdAt).toLocaleString()}</ClientOnly>
+            </p>
           </div>
 
           <Button onClick={() => router.push("/my/events")} variant="outline" className="w-full">

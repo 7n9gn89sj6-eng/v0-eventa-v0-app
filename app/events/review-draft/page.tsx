@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Loader2, ArrowLeft, Mail, Phone, Globe, User } from "lucide-react"
 import type { EventExtractionOutput, BroadEventCategory } from "@/lib/types"
 import { CATEGORY_LABELS } from "@/lib/ai-extraction-constants"
+import ClientOnly from "@/components/ClientOnly"
 
 interface DraftData {
   sourceText: string
@@ -175,10 +176,12 @@ export default function ReviewDraftPage() {
             <div>
               <Label>Date & Time</Label>
               <div className="mt-1 rounded-lg border bg-muted/50 p-3 text-sm">
-                <p className="font-medium">{new Date(draftData.extraction.start).toLocaleString()}</p>
-                {draftData.extraction.end && (
-                  <p className="text-muted-foreground">to {new Date(draftData.extraction.end).toLocaleString()}</p>
-                )}
+                <ClientOnly>
+                  <p className="font-medium">{new Date(draftData.extraction.start).toLocaleString()}</p>
+                  {draftData.extraction.end && (
+                    <p className="text-muted-foreground">to {new Date(draftData.extraction.end).toLocaleString()}</p>
+                  )}
+                </ClientOnly>
               </div>
             </div>
 

@@ -15,7 +15,6 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>("en")
 
   useEffect(() => {
-    // Read locale from cookie on mount
     const cookies = document.cookie.split("; ")
     const localeCookie = cookies.find((c) => c.startsWith("NEXT_LOCALE="))
     if (localeCookie) {
@@ -23,6 +22,9 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       if (savedLocale in translations) {
         setLocaleState(savedLocale)
       }
+    } else {
+      // Set default locale cookie if not present (replaces middleware logic)
+      document.cookie = `NEXT_LOCALE=en; max-age=31536000; path=/; samesite=lax`
     }
   }, [])
 

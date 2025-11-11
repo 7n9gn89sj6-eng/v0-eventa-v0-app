@@ -3,11 +3,14 @@ import { z } from "zod"
 const envSchema = z.object({
   // Database (required)
   DATABASE_URL: z.string().url("DATABASE_URL must be a valid URL"),
-  NEON_DATABASE_URL: z.string().url("NEON_DATABASE_URL must be a valid URL"),
+  NEON_DATABASE_URL: z.string().url("NEON_DATABASE_URL must be a valid URL").optional(),
 
-  // Email via Resend (required for sending emails)
-  RESEND_API_KEY: z.string().min(1, "RESEND_API_KEY is required for email functionality"),
-  EMAIL_FROM: z.string().email("EMAIL_FROM must be a valid email address").optional(),
+  // Email via SMTP (required for sending emails)
+  EMAIL_SERVER_HOST: z.string().min(1, "EMAIL_SERVER_HOST is required for email functionality"),
+  EMAIL_SERVER_PORT: z.string().min(1, "EMAIL_SERVER_PORT is required"),
+  EMAIL_SERVER_USER: z.string().min(1, "EMAIL_SERVER_USER is required"),
+  EMAIL_SERVER_PASSWORD: z.string().min(1, "EMAIL_SERVER_PASSWORD is required"),
+  EMAIL_FROM: z.string().email("EMAIL_FROM must be a valid email address"),
 
   // Application
   NEXT_PUBLIC_APP_URL: z.string().url("NEXT_PUBLIC_APP_URL must be a valid URL").optional(),
@@ -29,7 +32,10 @@ export function getEnv(): Env {
     const rawEnv = {
       DATABASE_URL: process.env.DATABASE_URL,
       NEON_DATABASE_URL: process.env.NEON_DATABASE_URL,
-      RESEND_API_KEY: process.env.RESEND_API_KEY,
+      EMAIL_SERVER_HOST: process.env.EMAIL_SERVER_HOST,
+      EMAIL_SERVER_PORT: process.env.EMAIL_SERVER_PORT,
+      EMAIL_SERVER_USER: process.env.EMAIL_SERVER_USER,
+      EMAIL_SERVER_PASSWORD: process.env.EMAIL_SERVER_PASSWORD,
       EMAIL_FROM: process.env.EMAIL_FROM,
       NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL || undefined,
       NODE_ENV: process.env.NODE_ENV as "development" | "production" | "test" | undefined,
@@ -40,7 +46,7 @@ export function getEnv(): Env {
     return cachedEnv
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const missingVars = error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")
+      const missingVars = error.issues.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")
       throw new Error(`Environment validation failed: ${missingVars}`)
     }
     throw error
@@ -48,7 +54,12 @@ export function getEnv(): Env {
 }
 
 // Export a convenient env object
-export const env = getEnv()
+export const env = new Proxy({} as Env, {
+  get(target, prop) {
+    const envObj = getEnv()
+    return envObj[prop as keyof Env]
+  },
+})
 
 export function assertEnv(keys: string[]): { ok: true } | { ok: false; missing: string[] } {
   const missing: string[] = []
