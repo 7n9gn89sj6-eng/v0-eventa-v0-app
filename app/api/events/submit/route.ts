@@ -1,12 +1,11 @@
+// app/api/events/submit/route.ts
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { neon } from "@neondatabase/serverless"
-import { env } from "@/lib/env"
-import { sendEventEditLinkEmail } from "@/lib/email"
 
-export const runtime = "nodejs"
-/** Ensure Next/Turbopack doesn't try to pre-render/optimize this API route */
+// ensure Next doesn’t try to pre-render/analyze this statically
 export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
 
 const EventSubmitSchema = z
   .object({
@@ -56,10 +55,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Creator email is required" }, { status: 400 })
     }
 
-    console.log("[v0] Connecting to database...")
-    const sql = neon(env.NEON_DATABASE_URL)
+    // read env lazily at runtime (avoid crashing build on import)
+    const NEON_DATABASE_URL = process.env.NEON_DATABASE_URL
+    if (!NEON_DATABASE_URL) {
+      console.error("[v0] NEON_DATABASE_URL is missing")
+      return NextResponse.json(
+        { error: "Server configuration error. Please contact support." },
+        { status: 500 },
+      )
+    }
 
-    // Ensure user exists (create if needed)
+    console.log("[v0] Connecting to database…")
+    const sql = neon(NEON_DATABASE_URL)
+
+    // upsert user
     let userId: string
     const existingUsers = await sql`
       SELECT id FROM "User" WHERE email = ${creatorEmail} LIMIT 1
@@ -78,22 +87,15 @@ export async function POST(request: NextRequest) {
       console.log("[v0] Created new user:", userId)
     }
 
-    const eventId = generateId()
-
-    // --- SAFE ADDRESS PARSING (prevents undefined.map) ---
-    const addressRaw =
-      typeof validatedData.location?.address === "string"
-        ? validatedData.location.address
-        : ""
-
+    // safe, defensive address parsing
+    const addressRaw = validatedData.location?.address ?? ""
     const addressParts = addressRaw
       ? addressRaw.split(",").map((p) => p.trim()).filter(Boolean)
       : []
-
     const city = addressParts[1] || addressParts[0] || "Unknown"
     const country = addressParts[addressParts.length - 1] || "Australia"
-    // -----------------------------------------------------
 
+    const eventId = generateId()
     console.log("[v0] Creating event:", { eventId, title: validatedData.title })
 
     await sql`
@@ -137,24 +139,24 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] Event created successfully")
 
-    // Create edit token (simple random id stored as-is)
+    // generate edit token
     const token = generateId()
     const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-
     await sql`
       INSERT INTO "EventEditToken" (id, "eventId", "tokenHash", expires, "createdAt")
       VALUES (${generateId()}, ${eventId}, ${token}, ${expires.toISOString()}, NOW())
     `
 
-    const baseUrl = env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-    const editUrl = `${baseUrl}/event/confirm?token=${token}`
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+    const editUrl = `${appUrl}/event/confirm?token=${token}`
 
+    // lazily import the email helper to avoid build-time import issues
     try {
+      const { sendEventEditLinkEmail } = await import("@/lib/email")
       await sendEventEditLinkEmail(creatorEmail, validatedData.title, eventId, token)
       console.log("[v0] Edit link email sent successfully to:", creatorEmail)
     } catch (emailError) {
       console.error("[v0] Failed to send email, but event was created:", emailError)
-      // Still return success with the URL
     }
 
     return NextResponse.json({
@@ -171,10 +173,6 @@ export async function POST(request: NextRequest) {
       message: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     })
-
-    if (error instanceof Error && error.message.includes("Environment validation failed")) {
-      return NextResponse.json({ error: "Server configuration error. Please contact support." }, { status: 500 })
-    }
 
     if (error instanceof z.ZodError) {
       console.error("[v0] Validation errors:", error.issues)
