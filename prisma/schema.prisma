@@ -135,6 +135,7 @@ model Event {
   timezone        String      @default("UTC")
   venueName       String?
   address         String?
+  postcode        String?     // Added postcode field to match form fields
   lat             Float?
   lng             Float?
   priceFree       Boolean     @default(false)
