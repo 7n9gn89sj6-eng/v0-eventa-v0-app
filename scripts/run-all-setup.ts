@@ -203,6 +203,14 @@ async function runSetup() {
             ALTER COLUMN "postcode" TYPE text USING "postcode"::text,
             ALTER COLUMN "postcode" DROP NOT NULL;
         END IF;
+
+        -- Location (NEW – if exists)
+        IF EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name='Location' AND column_name='postcode') THEN
+          ALTER TABLE "Location"
+            ALTER COLUMN "postcode" TYPE text USING "postcode"::text,
+            ALTER COLUMN "postcode" DROP NOT NULL;
+        END IF;
       END $$;
     `
     console.log("[v0] ✓ Postcode columns normalized")
