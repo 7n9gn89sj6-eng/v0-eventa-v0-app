@@ -99,7 +99,6 @@ async function runSetup() {
         "locationAddress" TEXT,
         "city" TEXT NOT NULL,
         "country" TEXT NOT NULL,
-        "postcode" VARCHAR(16),
         "imageUrl" TEXT,
         "externalUrl" TEXT,
         "status" "EventStatus" DEFAULT 'DRAFT' NOT NULL,
@@ -140,12 +139,33 @@ async function runSetup() {
     console.log("[v0] ✓ Database tables created")
 
     console.log("[v0] Checking for missing columns...")
+
+    // Check if postcode column exists
+    try {
+      const columnCheck = await sql`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'Event' AND column_name = 'postcode'
+      `
+
+      if (columnCheck.length === 0) {
+        console.log("[v0] Postcode column missing, adding it now...")
+        await sql`ALTER TABLE "Event" ADD COLUMN "postcode" VARCHAR(16)`
+        console.log("[v0] ✓ Postcode column added successfully")
+      } else {
+        console.log("[v0] ✓ Postcode column already exists")
+      }
+    } catch (error) {
+      console.error("[v0] Error checking/adding postcode column:", error)
+      throw error
+    }
+
+    // Add status column if missing
     try {
       await sql`ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "status" "EventStatus" DEFAULT 'DRAFT' NOT NULL`
-      await sql`ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "postcode" VARCHAR(16)`
-      console.log("[v0] ✓ Column checks complete")
+      console.log("[v0] ✓ Status column check complete")
     } catch (error) {
-      console.log("[v0] Note: Columns already exist or error:", error)
+      console.log("[v0] Note: Status column already exists or error:", error)
     }
 
     console.log("[v0] Creating indexes...")
