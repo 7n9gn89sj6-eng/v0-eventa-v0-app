@@ -135,7 +135,6 @@ model Event {
   timezone        String      @default("UTC")
   venueName       String?
   address         String?
-  postcode        String?     @db.VarChar(16) // Changed postcode to String? @db.VarChar(16) to match ChatGPT recommendation
   lat             Float?
   lng             Float?
   priceFree       Boolean     @default(false)
