@@ -3,7 +3,6 @@ import { detectLanguage } from "@/lib/search/language-detection"
 import { normalizeQuery } from "@/lib/search/query-normalization"
 import { searchDatabase } from "@/lib/search/database-search"
 import { searchWeb, deduplicateResults } from "@/lib/search/web-search"
-import type { SearchResponse } from "@/lib/types"
 import { ok, fail } from "@/lib/http"
 
 export async function POST(request: NextRequest) {
@@ -55,15 +54,7 @@ export async function POST(request: NextRequest) {
     const allResults = deduplicateResults(eventaResults, webResults)
     console.log("[v0] Total results after deduplication:", allResults.length)
 
-    const response: SearchResponse = {
-      results: allResults,
-      usedWeb: webResults.length > 0,
-      webSearchDisabled: !canWeb,
-      langDetected: langDetected as any,
-      totalResults: allResults.length,
-    }
-
-    return ok(response)
+    return ok(allResults)
   } catch (error) {
     console.error("Search error:", error)
     return fail("Search failed", 500)

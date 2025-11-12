@@ -235,10 +235,10 @@ export default function HomePage() {
         throw new Error(`Search failed (${searchResponse.status})`)
       }
 
-      const searchData = await searchResponse.json()
-      console.log("[v0] Search results:", searchData)
+      const results = await searchResponse.json()
+      const eventsArray = Array.isArray(results) ? results : results.results || []
 
-      if (searchData.count === 0) {
+      if (eventsArray.length === 0) {
         toast({
           title: "No Results",
           description: "No events found. Try different keywords or create your own.",
@@ -246,7 +246,7 @@ export default function HomePage() {
         setSearchResults([])
         setShowResults(false)
       } else {
-        setSearchResults(searchData.results || [])
+        setSearchResults(eventsArray)
         setShowResults(true)
         setShowDraftCard(false)
       }
