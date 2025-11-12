@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client"
 
-if (!process.env.DATABASE_URL && !process.env.NEON_DATABASE_URL) {
-  console.warn("DATABASE_URL is not set. Prisma will not be able to connect.")
+if (!process.env.DATABASE_URL) {
+  console.warn("DATABASE_URL is not set. Prisma will not connect.")
 }
 
 const globalForPrisma = globalThis as unknown as {

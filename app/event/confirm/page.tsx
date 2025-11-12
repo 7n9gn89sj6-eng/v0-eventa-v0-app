@@ -4,6 +4,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { AlertCircle } from "lucide-react"
 import bcrypt from "bcryptjs"
 
+export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 type SearchParams = Promise<{ token?: string }>
