@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "postbuild": "tsx scripts/run-all-setup.ts",
+    "postbuild": "tsx scripts/run-all-setup.ts && prisma migrate deploy",
     "build:ci": "npm run check:env && next build && npm run typecheck && npm run lint",
     "build:local": "next build",
     "check:env": "tsx scripts/check-env-strict.ts",
@@ -12,7 +12,7 @@
     "db:check": "tsx scripts/db-check.ts",
     "db:setup": "tsx scripts/run-all-setup.ts",
     "dev": "next dev",
-    "postinstall": "prisma migrate deploy && prisma generate",
+    "postinstall": "prisma generate",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
