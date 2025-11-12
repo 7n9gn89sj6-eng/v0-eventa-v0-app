@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import prisma from "@/lib/db"
+
+export const runtime = "nodejs"
 
 const EXTERNAL_STUB_EVENTS = [
   {
@@ -34,61 +36,72 @@ const EXTERNAL_STUB_EVENTS = [
   },
 ]
 
-export async function GET(request: NextRequest) {
-  const startTime = Date.now()
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url)
+  const q = (url.searchParams.get("query") || url.searchParams.get("q") || "").trim()
+  const take = Math.min(Number.parseInt(url.searchParams.get("take") || "20", 10) || 20, 50)
+  const page = Math.max(Number.parseInt(url.searchParams.get("page") || "1", 10) || 1, 1)
+  const skip = (page - 1) * take
+  const city = url.searchParams.get("city")
+  const country = url.searchParams.get("country")
 
   try {
-    const searchParams = request.nextUrl.searchParams
-    const query = searchParams.get("q")
-    const city = searchParams.get("city")
-    const country = searchParams.get("country")
-
-    if (!query) {
-      return NextResponse.json({ error: "Query parameter 'q' is required" }, { status: 400 })
-    }
-
-    let internalEvents = []
-    let dbError = false
-
-    try {
-      internalEvents = await db.event.findMany({
-        where: {
-          status: "PUBLISHED",
-          OR: [
-            { title: { contains: query, mode: "insensitive" } },
-            { description: { contains: query, mode: "insensitive" } },
-            { city: { contains: query, mode: "insensitive" } },
-            { country: { contains: query, mode: "insensitive" } },
-          ],
-          ...(city && { city: { contains: city, mode: "insensitive" } }),
-          ...(country && { country: { contains: country, mode: "insensitive" } }),
-        },
-        include: {
-          createdBy: {
-            select: {
-              name: true,
-              email: true,
-            },
-          },
-        },
-        orderBy: {
-          startAt: "asc",
-        },
-        take: 20,
+    if (!q) {
+      const [events, count] = await Promise.all([
+        prisma.event.findMany({
+          where: { status: "PUBLISHED" },
+          orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
+          take,
+          skip,
+        }),
+        prisma.event.count({ where: { status: "PUBLISHED" } }),
+      ])
+      return NextResponse.json({
+        events,
+        count,
+        page,
+        take,
+        internal: events,
+        external: [],
+        total: count,
       })
-    } catch (error) {
-      console.error("[v0] Database search error:", error)
-      dbError = true
     }
 
-    const tier1Latency = Date.now() - startTime
+    const where: any = {
+      status: "PUBLISHED",
+      OR: [
+        { title: { contains: q, mode: "insensitive" } },
+        { description: { contains: q, mode: "insensitive" } },
+        { city: { contains: q, mode: "insensitive" } },
+        { country: { contains: q, mode: "insensitive" } },
+        { venueName: { contains: q, mode: "insensitive" } },
+      ],
+    }
 
-    const tier2StartTime = Date.now()
+    if (city) {
+      where.city = { contains: city, mode: "insensitive" }
+    }
+    if (country) {
+      where.country = { contains: country, mode: "insensitive" }
+    }
+
+    const [events, count] = await Promise.all([
+      prisma.event.findMany({
+        where,
+        orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
+        take,
+        skip,
+      }),
+      prisma.event.count({ where }),
+    ])
+
+    console.log("[v0] Search query:", q, "found:", count, "events")
+
     const externalEvents = EXTERNAL_STUB_EVENTS.filter((event) => {
       const matchesQuery =
-        event.title.toLowerCase().includes(query.toLowerCase()) ||
-        event.description.toLowerCase().includes(query.toLowerCase()) ||
-        event.location.city.toLowerCase().includes(query.toLowerCase())
+        event.title.toLowerCase().includes(q.toLowerCase()) ||
+        event.description.toLowerCase().includes(q.toLowerCase()) ||
+        event.location.city.toLowerCase().includes(q.toLowerCase())
 
       const matchesCity = !city || event.location.city.toLowerCase().includes(city.toLowerCase())
       const matchesCountry = !country || event.location.country.toLowerCase().includes(country.toLowerCase())
@@ -96,63 +109,26 @@ export async function GET(request: NextRequest) {
       return matchesQuery && matchesCity && matchesCountry
     })
 
-    const tier2Latency = Date.now() - tier2StartTime
-
-    const results = {
-      internal: internalEvents.map((event) => ({
-        id: event.id,
-        title: event.title,
-        description: event.description,
-        startAt: event.startAt,
-        endAt: event.endAt,
-        location: {
-          address: event.locationAddress,
-          city: event.city,
-          country: event.country,
-        },
-        imageUrl: event.imageUrl,
-        externalUrl: event.externalUrl,
-        source: "eventa",
-      })),
-      external: externalEvents,
-      total: internalEvents.length + externalEvents.length,
-      latency: {
-        tier1_ms: tier1Latency,
-        tier2_ms: tier2Latency,
-        total_ms: Date.now() - startTime,
-      },
-      ...(dbError && { warning: "Internal search temporarily unavailable" }),
-    }
-
-    console.log("[v0] Search results:", {
-      query,
-      internal_count: internalEvents.length,
-      external_count: externalEvents.length,
-      tier1_latency_ms: tier1Latency,
-      tier2_latency_ms: tier2Latency,
-      db_error: dbError,
-    })
-
-    if (results.total === 0 && dbError) {
-      return NextResponse.json(
-        {
-          error: "We couldn't reach Eventa right now. Try again.",
-          error_code: "ERR_DB_CONNECT",
-        },
-        { status: 503 },
-      )
-    }
-
     return NextResponse.json({
-      ...results,
-      events: [...results.internal, ...results.external], // backward compatible
+      events,
+      count,
+      page,
+      take,
+      query: q,
+      internal: events,
+      external: externalEvents,
+      total: count + externalEvents.length,
     })
-  } catch (error) {
-    console.error("[v0] Search error:", error)
+  } catch (e: any) {
+    console.error("[v0] search/events error:", e)
     return NextResponse.json(
       {
-        error: "Failed to search events",
-        error_code: "ERR_SEARCH_FAILED",
+        events: [],
+        count: 0,
+        internal: [],
+        external: [],
+        total: 0,
+        error: String(e?.message || e),
       },
       { status: 500 },
     )

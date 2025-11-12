@@ -56,102 +56,82 @@ interface EventsListingContentProps {
 }
 
 export function EventsListingContent({ initialQuery }: EventsListingContentProps) {
-  const [events, setEvents] = useState<Event[]>([])
-  const [filteredEvents, setFilteredEvents] = useState<Event[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [showFilters, setShowFilters] = useState(false)
-  const [searchQuery, setSearchQuery] = useState(initialQuery || "")
-  const [searchError, setSearchError] = useState<string | null>(null)
-  const [isSearching, setIsSearching] = useState(false)
+  const [q, setQ] = useState(initialQuery || "")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [results, setResults] = useState<Event[]>([])
+  const [total, setTotal] = useState(0)
 
-  // Filters
+  const [showFilters, setShowFilters] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState("All")
   const [selectedPriceFilter, setSelectedPriceFilter] = useState("all")
   const [sortBy, setSortBy] = useState("date-asc")
 
-  useEffect(() => {
-    if (initialQuery) {
-      runSearch(initialQuery)
-    } else {
-      fetchEvents()
-    }
-  }, [])
-
-  useEffect(() => {
-    applyFilters()
-  }, [events, selectedCategory, selectedPriceFilter, sortBy])
-
-  const runSearch = async (query?: string) => {
-    const q = query || searchQuery
-    if (!q.trim()) {
-      fetchEvents()
-      return
-    }
-
-    setIsSearching(true)
-    setSearchError(null)
-
+  async function runSearch() {
+    if (loading) return
+    setLoading(true)
+    setError(null)
     try {
-      const res = await fetch(`/api/search/events?q=${encodeURIComponent(q)}`, {
+      const r = await fetch(`/api/search/events?query=${encodeURIComponent(q)}`, {
         method: "GET",
         headers: { accept: "application/json" },
         cache: "no-store",
       })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data?.error || `Search failed (${r.status})`)
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || `Search failed (${res.status})`)
-      }
+      const allEvents = [
+        ...(data.internal || []),
+        ...(data.external || []).map((ext: any) => ({
+          id: ext.id,
+          title: ext.title,
+          description: ext.description,
+          startAt: ext.startAt,
+          endAt: ext.endAt,
+          city: ext.location?.city || "",
+          country: ext.location?.country || "",
+          address: ext.location?.address || "",
+          venueName: ext.location?.address || "",
+          categories: [],
+          priceFree: false,
+          imageUrls: ext.imageUrl ? [ext.imageUrl] : [],
+          status: "PUBLISHED",
+          source: ext.source,
+          imageUrl: ext.imageUrl,
+          externalUrl: ext.externalUrl,
+        })),
+      ]
 
-      const data = await res.json()
-
-      const internalEvents = data.internal || []
-      const externalEvents = data.external || []
-      const allEvents = [...internalEvents, ...externalEvents]
-
-      console.log("[v0] Search returned:", allEvents.length, "events")
-      setEvents(allEvents)
-      setSearchError(null)
+      setResults(allEvents)
+      setTotal(data.count ?? 0)
     } catch (e: any) {
-      console.error("[v0] Search error:", e)
-      setSearchError(e?.message || "Search failed")
-      setEvents([])
+      console.error(e)
+      setError(e?.message || "Search failed")
+      setResults([])
+      setTotal(0)
     } finally {
-      setIsSearching(false)
+      setLoading(false)
     }
   }
 
-  const fetchEvents = async () => {
-    try {
-      setIsLoading(true)
-      const response = await fetch("/api/events?status=PUBLISHED&limit=100")
-      if (!response.ok) throw new Error("Failed to fetch events")
-      const data = await response.json()
-      setEvents(data.events || [])
-    } catch (error) {
-      console.error("[v0] Error fetching events:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  useEffect(() => {
+    runSearch()
+  }, [])
 
-  const applyFilters = () => {
-    let filtered = [...events]
-
-    // Category filter
-    if (selectedCategory !== "All") {
-      filtered = filtered.filter((event) => event.categories?.includes(selectedCategory))
-    }
-
-    // Price filter
-    if (selectedPriceFilter === "free") {
-      filtered = filtered.filter((event) => event.priceFree)
-    } else if (selectedPriceFilter === "paid") {
-      filtered = filtered.filter((event) => !event.priceFree)
-    }
-
-    // Sort
-    filtered.sort((a, b) => {
+  const filteredResults = results
+    .filter((event) => {
+      if (selectedCategory !== "All" && !event.categories?.includes(selectedCategory)) {
+        return false
+      }
+      if (selectedPriceFilter === "free" && !event.priceFree) {
+        return false
+      }
+      if (selectedPriceFilter === "paid" && event.priceFree) {
+        return false
+      }
+      return true
+    })
+    .sort((a, b) => {
       switch (sortBy) {
         case "date-asc":
           return new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
@@ -166,23 +146,15 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
       }
     })
 
-    setFilteredEvents(filtered)
-  }
-
   const clearFilters = () => {
     setSelectedCategory("All")
     setSelectedPriceFilter("all")
-    setSearchQuery("")
+    setQ("")
     setSortBy("date-asc")
-    fetchEvents()
   }
 
   const hasActiveFilters =
-    selectedCategory !== "All" || selectedPriceFilter !== "all" || searchQuery.trim() !== "" || sortBy !== "date-asc"
-
-  if (isLoading && !isSearching) {
-    return <LoadingSpinner size="lg" className="py-12" />
-  }
+    selectedCategory !== "All" || selectedPriceFilter !== "all" || q.trim() !== "" || sortBy !== "date-asc"
 
   return (
     <div className="space-y-6">
@@ -210,21 +182,23 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
                   <Input
                     id="search"
                     placeholder="Search events, cities, venues..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        runSearch()
-                      }
+                      if (e.key === "Enter") runSearch()
                     }}
                     className="pl-9"
+                    aria-label="Search events"
                   />
                 </div>
-                <Button onClick={() => runSearch()} disabled={isSearching || !searchQuery.trim()}>
-                  {isSearching ? "Processing..." : "Go"}
+                <Button onClick={runSearch} disabled={loading}>
+                  {loading ? "Processing…" : "Go"}
                 </Button>
               </div>
-              {searchError && <p className="text-sm text-red-600">{searchError}</p>}
+              {error && <p className="text-sm text-red-600">{error}</p>}
+              {!error && !loading && results.length === 0 && q.trim() && (
+                <p className="text-sm opacity-70">No results found.</p>
+              )}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3">
@@ -290,19 +264,17 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
       {/* Results Count */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Showing {filteredEvents.length} of {events.length} events
+          Showing {filteredResults.length} of {results.length} events
         </p>
       </div>
 
-      {filteredEvents.length === 0 && !isSearching ? (
+      {loading ? (
+        <LoadingSpinner size="lg" className="py-12" />
+      ) : filteredResults.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-lg text-muted-foreground mb-2">
-              {searchQuery.trim() ? "No results found" : "No events found"}
-            </p>
-            <p className="text-sm text-muted-foreground mb-4">
-              {searchQuery.trim() ? "Try a different search term or adjust your filters" : "Try adjusting your filters"}
-            </p>
+            <p className="text-lg text-muted-foreground mb-2">No events found</p>
+            <p className="text-sm text-muted-foreground mb-4">Try adjusting your search or filters</p>
             {hasActiveFilters && (
               <Button variant="outline" onClick={clearFilters}>
                 Clear Filters
@@ -310,11 +282,9 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
             )}
           </CardContent>
         </Card>
-      ) : isSearching ? (
-        <LoadingSpinner size="lg" className="py-12" />
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredEvents.map((event) => {
+          {filteredResults.map((event) => {
             const eventCity = event.city || event.location?.city || ""
             const eventCountry = event.country || event.location?.country || ""
             const eventImageUrl = event.imageUrls?.[0] || event.imageUrl || "/placeholder.svg"
