@@ -143,7 +143,10 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    return NextResponse.json(results)
+    return NextResponse.json({
+      ...results,
+      events: [...results.internal, ...results.external], // backward compatible
+    })
   } catch (error) {
     console.error("[v0] Search error:", error)
     return NextResponse.json(

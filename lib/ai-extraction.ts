@@ -2,7 +2,80 @@ import "server-only"
 import { generateObject } from "ai"
 import { openai } from "@ai-sdk/openai"
 import type { EventExtractionInput, EventExtractionOutput } from "./types"
+import { nextSaturday, nextSunday, set } from "date-fns"
 export { CATEGORY_LABELS, categoryToEnum } from "./ai-extraction-constants"
+
+function detectKind(text: string): string | undefined {
+  const t = text.toLowerCase()
+  if (/(garage|yard|car boot)\s+sale/.test(t)) return "markets_fairs"
+  if (/(workshop|class|lesson|training)/.test(t)) return "learning_talks"
+  if (/(concert|gig|live music|band|dj)/.test(t)) return "music_nightlife"
+  if (/(market|fair|bazaar|flea market)/.test(t)) return "markets_fairs"
+  if (/(food festival|wine tasting|cooking|dining)/.test(t)) return "food_drink"
+  if (/(charity|fundraiser|volunteer|community)/.test(t)) return "community_causes"
+  if (/(sports|fitness|outdoor|hiking|cycling)/.test(t)) return "sports_outdoors"
+  if (/(kids|children|family)/.test(t)) return "family_kids"
+  if (/(art|gallery|exhibition|theater|theatre|culture)/.test(t)) return "arts_culture"
+  if (/(webinar|online|virtual|zoom)/.test(t)) return "online_virtual"
+  return undefined
+}
+
+function parseWeekendBlock(text: string) {
+  const t = text.toLowerCase().replace(/\s+/g, " ")
+
+  // Matches patterns like "9am to 6pm", "9:00–18:00", etc.
+  const timeRe = /(\d{1,2}(:\d{2})?\s*(am|pm)?)\s*(to|-|–|—)\s*(\d{1,2}(:\d{2})?\s*(am|pm)?)/
+  const hasWeekend = /(this\s+)?weekend/.test(t) || (/saturday/.test(t) && /sunday/.test(t))
+
+  if (!hasWeekend) return null
+
+  const timeMatch = t.match(timeRe)
+  let startHour = 9,
+    startMin = 0,
+    endHour = 17,
+    endMin = 0
+
+  function to24(s: string) {
+    let raw = s.trim()
+    const isPM = /pm/.test(raw)
+    raw = raw.replace(/am|pm/g, "").trim()
+    const parts = raw.split(":")
+    const h = parts[0] || "0"
+    const m = parts[1] || "0"
+    let hh = Number.parseInt(h, 10)
+    const mm = Number.parseInt(m, 10) || 0
+
+    // Handle am/pm
+    if (isPM && hh < 12) hh += 12
+    if (!isPM && hh === 12) hh = 0
+
+    return { h: hh, m: mm }
+  }
+
+  if (timeMatch) {
+    const a = to24(timeMatch[1])
+    const b = to24(timeMatch[5])
+    startHour = a.h ?? startHour
+    startMin = a.m ?? startMin
+    endHour = b.h ?? endHour
+    endMin = b.m ?? endMin
+
+    // Handle 24h ranges like "9–18" without am/pm
+    if (!timeMatch[3] && !timeMatch[7] && endHour < startHour) {
+      endHour += 12
+    }
+  }
+
+  const sat = nextSaturday(new Date())
+  const sun = nextSunday(new Date())
+
+  const satStart = set(sat, { hours: startHour, minutes: startMin, seconds: 0, milliseconds: 0 })
+  const satEnd = set(sat, { hours: endHour, minutes: endMin, seconds: 0, milliseconds: 0 })
+  const sunStart = set(sun, { hours: startHour, minutes: startMin, seconds: 0, milliseconds: 0 })
+  const sunEnd = set(sun, { hours: endHour, minutes: endMin, seconds: 0, milliseconds: 0 })
+
+  return { satStart, satEnd, sunStart, sunEnd }
+}
 
 export async function extractEventFromText(input: EventExtractionInput): Promise<EventExtractionOutput> {
   const { object } = await generateObject({
@@ -214,7 +287,27 @@ CURRENT DATETIME FOR CONTEXT: ${new Date().toISOString()}
 Be thorough but reasonable. Extract as much structured data as possible while being honest about confidence levels.`,
   })
 
-  return object as EventExtractionOutput
+  const draft = object as EventExtractionOutput
+
+  const originalText = input.source_text
+
+  // Auto-detect category if AI returned "auto" or confidence is low
+  const inferredKind = detectKind(originalText)
+  if (inferredKind && (draft.category === "auto" || draft.confidence.category < 0.6)) {
+    draft.category = inferredKind
+    draft.notes_for_user.push("Category detected from keywords in your description")
+  }
+
+  // Parse weekend patterns for dates/times
+  const weekend = parseWeekendBlock(originalText)
+  if (weekend && draft.confidence.datetime < 0.6) {
+    draft.start = weekend.satStart.toISOString()
+    draft.end = weekend.satEnd.toISOString()
+    draft.confidence.datetime = 0.8 // Boost confidence since we parsed it
+    draft.notes_for_user.push("Dates set to upcoming weekend based on your text")
+  }
+
+  return draft
 }
 
 export async function suggestFollowUpQuestion(

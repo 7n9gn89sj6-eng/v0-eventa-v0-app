@@ -41,27 +41,85 @@ interface Event {
   priceAmount?: number
   imageUrls: string[]
   status: string
+  source?: string
+  location?: {
+    address?: string
+    city?: string
+    country?: string
+  }
+  imageUrl?: string
+  externalUrl?: string
 }
 
-export function EventsListingContent() {
+interface EventsListingContentProps {
+  initialQuery?: string
+}
+
+export function EventsListingContent({ initialQuery }: EventsListingContentProps) {
   const [events, setEvents] = useState<Event[]>([])
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showFilters, setShowFilters] = useState(false)
+  const [searchQuery, setSearchQuery] = useState(initialQuery || "")
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const [isSearching, setIsSearching] = useState(false)
 
   // Filters
   const [selectedCategory, setSelectedCategory] = useState("All")
   const [selectedPriceFilter, setSelectedPriceFilter] = useState("all")
-  const [searchQuery, setSearchQuery] = useState("")
   const [sortBy, setSortBy] = useState("date-asc")
 
   useEffect(() => {
-    fetchEvents()
+    if (initialQuery) {
+      runSearch(initialQuery)
+    } else {
+      fetchEvents()
+    }
   }, [])
 
   useEffect(() => {
     applyFilters()
-  }, [events, selectedCategory, selectedPriceFilter, searchQuery, sortBy])
+  }, [events, selectedCategory, selectedPriceFilter, sortBy])
+
+  const runSearch = async (query?: string) => {
+    const q = query || searchQuery
+    if (!q.trim()) {
+      fetchEvents()
+      return
+    }
+
+    setIsSearching(true)
+    setSearchError(null)
+
+    try {
+      const res = await fetch(`/api/search/events?q=${encodeURIComponent(q)}`, {
+        method: "GET",
+        headers: { accept: "application/json" },
+        cache: "no-store",
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.error || `Search failed (${res.status})`)
+      }
+
+      const data = await res.json()
+
+      const internalEvents = data.internal || []
+      const externalEvents = data.external || []
+      const allEvents = [...internalEvents, ...externalEvents]
+
+      console.log("[v0] Search returned:", allEvents.length, "events")
+      setEvents(allEvents)
+      setSearchError(null)
+    } catch (e: any) {
+      console.error("[v0] Search error:", e)
+      setSearchError(e?.message || "Search failed")
+      setEvents([])
+    } finally {
+      setIsSearching(false)
+    }
+  }
 
   const fetchEvents = async () => {
     try {
@@ -82,7 +140,7 @@ export function EventsListingContent() {
 
     // Category filter
     if (selectedCategory !== "All") {
-      filtered = filtered.filter((event) => event.categories.includes(selectedCategory))
+      filtered = filtered.filter((event) => event.categories?.includes(selectedCategory))
     }
 
     // Price filter
@@ -90,19 +148,6 @@ export function EventsListingContent() {
       filtered = filtered.filter((event) => event.priceFree)
     } else if (selectedPriceFilter === "paid") {
       filtered = filtered.filter((event) => !event.priceFree)
-    }
-
-    // Search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(
-        (event) =>
-          event.title.toLowerCase().includes(query) ||
-          event.description?.toLowerCase().includes(query) ||
-          event.city.toLowerCase().includes(query) ||
-          event.country.toLowerCase().includes(query) ||
-          event.venueName?.toLowerCase().includes(query),
-      )
     }
 
     // Sort
@@ -129,12 +174,13 @@ export function EventsListingContent() {
     setSelectedPriceFilter("all")
     setSearchQuery("")
     setSortBy("date-asc")
+    fetchEvents()
   }
 
   const hasActiveFilters =
     selectedCategory !== "All" || selectedPriceFilter !== "all" || searchQuery.trim() !== "" || sortBy !== "date-asc"
 
-  if (isLoading) {
+  if (isLoading && !isSearching) {
     return <LoadingSpinner size="lg" className="py-12" />
   }
 
@@ -146,7 +192,7 @@ export function EventsListingContent() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <SlidersHorizontal className="h-5 w-5" />
-              <CardTitle>Filters</CardTitle>
+              <CardTitle>Search & Filters</CardTitle>
             </div>
             <Button variant="ghost" size="sm" onClick={() => setShowFilters(!showFilters)}>
               {showFilters ? "Hide" : "Show"}
@@ -156,19 +202,29 @@ export function EventsListingContent() {
 
         {showFilters && (
           <CardContent className="space-y-4">
-            {/* Search */}
             <div className="space-y-2">
               <Label htmlFor="search">Search</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="search"
-                  placeholder="Search events, cities, venues..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="search"
+                    placeholder="Search events, cities, venues..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        runSearch()
+                      }
+                    }}
+                    className="pl-9"
+                  />
+                </div>
+                <Button onClick={() => runSearch()} disabled={isSearching || !searchQuery.trim()}>
+                  {isSearching ? "Processing..." : "Go"}
+                </Button>
               </div>
+              {searchError && <p className="text-sm text-red-600">{searchError}</p>}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3">
@@ -238,12 +294,15 @@ export function EventsListingContent() {
         </p>
       </div>
 
-      {/* Events Grid */}
-      {filteredEvents.length === 0 ? (
+      {filteredEvents.length === 0 && !isSearching ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-lg text-muted-foreground mb-2">No events found</p>
-            <p className="text-sm text-muted-foreground mb-4">Try adjusting your filters or search query</p>
+            <p className="text-lg text-muted-foreground mb-2">
+              {searchQuery.trim() ? "No results found" : "No events found"}
+            </p>
+            <p className="text-sm text-muted-foreground mb-4">
+              {searchQuery.trim() ? "Try a different search term or adjust your filters" : "Try adjusting your filters"}
+            </p>
             {hasActiveFilters && (
               <Button variant="outline" onClick={clearFilters}>
                 Clear Filters
@@ -251,91 +310,118 @@ export function EventsListingContent() {
             )}
           </CardContent>
         </Card>
+      ) : isSearching ? (
+        <LoadingSpinner size="lg" className="py-12" />
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredEvents.map((event) => (
-            <Card key={event.id} className="flex flex-col overflow-hidden hover:shadow-lg transition-shadow">
-              {event.imageUrls?.[0] && (
+          {filteredEvents.map((event) => {
+            const eventCity = event.city || event.location?.city || ""
+            const eventCountry = event.country || event.location?.country || ""
+            const eventImageUrl = event.imageUrls?.[0] || event.imageUrl || "/placeholder.svg"
+
+            return (
+              <Card key={event.id} className="flex flex-col overflow-hidden hover:shadow-lg transition-shadow">
                 <div className="aspect-video w-full overflow-hidden bg-muted">
                   <img
-                    src={event.imageUrls[0] || "/placeholder.svg"}
+                    src={eventImageUrl || "/placeholder.svg"}
                     alt={event.title}
                     className="h-full w-full object-cover transition-transform hover:scale-105"
                   />
                 </div>
-              )}
 
-              <CardHeader className="flex-1">
-                <div className="mb-2 flex flex-wrap gap-2">
-                  {event.priceFree && (
-                    <Badge variant="secondary" className="text-xs">
-                      Free
-                    </Badge>
-                  )}
-                  {event.categories.slice(0, 2).map((cat) => (
-                    <Badge key={cat} variant="outline" className="text-xs">
-                      {cat}
-                    </Badge>
-                  ))}
-                </div>
+                <CardHeader className="flex-1">
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    {event.priceFree && (
+                      <Badge variant="secondary" className="text-xs">
+                        Free
+                      </Badge>
+                    )}
+                    {event.source && (
+                      <Badge variant="outline" className="text-xs">
+                        {event.source}
+                      </Badge>
+                    )}
+                    {event.categories?.slice(0, 2).map((cat) => (
+                      <Badge key={cat} variant="outline" className="text-xs">
+                        {cat}
+                      </Badge>
+                    ))}
+                  </div>
 
-                <CardTitle className="line-clamp-2">
-                  <Link href={`/events/${event.id}`} className="hover:underline">
-                    {event.title}
-                  </Link>
-                </CardTitle>
+                  <CardTitle className="line-clamp-2">
+                    {event.externalUrl ? (
+                      <a href={event.externalUrl} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                        {event.title}
+                      </a>
+                    ) : (
+                      <Link href={`/events/${event.id}`} className="hover:underline">
+                        {event.title}
+                      </Link>
+                    )}
+                  </CardTitle>
 
-                <CardDescription className="line-clamp-3">{event.description}</CardDescription>
-              </CardHeader>
+                  <CardDescription className="line-clamp-3">{event.description}</CardDescription>
+                </CardHeader>
 
-              <CardContent className="space-y-3">
-                <div className="space-y-2 text-sm text-muted-foreground">
-                  <div className="flex items-start gap-2">
-                    <Calendar className="h-4 w-4 mt-0.5 shrink-0" />
-                    <ClientOnly
-                      placeholder={
+                <CardContent className="space-y-3">
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    <div className="flex items-start gap-2">
+                      <Calendar className="h-4 w-4 mt-0.5 shrink-0" />
+                      <ClientOnly
+                        placeholder={
+                          <div>
+                            <p className="font-medium text-foreground">—</p>
+                            <p className="text-xs">—</p>
+                          </div>
+                        }
+                      >
                         <div>
-                          <p className="font-medium text-foreground">—</p>
-                          <p className="text-xs">—</p>
+                          <p className="font-medium text-foreground">
+                            {new Date(event.startAt).toLocaleDateString("en-US", {
+                              weekday: "short",
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })}
+                          </p>
+                          <p className="text-xs">
+                            {new Date(event.startAt).toLocaleTimeString("en-US", {
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                          </p>
                         </div>
-                      }
-                    >
+                      </ClientOnly>
+                    </div>
+
+                    <div className="flex items-start gap-2">
+                      <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
                       <div>
-                        <p className="font-medium text-foreground">
-                          {new Date(event.startAt).toLocaleDateString("en-US", {
-                            weekday: "short",
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })}
-                        </p>
+                        {event.venueName && <p className="font-medium text-foreground">{event.venueName}</p>}
                         <p className="text-xs">
-                          {new Date(event.startAt).toLocaleTimeString("en-US", {
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })}
+                          {eventCity}
+                          {eventCity && eventCountry ? ", " : ""}
+                          {eventCountry}
                         </p>
                       </div>
-                    </ClientOnly>
-                  </div>
-
-                  <div className="flex items-start gap-2">
-                    <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
-                    <div>
-                      {event.venueName && <p className="font-medium text-foreground">{event.venueName}</p>}
-                      <p className="text-xs">
-                        {event.city}, {event.country}
-                      </p>
                     </div>
                   </div>
-                </div>
 
-                <Button asChild className="w-full">
-                  <Link href={`/events/${event.id}`}>View Details</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+                  {event.externalUrl ? (
+                    <Button asChild className="w-full">
+                      <a href={event.externalUrl} target="_blank" rel="noopener noreferrer">
+                        View on {event.source || "External Site"}
+                      </a>
+                    </Button>
+                  ) : (
+                    <Button asChild className="w-full">
+                      <Link href={`/events/${event.id}`}>View Details</Link>
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
       )}
     </div>
