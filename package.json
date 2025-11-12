@@ -103,6 +103,7 @@
     "swr": "latest",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
+    "util": "latest",
     "vue-router": "latest",
     "zod": "3.25.76"
   },

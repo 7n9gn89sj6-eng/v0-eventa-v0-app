@@ -1,5 +1,8 @@
 import { neon } from "@neondatabase/serverless"
+import { exec } from "child_process"
+import { promisify } from "util"
 
+const execAsync = promisify(exec)
 const sql = neon(process.env.NEON_DATABASE_URL || process.env.DATABASE_URL!)
 
 async function runSetup() {
@@ -96,6 +99,7 @@ async function runSetup() {
         "locationAddress" TEXT,
         "city" TEXT NOT NULL,
         "country" TEXT NOT NULL,
+        "postcode" VARCHAR(16),
         "imageUrl" TEXT,
         "externalUrl" TEXT,
         "status" "EventStatus" DEFAULT 'DRAFT' NOT NULL,
@@ -138,9 +142,10 @@ async function runSetup() {
     console.log("[v0] Checking for missing columns...")
     try {
       await sql`ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "status" "EventStatus" DEFAULT 'DRAFT' NOT NULL`
-      console.log("[v0] ✓ Status column check complete")
+      await sql`ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "postcode" VARCHAR(16)`
+      console.log("[v0] ✓ Column checks complete")
     } catch (error) {
-      console.log("[v0] Note: Status column already exists or error:", error)
+      console.log("[v0] Note: Columns already exist or error:", error)
     }
 
     console.log("[v0] Creating indexes...")
@@ -298,6 +303,16 @@ async function runSetup() {
     }
 
     console.log("[v0] ✓ Sample events seeded")
+
+    console.log("[v0] Running Prisma migrations...")
+    try {
+      const { stdout, stderr } = await execAsync("prisma migrate deploy")
+      if (stdout) console.log("[v0] Prisma output:", stdout)
+      if (stderr) console.log("[v0] Prisma warnings:", stderr)
+      console.log("[v0] ✓ Prisma migrations completed")
+    } catch (error: any) {
+      console.log("[v0] Note: Prisma migration skipped or failed:", error.message)
+    }
 
     // Verify the data
     const count = await sql`SELECT COUNT(*) as count FROM "Event" WHERE "status" = 'PUBLISHED'`
