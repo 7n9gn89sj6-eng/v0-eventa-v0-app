@@ -126,29 +126,25 @@ export default async function EventConfirmPage({
 
     redirect(`/edit/${eventId}?token=${token}`)
   } catch (err: any) {
-    console.error("Confirm error:", err?.message || err)
+    const msg = String(err?.message || err)
+    const stack = String(err?.stack || "")
+    console.error("Confirm error:", msg)
 
-    const msg = String(err?.message || "")
-    const looksLikePostcodeMismatch =
-      msg.includes("postcode") && (msg.includes("column") || msg.includes("type") || msg.includes("Invalid"))
+    const looksLikePostcode =
+      msg.includes("postcode") || stack.includes("postcode") || (msg.includes("column") && msg.includes("type"))
 
     return (
-      <div className="container mx-auto px-4 py-12">
-        <div className="mx-auto max-w-2xl">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-destructive" />
-                <CardTitle>Something went wrong</CardTitle>
-              </div>
-              <CardDescription>
-                {looksLikePostcodeMismatch
-                  ? "We're updating our database for this region format. Please try again shortly."
-                  : "Please try the link again in a moment."}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </div>
+      <div className="max-w-md mx-auto py-16 text-center">
+        <h1 className="text-2xl font-semibold">Something went wrong</h1>
+        <p className="mt-2">
+          {looksLikePostcode
+            ? "We're updating our database to support this postcode format. Please try again shortly."
+            : "Please try the link again in a moment."}
+        </p>
+        <pre className="mt-4 text-xs whitespace-pre-wrap opacity-60">
+          {/* v0: TEMP – show trimmed error for diagnosis; remove after confirm works */}
+          {msg.slice(0, 600)}
+        </pre>
       </div>
     )
   }
