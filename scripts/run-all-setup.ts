@@ -119,6 +119,7 @@ async function runSetup() {
         "searchText" TEXT NOT NULL DEFAULT '',
         "searchTextFolded" TEXT,
         "embedding" vector(1536),
+        "postcode" VARCHAR(16),
         CONSTRAINT "Event_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE CASCADE
       )
     `
@@ -167,6 +168,44 @@ async function runSetup() {
     } catch (error) {
       console.log("[v0] Note: Status column already exists or error:", error)
     }
+
+    console.log("[v0] Normalizing postcode columns...")
+    await sql`
+      DO $$ BEGIN
+        -- Event
+        IF EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name='Event' AND column_name='postcode') THEN
+          ALTER TABLE "Event"
+            ALTER COLUMN "postcode" TYPE text USING "postcode"::text,
+            ALTER COLUMN "postcode" DROP NOT NULL;
+        END IF;
+
+        -- Venue
+        IF EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name='Venue' AND column_name='postcode') THEN
+          ALTER TABLE "Venue"
+            ALTER COLUMN "postcode" TYPE text USING "postcode"::text,
+            ALTER COLUMN "postcode" DROP NOT NULL;
+        END IF;
+
+        -- Organizer
+        IF EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name='Organizer' AND column_name='postcode') THEN
+          ALTER TABLE "Organizer"
+            ALTER COLUMN "postcode" TYPE text USING "postcode"::text,
+            ALTER COLUMN "postcode" DROP NOT NULL;
+        END IF;
+
+        -- UserProfile
+        IF EXISTS (SELECT 1 FROM information_schema.columns
+                   WHERE table_schema = 'public' AND table_name='UserProfile' AND column_name='postcode') THEN
+          ALTER TABLE "UserProfile"
+            ALTER COLUMN "postcode" TYPE text USING "postcode"::text,
+            ALTER COLUMN "postcode" DROP NOT NULL;
+        END IF;
+      END $$;
+    `
+    console.log("[v0] ✓ Postcode columns normalized")
 
     console.log("[v0] Creating indexes...")
     await sql`CREATE INDEX IF NOT EXISTS "EmailVerification_userId_idx" ON "EmailVerification"("userId")`
