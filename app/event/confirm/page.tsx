@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { db } from "@/lib/db"
+import { neon } from "@neondatabase/serverless"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertCircle } from "lucide-react"
 import bcrypt from "bcryptjs"
@@ -33,13 +33,29 @@ export default async function EventConfirmPage({
     )
   }
 
-  const allTokens = await db.eventEditToken.findMany({
-    include: {
-      event: true,
-    },
-  })
+  const NEON_DATABASE_URL = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL
 
-  let matchedToken = null
+  if (!NEON_DATABASE_URL) {
+    throw new Error("Database URL not configured")
+  }
+
+  const sql = neon(NEON_DATABASE_URL)
+
+  // Get all tokens
+  const allTokens = await sql`
+    SELECT 
+      et.id,
+      et."tokenHash",
+      et."eventId",
+      et.expires,
+      e.id as "event_id",
+      e.status as "event_status"
+    FROM "EventEditToken" et
+    LEFT JOIN "Event" e ON e.id = et."eventId"
+  `
+
+  // Find matching token by comparing hashes
+  let matchedToken: any = null
   for (const tokenRecord of allTokens) {
     const isMatch = await bcrypt.compare(token, tokenRecord.tokenHash)
     if (isMatch) {
@@ -69,7 +85,7 @@ export default async function EventConfirmPage({
   }
 
   const now = new Date()
-  if (matchedToken.expires <= now) {
+  if (new Date(matchedToken.expires) <= now) {
     return (
       <div className="container mx-auto px-4 py-12">
         <div className="mx-auto max-w-2xl">
@@ -89,20 +105,22 @@ export default async function EventConfirmPage({
     )
   }
 
-  const event = matchedToken.event
+  const eventId = matchedToken.event_id
 
-  if (!event) {
+  if (!eventId) {
     redirect("/")
   }
 
-  if (event.status === "PUBLISHED") {
-    redirect(`/edit/${event.id}?token=${token}`)
+  if (matchedToken.event_status === "PUBLISHED") {
+    redirect(`/edit/${eventId}?token=${token}`)
   }
 
-  await db.event.update({
-    where: { id: event.id },
-    data: { status: "PUBLISHED" },
-  })
+  // Update event status to PUBLISHED
+  await sql`
+    UPDATE "Event"
+    SET status = 'PUBLISHED'
+    WHERE id = ${eventId}
+  `
 
-  redirect(`/edit/${event.id}?token=${token}`)
+  redirect(`/edit/${eventId}?token=${token}`)
 }
