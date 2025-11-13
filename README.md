@@ -1,5 +1,7 @@
 # Eventa v0
 
+<!-- Deployment verification: 2025-11-13 13:57 UTC -->
+
 A multilingual community events platform with AI-powered hybrid search.
 
 ## Features
