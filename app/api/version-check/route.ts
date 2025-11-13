@@ -10,16 +10,17 @@ export async function GET() {
 
   try {
     const submitRoutePath = path.join(process.cwd(), "app/api/events/submit/route.ts")
-    const confirmPagePath = path.join(process.cwd(), "app/event/confirm/page.tsx")
+    const confirmRoutePath = path.join(process.cwd(), "app/event/confirm/route.ts")
 
     const submitCode = fs.readFileSync(submitRoutePath, "utf-8")
-    const confirmCode = fs.readFileSync(confirmPagePath, "utf-8")
+    const confirmCode = fs.readFileSync(confirmRoutePath, "utf-8")
 
     // Check for key indicators
     const hasBcryptImport = submitCode.includes('import bcrypt from "bcryptjs"')
     const hasBcryptHash = submitCode.includes("bcrypt.hash(token")
-    const hasGranularDiagnostics = confirmCode.includes("Step 1: Parse searchParams")
-    const hasDiagnosticMode = confirmCode.includes("diagnosticMode")
+    const hasBackwardCompatibility =
+      confirmCode.includes("bcrypt.compare") && confirmCode.includes("plainToken === token")
+    const hasRedirect = confirmCode.includes("redirect(")
 
     return NextResponse.json({
       timestamp: new Date().toISOString(),
@@ -29,15 +30,15 @@ export async function GET() {
       checks: {
         submitRoute_hasBcryptImport: hasBcryptImport,
         submitRoute_hasBcryptHash: hasBcryptHash,
-        confirmPage_hasGranularDiagnostics: hasGranularDiagnostics,
-        confirmPage_hasDiagnosticMode: hasDiagnosticMode,
+        confirmRoute_hasBackwardCompatibility: hasBackwardCompatibility,
+        confirmRoute_hasRedirect: hasRedirect,
       },
       summary:
-        hasBcryptImport && hasBcryptHash && hasGranularDiagnostics && hasDiagnosticMode
+        hasBcryptImport && hasBcryptHash && hasBackwardCompatibility && hasRedirect
           ? "✅ LATEST CODE IS DEPLOYED"
           : "❌ OLD CODE IS DEPLOYED",
       submitRoutePreview: submitCode.substring(0, 500),
-      confirmPagePreview: confirmCode.substring(0, 500),
+      confirmRoutePreview: confirmCode.substring(0, 500),
     })
   } catch (error) {
     return NextResponse.json({
