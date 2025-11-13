@@ -8,7 +8,6 @@ export const runtime = "nodejs"
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get("token")
 
-  // Missing token
   if (!token) {
     console.log("[v0] Confirmation attempted without token")
     return NextResponse.redirect(new URL("/error?code=invalid-token", request.url))
@@ -23,9 +22,8 @@ export async function GET(request: NextRequest) {
 
     const sql = neon(NEON_DATABASE_URL)
 
-    // Find all tokens for potential match
     const tokens = await sql`
-      SELECT "EventEditToken".id, "EventEditToken"."eventId", "EventEditToken"."tokenHash", 
+      SELECT "EventEditToken".id, "EventEditToken"."eventId", "EventEditToken"."tokenHash",
              "Event".status, "Event".title
       FROM "EventEditToken"
       JOIN "Event" ON "EventEditToken"."eventId" = "Event".id
@@ -33,49 +31,44 @@ export async function GET(request: NextRequest) {
     `
 
     if (tokens.length === 0) {
-      console.log("[v0] No valid tokens found in database")
+      console.log("[v0] No valid tokens found")
       return NextResponse.redirect(new URL("/error?code=invalid-token", request.url))
     }
 
-    // Try to match token using bcrypt (new tokens) or plain text (old tokens)
     let matchedToken = null
-    for (const tokenRecord of tokens) {
+    for (const record of tokens) {
       try {
-        const isMatch = await bcrypt.compare(token, tokenRecord.tokenHash)
+        const isMatch = await bcrypt.compare(token, record.tokenHash)
         if (isMatch) {
-          matchedToken = tokenRecord
+          matchedToken = record
           break
         }
       } catch {
-        // Fallback: try plain text comparison for old tokens
-        if (token === tokenRecord.tokenHash) {
-          matchedToken = tokenRecord
+        if (token === record.tokenHash) {
+          matchedToken = record
           break
         }
       }
     }
 
     if (!matchedToken) {
-      console.log("[v0] Token does not match any record")
+      console.log("[v0] No token match")
       return NextResponse.redirect(new URL("/error?code=invalid-token", request.url))
     }
 
     const eventId = matchedToken.eventId
 
-    // Update event to PUBLISHED status
     await sql`
       UPDATE "Event"
       SET status = 'PUBLISHED', "updatedAt" = NOW()
       WHERE id = ${eventId}
     `
 
-    console.log("[v0] Event confirmed and published:", eventId)
+    console.log("[v0] Event confirmed:", eventId)
 
-    // Redirect to edit page with success parameter
-    return NextResponse.redirect(new URL(`/events/${eventId}/edit?confirmed=true`, request.url))
-
+    return NextResponse.redirect(new URL(`/edit/${eventId}?confirmed=true`, request.url))
   } catch (error) {
-    console.error("[v0] Error during confirmation:", error)
+    console.error("[v0] Confirmation error:", error)
     return NextResponse.redirect(new URL("/error?code=server-error", request.url))
   }
 }
