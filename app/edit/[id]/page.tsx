@@ -19,86 +19,23 @@ export default async function EditEventPage({
 
   const isConfirmedAccess = confirmed === "true"
 
+  // ----------------------------------------------------
+  // STEP 1 — DECIDE WHAT TO SHOW (NO JSX RETURNED YET)
+  // ----------------------------------------------------
+  let errorType: "missing" | "expired" | "invalid" | null = null
+
   if (!token && !isConfirmedAccess) {
-    return (
-      <div className="container mx-auto px-4 py-12">
-        <div className="mx-auto max-w-2xl">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-destructive" />
-                <CardTitle>Edit Link Required</CardTitle>
-              </div>
-              <CardDescription>
-                You need a valid edit link to modify this event. Check your email for the edit link that was sent when
-                you created the event.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Link href={`/events/${id}`} className="text-primary hover:underline">
-                View event details →
-              </Link>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
+    errorType = "missing"
   }
 
   if (token && !isConfirmedAccess) {
     const validation = await validateEventEditToken(id, token)
 
-    if (validation === "expired") {
-      return (
-        <div className="container mx-auto px-4 py-12">
-          <div className="mx-auto max-w-2xl">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5 text-destructive" />
-                  <CardTitle>Edit Link Expired</CardTitle>
-                </div>
-                <CardDescription>
-                  This edit link has expired. Edit links are valid for 30 days after creation.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Link href={`/events/${id}`} className="text-primary hover:underline">
-                  View event details →
-                </Link>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      )
-    }
-
-    if (validation === "invalid") {
-      return (
-        <div className="container mx-auto px-4 py-12">
-          <div className="mx-auto max-w-2xl">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5 text-destructive" />
-                  <CardTitle>Invalid Edit Link</CardTitle>
-                </div>
-                <CardDescription>
-                  This edit link is invalid. Please check the URL or look for the correct link in your email.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Link href={`/events/${id}`} className="text-primary hover:underline">
-                  View event details →
-                </Link>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      )
-    }
+    if (validation === "expired") errorType = "expired"
+    if (validation === "invalid") errorType = "invalid"
   }
 
+  // Fetch event only after token checks
   const event = await db.event.findUnique({
     where: { id },
   })
@@ -107,35 +44,109 @@ export default async function EditEventPage({
     redirect("/")
   }
 
+  // ----------------------------------------------------
+  // STEP 2 — NOW RENDER JSX SAFELY
+  // ----------------------------------------------------
+
+  // Error states
+  if (errorType === "missing") {
+    return (
+      <Wrapper>
+        <ErrorCard
+          title="Edit Link Required"
+          description="You need a valid edit link to modify this event."
+          href={`/events/${id}`}
+        />
+      </Wrapper>
+    )
+  }
+
+  if (errorType === "expired") {
+    return (
+      <Wrapper>
+        <ErrorCard
+          title="Edit Link Expired"
+          description="This edit link has expired. Edit links are valid for 30 days."
+          href={`/events/${id}`}
+        />
+      </Wrapper>
+    )
+  }
+
+  if (errorType === "invalid") {
+    return (
+      <Wrapper>
+        <ErrorCard
+          title="Invalid Edit Link"
+          description="This edit link is invalid. Please check the URL."
+          href={`/events/${id}`}
+        />
+      </Wrapper>
+    )
+  }
+
+  // Success state (confimed OR token-valid)
+  return (
+    <Wrapper>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold">Edit Event</h1>
+        <p className="text-muted-foreground">Update your event details</p>
+      </div>
+
+      {isConfirmedAccess && (
+        <Alert className="mb-6 border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950">
+          <AlertCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+          <AlertDescription className="text-green-900 dark:text-green-100">
+            <strong>Success!</strong> Your event has been confirmed and published.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {token && !isConfirmedAccess && (
+        <Alert className="mb-6 border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950">
+          <Lock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <AlertDescription className="text-blue-900 dark:text-blue-100">
+            You're editing via a secure link.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <EditEventForm event={event} token={token || ""} />
+    </Wrapper>
+  )
+}
+
+function Wrapper({ children }: { children: React.ReactNode }) {
   return (
     <div className="container mx-auto px-4 py-12">
-      <div className="mx-auto max-w-2xl">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold">Edit Event</h1>
-          <p className="text-muted-foreground">Update your event details</p>
-        </div>
-
-        {isConfirmedAccess && (
-          <Alert className="mb-6 border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950">
-            <AlertCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-            <AlertDescription className="text-green-900 dark:text-green-100">
-              <strong>Success!</strong> Your event has been confirmed and published. You can now edit any details or
-              share it with others.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {token && !isConfirmedAccess && (
-          <Alert className="mb-6 border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950">
-            <Lock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            <AlertDescription className="text-blue-900 dark:text-blue-100">
-              You're editing via a secure link. No sign-in required.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        <EditEventForm event={event} token={token || ""} />
-      </div>
+      <div className="mx-auto max-w-2xl">{children}</div>
     </div>
+  )
+}
+
+function ErrorCard({
+  title,
+  description,
+  href,
+}: {
+  title: string
+  description: string
+  href: string
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <AlertCircle className="h-5 w-5 text-destructive" />
+          <CardTitle>{title}</CardTitle>
+        </div>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Link href={href} className="text-primary hover:underline">
+          View event details →
+        </Link>
+      </CardContent>
+    </Card>
   )
 }
