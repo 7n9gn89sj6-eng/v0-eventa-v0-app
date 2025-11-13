@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { neon } from "@neondatabase/serverless"
+import bcrypt from "bcryptjs"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -139,10 +140,11 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Event created successfully")
 
     const token = generateId()
+    const tokenHash = await bcrypt.hash(token, 10)
     const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
     await sql`
       INSERT INTO "EventEditToken" (id, "eventId", "tokenHash", expires, "createdAt")
-      VALUES (${generateId()}, ${eventId}, ${token}, ${expires.toISOString()}, NOW())
+      VALUES (${generateId()}, ${eventId}, ${tokenHash}, ${expires.toISOString()}, NOW())
     `
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
