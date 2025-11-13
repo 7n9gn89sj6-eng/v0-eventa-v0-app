@@ -57,10 +57,7 @@ export async function POST(request: NextRequest) {
     const NEON_DATABASE_URL = process.env.NEON_DATABASE_URL
     if (!NEON_DATABASE_URL) {
       console.error("[v0] NEON_DATABASE_URL is missing")
-      return NextResponse.json(
-        { error: "Server configuration error. Please contact support." },
-        { status: 500 },
-      )
+      return NextResponse.json({ error: "Server configuration error. Please contact support." }, { status: 500 })
     }
 
     console.log("[v0] Connecting to database…")
@@ -142,11 +139,9 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] Event created successfully")
 
-    // 🔐 Secure token: hash before storing
     const token = generateId()
     const tokenHash = await bcrypt.hash(token, 10)
     const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-
     await sql`
       INSERT INTO "EventEditToken" (id, "eventId", "tokenHash", expires, "createdAt")
       VALUES (${generateId()}, ${eventId}, ${tokenHash}, ${expires.toISOString()}, NOW())
