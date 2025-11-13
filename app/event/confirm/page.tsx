@@ -10,44 +10,71 @@ export const dynamic = "force-dynamic"
 type SearchParams = Promise<{ token?: string; diagnosticMode?: string; dryRunMode?: string }>
 
 async function realConfirmFunction(token: string | undefined) {
+  console.log("[v0] Step 1: Checking token presence")
   if (!token) {
+    console.log("[v0] Step 1: FAILED - No token provided")
     return {
       type: "error",
       title: "Invalid link",
       description: "Your verification link is missing a token. Check your email for the confirmation link.",
     }
   }
+  console.log("[v0] Step 1: OK - Token present:", token.slice(0, 10) + "...")
 
+  console.log("[v0] Step 2: Checking database URL")
   const NEON_DATABASE_URL = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL
 
   if (!NEON_DATABASE_URL) {
+    console.log("[v0] Step 2: FAILED - No database URL")
     throw new Error("Database URL not configured")
   }
+  console.log("[v0] Step 2: OK - Database URL present")
 
+  console.log("[v0] Step 3: Creating SQL client")
   const sql = neon(NEON_DATABASE_URL)
+  console.log("[v0] Step 3: OK - SQL client created")
 
-  const allTokens = await sql`
-    SELECT 
-      et.id,
-      et."tokenHash",
-      et."eventId",
-      et.expires,
-      e.id as "event_id",
-      e.status as "event_status"
-    FROM "EventEditToken" et
-    LEFT JOIN "Event" e ON e.id = et."eventId"
-  `
+  console.log("[v0] Step 4: Querying all tokens from database")
+  let allTokens
+  try {
+    allTokens = await sql`
+      SELECT 
+        et.id,
+        et."tokenHash",
+        et."eventId",
+        et.expires,
+        e.id as "event_id",
+        e.status as "event_status"
+      FROM "EventEditToken" et
+      LEFT JOIN "Event" e ON e.id = et."eventId"
+    `
+    console.log("[v0] Step 4: OK - Found", allTokens.length, "tokens in database")
+  } catch (dbError) {
+    console.error("[v0] Step 4: FAILED - Database query error:", dbError)
+    throw new Error(`Database query failed: ${String(dbError).slice(0, 300)}`)
+  }
 
+  console.log("[v0] Step 5: Comparing token with bcrypt")
   let matchedToken: any = null
-  for (const tokenRecord of allTokens) {
-    const isMatch = await bcrypt.compare(token, tokenRecord.tokenHash)
-    if (isMatch) {
-      matchedToken = tokenRecord
-      break
+  let comparisonCount = 0
+  try {
+    for (const tokenRecord of allTokens) {
+      comparisonCount++
+      console.log(`[v0] Step 5.${comparisonCount}: Comparing with token record ${tokenRecord.id}`)
+      const isMatch = await bcrypt.compare(token, tokenRecord.tokenHash)
+      if (isMatch) {
+        matchedToken = tokenRecord
+        console.log("[v0] Step 5: OK - Token matched on comparison", comparisonCount)
+        break
+      }
     }
+  } catch (bcryptError) {
+    console.error("[v0] Step 5: FAILED - Bcrypt comparison error:", bcryptError)
+    throw new Error(`Token comparison failed: ${String(bcryptError).slice(0, 300)}`)
   }
 
   if (!matchedToken) {
+    console.log("[v0] Step 5: FAILED - No matching token found after", comparisonCount, "comparisons")
     return {
       type: "error",
       title: "Invalid Confirmation Link",
@@ -56,31 +83,48 @@ async function realConfirmFunction(token: string | undefined) {
     }
   }
 
+  console.log("[v0] Step 6: Checking token expiry")
   const now = new Date()
   if (new Date(matchedToken.expires) <= now) {
+    console.log("[v0] Step 6: FAILED - Token expired at", matchedToken.expires)
     return {
       type: "error",
       title: "Confirmation Link Expired",
       description: "This confirmation link has expired. Confirmation links are valid for 30 days after creation.",
     }
   }
+  console.log("[v0] Step 6: OK - Token not expired")
 
+  console.log("[v0] Step 7: Checking event ID")
   const eventId = matchedToken.event_id
 
   if (!eventId) {
+    console.log("[v0] Step 7: FAILED - No event ID found")
     return { type: "redirect", url: "/" }
   }
+  console.log("[v0] Step 7: OK - Event ID:", eventId)
 
+  console.log("[v0] Step 8: Checking event status")
   if (matchedToken.event_status === "PUBLISHED") {
+    console.log("[v0] Step 8: Event already published, redirecting to edit")
     return { type: "redirect", url: `/edit/${eventId}?token=${token}` }
   }
+  console.log("[v0] Step 8: OK - Event not yet published")
 
-  await sql`
-    UPDATE "Event"
-    SET status = 'PUBLISHED'
-    WHERE id = ${eventId}
-  `
+  console.log("[v0] Step 9: Updating event status to PUBLISHED")
+  try {
+    await sql`
+      UPDATE "Event"
+      SET status = 'PUBLISHED'
+      WHERE id = ${eventId}
+    `
+    console.log("[v0] Step 9: OK - Event status updated")
+  } catch (updateError) {
+    console.error("[v0] Step 9: FAILED - Update error:", updateError)
+    throw new Error(`Failed to update event: ${String(updateError).slice(0, 300)}`)
+  }
 
+  console.log("[v0] Step 10: Redirecting to edit page")
   return { type: "redirect", url: `/edit/${eventId}?token=${token}` }
 }
 
@@ -89,7 +133,22 @@ export default async function EventConfirmPage({
 }: {
   searchParams: SearchParams
 }) {
-  const params = await searchParams
+  let params
+  try {
+    console.log("[v0] Awaiting searchParams...")
+    params = await searchParams
+    console.log("[v0] SearchParams received:", params)
+  } catch (paramError) {
+    console.error("[v0] FATAL: Failed to await searchParams:", paramError)
+    return (
+      <div className="max-w-md mx-auto py-16 text-center">
+        <h1 className="text-2xl font-semibold text-red-600">Configuration Error</h1>
+        <p className="mt-2">Failed to read URL parameters. This is a Next.js configuration issue.</p>
+        <pre className="mt-4 text-xs whitespace-pre-wrap opacity-60">{String(paramError).slice(0, 600)}</pre>
+      </div>
+    )
+  }
+
   const token = params.token
   const diagnosticMode = params.diagnosticMode === "true"
   const dryRunMode = params.dryRunMode === "true"
