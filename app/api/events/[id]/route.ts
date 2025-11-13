@@ -10,6 +10,9 @@ import { moderateEventContent } from "@/lib/ai-moderation"
 import { notifyAdminOfFlaggedEvent } from "@/lib/admin-notifications"
 import { sendEmail } from "@/lib/email"
 
+// ---------------------------------------------------------
+// GET EVENT (PUBLIC)
+// ---------------------------------------------------------
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const { id } = params
@@ -37,6 +40,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
+// ---------------------------------------------------------
+// OWNER-ONLY PATCH
+// ---------------------------------------------------------
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await getSession()
@@ -47,21 +53,14 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const { id } = params
     const body = await request.json()
 
-    // Verify ownership
     const event = await db.event.findUnique({
       where: { id },
       select: { createdById: true },
     })
 
-    if (!event) {
-      return fail("Event not found", 404)
-    }
+    if (!event) return fail("Event not found", 404)
+    if (event.createdById !== session.userId) return fail("Forbidden", 403)
 
-    if (event.createdById !== session.userId) {
-      return fail("Forbidden", 403)
-    }
-
-    // Update event with allowed fields
     const updatedEvent = await db.event.update({
       where: { id },
       data: {
@@ -79,19 +78,25 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     return ok({ event: updatedEvent })
   } catch (error) {
-    console.error("[v0] Error updating event:", error)
+    console.error("[v0] PATCH error:", error)
     return fail("Failed to update event", 500)
   }
 }
 
+// ---------------------------------------------------------
+// FULL PUT (OWNER OR TOKEN OR CONFIRMED)
+// ---------------------------------------------------------
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const { id } = params
     const body = await request.json()
 
+    // Tokens from header or query
     const authHeader = request.headers.get("authorization")
     const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null
     const queryToken = request.nextUrl.searchParams.get("token")
+    const confirmed = request.nextUrl.searchParams.get("confirmed") === "true"
+
     const editToken = bearerToken || queryToken
 
     let isAuthorized = false
@@ -107,23 +112,20 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         moderationStatus: true,
         title: true,
         createdBy: {
-          select: {
-            email: true,
-            name: true,
-          },
+          select: { email: true, name: true },
         },
       },
     })
 
-    if (!event) {
-      return fail("Event not found", 404)
-    }
+    if (!event) return fail("Event not found", 404)
 
+    // Disallow edits after event ends
     const now = new Date()
     if (event.endAt && now > event.endAt) {
       return fail("Cannot edit event after it has ended", 403)
     }
 
+    // 1. OWNER SESSION
     const session = await getSession()
     if (session && event.createdById === session.userId) {
       isAuthorized = true
@@ -131,6 +133,13 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       userId = session.userId
     }
 
+    // 2. CONFIRMED ACCESS ("?confirmed=true")
+    if (!isAuthorized && confirmed) {
+      isAuthorized = true
+      userId = event.createdById
+    }
+
+    // 3. EDIT TOKEN
     if (!isAuthorized && editToken) {
       const tokenValidation = await validateEventEditToken(id, editToken)
 
@@ -148,6 +157,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       return fail("Unauthorized", 401)
     }
 
+    // Basic validation
     const startAt = body.startAt ? new Date(body.startAt) : event.startAt
     const endAt = body.endAt ? new Date(body.endAt) : event.endAt
 
@@ -157,6 +167,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
     const oldStatus = event.moderationStatus
 
+    // Update event
     const updatedEvent = await db.event.update({
       where: { id },
       data: {
@@ -167,13 +178,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         address: body.address,
         city: body.city,
         country: body.country,
-        startAt: body.startAt ? new Date(body.startAt) : undefined,
-        endAt: body.endAt ? new Date(body.endAt) : undefined,
+        startAt,
+        endAt,
         imageUrl: body.imageUrl,
         externalUrl: body.externalUrl,
         contactEmail: body.contactEmail,
         categories: body.categories,
         languages: body.languages,
+
         moderationStatus: "PENDING",
         moderationReason: null,
         moderationSeverity: null,
@@ -183,16 +195,18 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       },
     })
 
+    // Logging
     await createAuditLog({
       eventId: id,
-      actor: "user",
+      actor: isOwner ? "user" : "external",
       actorId: userId,
       action: "edited",
       oldStatus,
       newStatus: "PENDING",
-      notes: "Event edited and resubmitted for moderation",
+      notes: "Event edited and re-submitted for moderation",
     })
 
+    // Trigger moderation in background
     moderateEventContent({
       title: body.title,
       description: body.description,
@@ -200,16 +214,16 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       country: body.country,
       externalUrl: body.externalUrl,
     })
-      .then(async (moderationResult) => {
-        const newStatus = moderationResult.status.toUpperCase()
+      .then(async (result) => {
+        const newStatus = result.status.toUpperCase()
 
         await db.event.update({
           where: { id },
           data: {
             moderationStatus: newStatus as any,
-            moderationReason: moderationResult.reason,
-            moderationSeverity: moderationResult.severity_level.toUpperCase() as any,
-            moderationCategory: moderationResult.policy_category,
+            moderationReason: result.reason,
+            moderationSeverity: result.severity_level.toUpperCase() as any,
+            moderationCategory: result.policy_category,
             moderatedAt: new Date(),
           },
         })
@@ -218,97 +232,79 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
           eventId: id,
           actor: "ai",
           action:
-            moderationResult.status === "approved"
+            result.status === "approved"
               ? "approved"
-              : moderationResult.status === "rejected"
+              : result.status === "rejected"
                 ? "rejected"
                 : "flagged",
           oldStatus: "PENDING",
           newStatus,
-          reason: moderationResult.reason,
-          notes: `AI re-moderation after edit: ${moderationResult.policy_category}`,
+          reason: result.reason,
+          notes: `AI moderation: ${result.policy_category}`,
         })
 
-        if (moderationResult.status === "flagged" || moderationResult.status === "rejected") {
+        // Notify admin + email on reject
+        if (result.status === "flagged" || result.status === "rejected") {
           await notifyAdminOfFlaggedEvent({
             id,
             title: body.title,
             description: body.description,
             moderationStatus: newStatus,
-            moderationReason: moderationResult.reason,
-            moderationSeverity: moderationResult.severity_level.toUpperCase(),
-            moderationCategory: moderationResult.policy_category,
+            moderationReason: result.reason,
+            moderationSeverity: result.severity_level.toUpperCase(),
+            moderationCategory: result.policy_category,
           })
 
-          if (moderationResult.status === "rejected") {
+          if (result.status === "rejected") {
             try {
               await sendEmail({
                 to: event.createdBy.email,
                 subject: `Event Rejected: ${body.title}`,
                 html: `
-                  <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h2 style="color: #dc2626;">Event Rejected After Edit</h2>
-                    
-                    <p>Hello ${event.createdBy.name || "there"},</p>
-                    
-                    <p>Your edited event submission has been rejected by our moderation system.</p>
-                    
-                    <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; margin: 16px 0;">
-                      <p style="margin: 0; font-weight: bold;">Event: ${body.title}</p>
-                      <p style="margin: 8px 0 0 0;">Reason: ${moderationResult.reason}</p>
-                    </div>
-                    
-                    <p>You can edit your event again and resubmit it for review.</p>
-                  </div>
+                  <h2 style="color:#dc2626">Event Rejected</h2>
+                  <p>Hello ${event.createdBy.name || ""},</p>
+                  <p>Your event was rejected after editing.</p>
+                  <p><strong>Reason:</strong> ${result.reason}</p>
                 `,
               })
-            } catch (emailError) {
-              console.error("[v0] Failed to send rejection email:", emailError)
+            } catch (e) {
+              console.error("Failed to send rejection email", e)
             }
           }
         }
       })
-      .catch((error) => {
-        console.error("[v0] Re-moderation failed:", error)
-      })
+      .catch((err) => console.error("Moderation error:", err))
 
     return ok({ event: updatedEvent })
   } catch (error) {
-    console.error("[v0] Error updating event:", error)
+    console.error("[v0] PUT error:", error)
     return fail("Failed to update event", 500)
   }
 }
 
+// ---------------------------------------------------------
+// DELETE
+// ---------------------------------------------------------
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await getSession()
-    if (!session) {
-      return fail("Unauthorized", 401)
-    }
+    if (!session) return fail("Unauthorized", 401)
 
     const { id } = params
 
-    // Verify ownership
     const event = await db.event.findUnique({
       where: { id },
       select: { createdById: true },
     })
 
-    if (!event) {
-      return fail("Event not found", 404)
-    }
+    if (!event) return fail("Event not found", 404)
+    if (event.createdById !== session.userId) return fail("Forbidden", 403)
 
-    if (event.createdById !== session.userId) {
-      return fail("Forbidden", 403)
-    }
-
-    await db.event.delete({
-      where: { id },
-    })
+    await db.event.delete({ where: { id } })
 
     return ok({ ok: true })
   } catch (error) {
-    console.error("[v0] Error deleting event:", error)
+    console.error("[v0] DELETE error:", error)
     return fail("Failed to delete event", 500)
   }
 }
