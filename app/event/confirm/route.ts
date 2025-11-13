@@ -72,7 +72,8 @@ export async function GET(request: NextRequest) {
     console.log("[v0] Event confirmed and published:", eventId)
 
     // Redirect to edit page with success parameter
-    return NextResponse.redirect(new URL(`/edit/${eventId}?confirmed=true`, request.url))
+    return NextResponse.redirect(new URL(`/events/${eventId}/edit?confirmed=true`, request.url))
+
   } catch (error) {
     console.error("[v0] Error during confirmation:", error)
     return NextResponse.redirect(new URL("/error?code=server-error", request.url))
