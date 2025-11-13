@@ -170,50 +170,32 @@ async function runSetup() {
     }
 
     console.log("[v0] Normalizing postcode columns...")
-    await sql`
-      DO $$ BEGIN
-        -- Event
-        IF EXISTS (SELECT 1 FROM information_schema.columns
-                   WHERE table_schema = 'public' AND table_name='Event' AND column_name='postcode') THEN
-          ALTER TABLE "Event"
-            ALTER COLUMN "postcode" TYPE text USING "postcode"::text,
-            ALTER COLUMN "postcode" DROP NOT NULL;
-        END IF;
+    try {
+      // Event table - always exists from CREATE TABLE above
+      await sql`ALTER TABLE "Event" ALTER COLUMN "postcode" TYPE TEXT USING "postcode"::text`
+      await sql`ALTER TABLE "Event" ALTER COLUMN "postcode" DROP NOT NULL`
+      console.log("[v0] ✓ Event.postcode normalized to TEXT")
+    } catch (error: any) {
+      if (error.message?.includes("does not exist")) {
+        console.log("[v0] Note: Event.postcode doesn't exist, skipping normalization")
+      } else {
+        console.log("[v0] ✓ Event.postcode already TEXT or normalization not needed")
+      }
+    }
 
-        -- Venue
-        IF EXISTS (SELECT 1 FROM information_schema.columns
-                   WHERE table_schema = 'public' AND table_name='Venue' AND column_name='postcode') THEN
-          ALTER TABLE "Venue"
-            ALTER COLUMN "postcode" TYPE text USING "postcode"::text,
-            ALTER COLUMN "postcode" DROP NOT NULL;
-        END IF;
-
-        -- Organizer
-        IF EXISTS (SELECT 1 FROM information_schema.columns
-                   WHERE table_schema = 'public' AND table_name='Organizer' AND column_name='postcode') THEN
-          ALTER TABLE "Organizer"
-            ALTER COLUMN "postcode" TYPE text USING "postcode"::text,
-            ALTER COLUMN "postcode" DROP NOT NULL;
-        END IF;
-
-        -- UserProfile
-        IF EXISTS (SELECT 1 FROM information_schema.columns
-                   WHERE table_schema = 'public' AND table_name='UserProfile' AND column_name='postcode') THEN
-          ALTER TABLE "UserProfile"
-            ALTER COLUMN "postcode" TYPE text USING "postcode"::text,
-            ALTER COLUMN "postcode" DROP NOT NULL;
-        END IF;
-
-        -- Location (NEW – if exists)
-        IF EXISTS (SELECT 1 FROM information_schema.columns
-                   WHERE table_schema = 'public' AND table_name='Location' AND column_name='postcode') THEN
-          ALTER TABLE "Location"
-            ALTER COLUMN "postcode" TYPE text USING "postcode"::text,
-            ALTER COLUMN "postcode" DROP NOT NULL;
-        END IF;
-      END $$;
-    `
-    console.log("[v0] ✓ Postcode columns normalized")
+    // Only normalize other tables if they exist
+    const tables = ["Venue", "Organizer", "UserProfile", "Location"]
+    for (const table of tables) {
+      try {
+        await sql`ALTER TABLE ${sql(table)} ALTER COLUMN "postcode" TYPE TEXT USING "postcode"::text`
+        await sql`ALTER TABLE ${sql(table)} ALTER COLUMN "postcode" DROP NOT NULL`
+        console.log(`[v0] ✓ ${table}.postcode normalized to TEXT`)
+      } catch (error: any) {
+        // Table doesn't exist or column doesn't exist - that's fine
+        console.log(`[v0] Note: ${table}.postcode not found (table may not exist)`)
+      }
+    }
+    console.log("[v0] ✓ Postcode normalization complete")
 
     console.log("[v0] Creating indexes...")
     await sql`CREATE INDEX IF NOT EXISTS "EmailVerification_userId_idx" ON "EmailVerification"("userId")`

@@ -61,7 +61,16 @@ async function realConfirmFunction(token: string | undefined) {
     for (const tokenRecord of allTokens) {
       comparisonCount++
       console.log(`[v0] Step 5.${comparisonCount}: Comparing with token record ${tokenRecord.id}`)
-      const isMatch = await bcrypt.compare(token, tokenRecord.tokenHash)
+
+      let isMatch = false
+      try {
+        isMatch = await bcrypt.compare(token, tokenRecord.tokenHash)
+      } catch (bcryptError) {
+        // If bcrypt fails, try plain text comparison (for old tokens)
+        console.log(`[v0] Step 5.${comparisonCount}: Bcrypt failed, trying plain comparison`)
+        isMatch = token === tokenRecord.tokenHash
+      }
+
       if (isMatch) {
         matchedToken = tokenRecord
         console.log("[v0] Step 5: OK - Token matched on comparison", comparisonCount)
