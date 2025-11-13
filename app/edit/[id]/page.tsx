@@ -12,10 +12,10 @@ export default async function EditEventPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ token?: string }>
+  searchParams: Promise<{ token?: string; confirmed?: string }>
 }) {
   const { id } = await params
-  const { token } = await searchParams
+  const { token, confirmed } = await searchParams
 
   if (!token) {
     return (
@@ -110,6 +110,16 @@ export default async function EditEventPage({
           <h1 className="text-3xl font-bold">Edit Event</h1>
           <p className="text-muted-foreground">Update your event details</p>
         </div>
+
+        {confirmed === "true" && (
+          <Alert className="mb-6 border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950">
+            <AlertCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+            <AlertDescription className="text-green-900 dark:text-green-100">
+              <strong>Success!</strong> Your event has been confirmed and published. You can now edit any details or
+              share it with others.
+            </AlertDescription>
+          </Alert>
+        )}
 
         <Alert className="mb-6 border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950">
           <Lock className="h-4 w-4 text-blue-600 dark:text-blue-400" />

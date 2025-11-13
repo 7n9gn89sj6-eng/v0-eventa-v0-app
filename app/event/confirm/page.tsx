@@ -66,7 +66,6 @@ async function realConfirmFunction(token: string | undefined) {
       try {
         isMatch = await bcrypt.compare(token, tokenRecord.tokenHash)
       } catch (bcryptError) {
-        // If bcrypt fails, try plain text comparison (for old tokens)
         console.log(`[v0] Step 5.${comparisonCount}: Bcrypt failed, trying plain comparison`)
         isMatch = token === tokenRecord.tokenHash
       }
@@ -127,14 +126,14 @@ async function realConfirmFunction(token: string | undefined) {
       SET status = 'PUBLISHED'
       WHERE id = ${eventId}
     `
-    console.log("[v0] Step 9: OK - Event status updated")
+    console.log("[v0] Step 9: OK - Event status updated to PUBLISHED")
   } catch (updateError) {
     console.error("[v0] Step 9: FAILED - Update error:", updateError)
     throw new Error(`Failed to update event: ${String(updateError).slice(0, 300)}`)
   }
 
-  console.log("[v0] Step 10: Redirecting to edit page")
-  return { type: "redirect", url: `/edit/${eventId}?token=${token}` }
+  console.log("[v0] Step 10: Redirecting to edit page with confirmation flag")
+  return { type: "redirect", url: `/edit/${eventId}?token=${token}&confirmed=true` }
 }
 
 export default async function EventConfirmPage({
@@ -142,32 +141,17 @@ export default async function EventConfirmPage({
 }: {
   searchParams: SearchParams
 }) {
-  let params
-  try {
-    console.log("[v0] Awaiting searchParams...")
-    params = await searchParams
-    console.log("[v0] SearchParams received:", params)
-  } catch (paramError) {
-    console.error("[v0] FATAL: Failed to await searchParams:", paramError)
-    return (
-      <div className="max-w-md mx-auto py-16 text-center">
-        <h1 className="text-2xl font-semibold text-red-600">Configuration Error</h1>
-        <p className="mt-2">Failed to read URL parameters. This is a Next.js configuration issue.</p>
-        <pre className="mt-4 text-xs whitespace-pre-wrap opacity-60">{String(paramError).slice(0, 600)}</pre>
-      </div>
-    )
-  }
-
+  const params = await searchParams
   const token = params.token
   const diagnosticMode = params.diagnosticMode === "true"
   const dryRunMode = params.dryRunMode === "true"
 
-  console.log("[v0] DIAGNOSTIC START", { diagnosticMode, dryRunMode, hasToken: !!token })
+  console.log("[v0] Confirm page loaded", { diagnosticMode, dryRunMode, hasToken: !!token })
 
   try {
     const result = await realConfirmFunction(token)
 
-    console.log("[v0] DIAGNOSTIC RESULT", { result, dryRunMode })
+    console.log("[v0] Confirmation result:", result.type)
 
     if (dryRunMode) {
       return (
@@ -210,12 +194,12 @@ export default async function EventConfirmPage({
       )
     }
 
-    // Fallback
+    // Fallback redirect
     redirect("/")
   } catch (err: any) {
     const msg = String(err?.message || err)
     const stack = String(err?.stack || "")
-    console.error("[v0] DIAGNOSTIC ERROR", { msg, stack })
+    console.error("[v0] Confirmation error:", msg)
 
     if (diagnosticMode) {
       return (
@@ -250,14 +234,27 @@ export default async function EventConfirmPage({
       msg.includes("postcode") || stack.includes("postcode") || (msg.includes("column") && msg.includes("type"))
 
     return (
-      <div className="max-w-md mx-auto py-16 text-center">
-        <h1 className="text-2xl font-semibold">Something went wrong</h1>
-        <p className="mt-2">
-          {looksLikePostcode
-            ? "We're updating our database to support this postcode format. Please try again shortly."
-            : "Please try the link again in a moment."}
-        </p>
-        <pre className="mt-4 text-xs whitespace-pre-wrap opacity-60">{msg.slice(0, 600)}</pre>
+      <div className="container mx-auto px-4 py-12">
+        <div className="mx-auto max-w-2xl">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-destructive" />
+                <CardTitle>Something went wrong</CardTitle>
+              </div>
+              <CardDescription>
+                {looksLikePostcode
+                  ? "We're updating our database to support this postcode format. Please try again shortly."
+                  : "Please try the link again in a moment."}
+              </CardDescription>
+              {process.env.NODE_ENV === "development" && (
+                <pre className="mt-4 text-xs whitespace-pre-wrap opacity-60 bg-muted p-2 rounded">
+                  {msg.slice(0, 600)}
+                </pre>
+              )}
+            </CardHeader>
+          </Card>
+        </div>
       </div>
     )
   }

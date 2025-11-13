@@ -84,7 +84,9 @@ export async function sendEventEditLinkEmail(to: string, eventTitle: string, eve
       `,
     })
 
-    console.log("[v0] Edit link email sent successfully to:", to, "ID:", info.messageId)
+    console.log("[v0] Confirmation email queued successfully")
+    console.log("[v0] Email recipient:", to)
+    console.log("[v0] Email message ID:", info.messageId)
   } catch (error) {
     console.error("[v0] Error sending edit link email:", error)
     throw error instanceof Error ? error : new Error("Failed to send edit link email")
