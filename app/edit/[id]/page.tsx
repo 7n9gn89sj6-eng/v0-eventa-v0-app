@@ -17,7 +17,9 @@ export default async function EditEventPage({
   const { id } = await params
   const { token, confirmed } = await searchParams
 
-  if (!token) {
+  const isConfirmedAccess = confirmed === "true"
+
+  if (!token && !isConfirmedAccess) {
     return (
       <div className="container mx-auto px-4 py-12">
         <div className="mx-auto max-w-2xl">
@@ -43,56 +45,58 @@ export default async function EditEventPage({
     )
   }
 
-  const validation = await validateEventEditToken(id, token)
+  if (token && !isConfirmedAccess) {
+    const validation = await validateEventEditToken(id, token)
 
-  if (validation === "expired") {
-    return (
-      <div className="container mx-auto px-4 py-12">
-        <div className="mx-auto max-w-2xl">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-destructive" />
-                <CardTitle>Edit Link Expired</CardTitle>
-              </div>
-              <CardDescription>
-                This edit link has expired. Edit links are valid for 30 days after creation.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Link href={`/events/${id}`} className="text-primary hover:underline">
-                View event details →
-              </Link>
-            </CardContent>
-          </Card>
+    if (validation === "expired") {
+      return (
+        <div className="container mx-auto px-4 py-12">
+          <div className="mx-auto max-w-2xl">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-destructive" />
+                  <CardTitle>Edit Link Expired</CardTitle>
+                </div>
+                <CardDescription>
+                  This edit link has expired. Edit links are valid for 30 days after creation.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link href={`/events/${id}`} className="text-primary hover:underline">
+                  View event details →
+                </Link>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
-    )
-  }
+      )
+    }
 
-  if (validation === "invalid") {
-    return (
-      <div className="container mx-auto px-4 py-12">
-        <div className="mx-auto max-w-2xl">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-destructive" />
-                <CardTitle>Invalid Edit Link</CardTitle>
-              </div>
-              <CardDescription>
-                This edit link is invalid. Please check the URL or look for the correct link in your email.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Link href={`/events/${id}`} className="text-primary hover:underline">
-                View event details →
-              </Link>
-            </CardContent>
-          </Card>
+    if (validation === "invalid") {
+      return (
+        <div className="container mx-auto px-4 py-12">
+          <div className="mx-auto max-w-2xl">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-destructive" />
+                  <CardTitle>Invalid Edit Link</CardTitle>
+                </div>
+                <CardDescription>
+                  This edit link is invalid. Please check the URL or look for the correct link in your email.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link href={`/events/${id}`} className="text-primary hover:underline">
+                  View event details →
+                </Link>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
-    )
+      )
+    }
   }
 
   const event = await db.event.findUnique({
@@ -111,7 +115,7 @@ export default async function EditEventPage({
           <p className="text-muted-foreground">Update your event details</p>
         </div>
 
-        {confirmed === "true" && (
+        {isConfirmedAccess && (
           <Alert className="mb-6 border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950">
             <AlertCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
             <AlertDescription className="text-green-900 dark:text-green-100">
@@ -121,14 +125,16 @@ export default async function EditEventPage({
           </Alert>
         )}
 
-        <Alert className="mb-6 border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950">
-          <Lock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-          <AlertDescription className="text-blue-900 dark:text-blue-100">
-            You're editing via a secure link. No sign-in required.
-          </AlertDescription>
-        </Alert>
+        {token && !isConfirmedAccess && (
+          <Alert className="mb-6 border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950">
+            <Lock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <AlertDescription className="text-blue-900 dark:text-blue-100">
+              You're editing via a secure link. No sign-in required.
+            </AlertDescription>
+          </Alert>
+        )}
 
-        <EditEventForm event={event} token={token} />
+        <EditEventForm event={event} token={token || ""} />
       </div>
     </div>
   )
