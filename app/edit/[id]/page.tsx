@@ -1,4 +1,4 @@
-iexport const runtime = "nodejs"
+export const runtime = "nodejs"
 
 import type { NextRequest } from "next/server"
 import { db } from "@/lib/db"
