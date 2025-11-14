@@ -10,8 +10,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form"
-import { Loader2, CheckCircle2, Sparkles } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { Loader2, CheckCircle2, Sparkles } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 
 const API_URL = "/api/events/submit"
 
@@ -283,9 +283,9 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
               <CheckCircle2 className="size-8 text-primary" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-2xl font-semibold">Check your email to verify & finish</h2>
+              <h2 className="text-2xl font-semibold">Thanks for Posting your event</h2>
               <p className="text-muted-foreground text-pretty">
-                We've sent a verification link to your email address. Click the link to publish your event.
+                A confirmation email has been sent
               </p>
             </div>
             <div className="flex gap-3 mt-4">
@@ -358,7 +358,7 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                         disabled={isSubmitting}
                       />
                     </FormControl>
-                    <FormDescription>We'll send a verification link to this email</FormDescription>
+                    <FormDescription>We'll send a confirmation link to this email</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
