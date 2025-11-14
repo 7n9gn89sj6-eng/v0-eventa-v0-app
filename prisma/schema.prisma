@@ -83,6 +83,7 @@ enum EventStatus {
   DRAFT
   PUBLISHED
   ARCHIVED
+  PENDING
 }
 
 enum ModerationStatus {
@@ -108,6 +109,13 @@ enum EventCategory {
   LEARNING_TALKS
   MARKETS_FAIRS
   ONLINE_VIRTUAL
+}
+
+enum AIStatus {
+  PENDING
+  SAFE
+  NEEDS_REVIEW
+  REJECTED
 }
 
 model Event {
@@ -150,6 +158,19 @@ model Event {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   
+  // AI moderation fields
+  aiStatus            AIStatus?         @default(PENDING)
+  aiReason            String?           @db.Text
+  aiAnalyzedAt        DateTime?
+  
+  // Edit tracking fields
+  editCount           Int               @default(0)
+  lastEditedAt        DateTime?
+  
+  // Published timestamp for approved events
+  publishedAt         DateTime?
+  
+  // Existing moderation fields (kept for backward compatibility)
   moderationStatus    ModerationStatus  @default(PENDING)
   moderationReason    String?           @db.Text
   moderationSeverity  ModerationSeverity?
@@ -158,7 +179,11 @@ model Event {
   moderatedBy         String?
   moderatedByAdmin    User?             @relation("ModeratedEvents", fields: [moderatedBy], references: [id])
   
-  // Search fields
+  // Admin review notes
+  adminNotes          String?           @db.Text
+  reviewedBy          String?
+  reviewedAt          DateTime?
+  
   searchText        String      @db.Text
   searchTextFolded  String?     @db.Text
   embedding         Unsupported("vector(1536)")?
@@ -174,6 +199,7 @@ model Event {
   @@index([category])
   @@index([lat, lng])
   @@index([status])
+  @@index([aiStatus])
 }
 
 model EventEditToken {
