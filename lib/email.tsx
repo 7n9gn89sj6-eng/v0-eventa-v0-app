@@ -57,39 +57,29 @@ export async function sendEventEditLinkEmail(to: string, eventTitle: string, eve
     const transporter = getResendClient()
     const from = process.env.EMAIL_FROM || "noreply@example.com"
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-    const editLink = `${appUrl}/event/confirm?token=${token}`
+    const editLink = `${appUrl}/edit/${token}`
 
     const info = await transporter.sendMail({
       from,
       to,
-      subject: `Confirm your event: ${eventTitle}`,
+      subject: `Event Submitted: ${eventTitle}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2>Your Event Has Been Created!</h2>
-          <p>Your event "<strong>${eventTitle}</strong>" has been submitted successfully!</p>
-          <p>Click the button below to confirm and finalize your event:</p>
-          <div style="margin: 30px 0;">
-            <a href="${editLink}" style="background-color: #0070f3; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
-              Confirm & Finalize Event
-            </a>
-          </div>
-          <p>Or copy this link:</p>
-          <p style="background-color: #f4f4f4; padding: 10px; word-break: break-all; font-size: 12px;">
-            ${editLink}
-          </p>
-          <p style="color: #666; font-size: 12px; margin-top: 30px;">
-            <strong>Important:</strong> This link will allow you to edit your event for 30 days. Keep it safe - anyone with this link can modify your event.
+          <h2>Thank You for Your Submission!</h2>
+          <p>Your event "<strong>${eventTitle}</strong>" has been submitted successfully and is awaiting approval.</p>
+          <p style="color: #666; margin-top: 30px;">
+            Our team will review your submission shortly. You'll receive another email once your event is approved.
           </p>
         </div>
       `,
     })
 
-    console.log("[v0] Confirmation email queued successfully")
+    console.log("[v0] Submission email sent successfully")
     console.log("[v0] Email recipient:", to)
     console.log("[v0] Email message ID:", info.messageId)
   } catch (error) {
-    console.error("[v0] Error sending edit link email:", error)
-    throw error instanceof Error ? error : new Error("Failed to send edit link email")
+    console.error("[v0] Error sending submission email:", error)
+    throw error instanceof Error ? error : new Error("Failed to send submission email")
   }
 }
 

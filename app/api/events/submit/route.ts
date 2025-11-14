@@ -153,10 +153,10 @@ export async function POST(request: NextRequest) {
     try {
       const { sendEventEditLinkEmail } = await import("@/lib/email")
       await sendEventEditLinkEmail(creatorEmail, validatedData.title, eventId, token)
-      console.log("[v0] Confirmation email sent successfully to:", creatorEmail)
-      console.log("[v0] Confirmation link:", `${appUrl}/event/confirm?token=${token.slice(0, 10)}...`)
+      console.log("[v0] Submission email sent successfully to:", creatorEmail)
+      console.log("[v0] Edit token generated:", `${token.slice(0, 10)}...`)
     } catch (emailError) {
-      console.error("[v0] Failed to send confirmation email, but event was created:", emailError)
+      console.error("[v0] Failed to send submission email, but event was created:", emailError)
     }
 
     return NextResponse.json({
@@ -164,7 +164,7 @@ export async function POST(request: NextRequest) {
       eventId,
       token,
       editUrl,
-      message: "Event created successfully! Check your email for the confirmation link.",
+      message: "Event created successfully! Your submission is awaiting approval.",
     })
   } catch (error) {
     console.error("[v0] Error in POST /api/events/submit:", error)
