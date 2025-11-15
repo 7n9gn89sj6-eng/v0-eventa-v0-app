@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Calendar, MapPin, Search, SlidersHorizontal, X } from 'lucide-react'
+import { Calendar, MapPin, Search, SlidersHorizontal, X } from "lucide-react"
 import Link from "next/link"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { Badge } from "@/components/ui/badge"
@@ -119,6 +119,7 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
 
   useEffect(() => {
     runSearch()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const filteredResults = results
@@ -266,7 +267,6 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
 
       {/* Results Count */}
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
           {(() => {
             const template = t("events.results.showing") || "Showing {filtered} of {total} events"
             return String(template)
@@ -388,14 +388,15 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
                   {event.externalUrl ? (
                     <Button asChild className="w-full">
                       <a href={event.externalUrl} target="_blank" rel="noopener noreferrer">
-                        {t("events.card.viewOn").replace("{source}", event.source || "External Site")}
+                        {String(t("events.card.viewOn")).replace(
+                          "{source}",
+                          event.source || "External Site",
+                        )}
                       </a>
                     </Button>
                   ) : (
                     <Button asChild className="w-full">
-                      <Link href={`/events/${event.id}`}>
-                        {t("events.card.viewDetails")}
-                      </Link>
+                      <Link href={`/events/${event.id}`}>{t("events.card.viewDetails")}</Link>
                     </Button>
                   )}
                 </CardContent>
