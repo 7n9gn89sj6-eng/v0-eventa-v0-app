@@ -20,7 +20,7 @@ export default function AddEventPage({
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight text-balance">{t("form.sections.eventDetails")}</h1>
         <p className="mt-2 text-muted-foreground text-pretty">
-          Share your event with the community. Fill in the details below and we'll send you a verification email to finish publishing.
+          {t("form.fields.emailHint")}
         </p>
       </div>
       <Suspense fallback={<div>Loading...</div>}>
