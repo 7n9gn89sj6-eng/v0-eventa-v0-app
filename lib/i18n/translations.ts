@@ -20,6 +20,12 @@ export const translations = {
       favorites: "Favorites",
       postEvent: "Post Event",
     },
+    common: {
+      browse: "Browse",
+      location: "Location",
+      pageTitle: "Discover & Create Events",
+      pageSubtitle: "Search for events or create your own with AI assistance",
+    },
     aria: {
       loading: "Loading",
       breadcrumb: "Breadcrumb",
@@ -52,6 +58,12 @@ export const translations = {
       myEvents: "I Miei Eventi",
       favorites: "Preferiti",
       postEvent: "Pubblica Evento",
+    },
+    common: {
+      browse: "Sfoglia",
+      location: "Posizione",
+      pageTitle: "Scopri e Crea Eventi",
+      pageSubtitle: "Cerca eventi o crea i tuoi con l'assistenza dell'IA",
     },
     aria: {
       loading: "Caricamento",
@@ -86,6 +98,12 @@ export const translations = {
       favorites: "Αγαπημένα",
       postEvent: "Δημοσίευση Εκδήλωσης",
     },
+    common: {
+      browse: "Περιήγηση",
+      location: "Τοποθεσία",
+      pageTitle: "Ανακαλύψτε και Δημιουργήστε Εκδηλώσεις",
+      pageSubtitle: "Αναζητήστε εκδηλώσεις ή δημιουργήστε τις δικές σας με τη βοήθεια της ΤΝ",
+    },
     aria: {
       loading: "Φόρτωση",
       breadcrumb: "Breadcrumb",
@@ -119,6 +137,12 @@ export const translations = {
       favorites: "Favoritos",
       postEvent: "Publicar Evento",
     },
+    common: {
+      browse: "Explorar",
+      location: "Ubicación",
+      pageTitle: "Descubre y Crea Eventos",
+      pageSubtitle: "Busca eventos o crea los tuyos con asistencia de IA",
+    },
     aria: {
       loading: "Cargando",
       breadcrumb: "Breadcrumb",
@@ -151,6 +175,12 @@ export const translations = {
       myEvents: "Mes Événements",
       favorites: "Favoris",
       postEvent: "Publier un Événement",
+    },
+    common: {
+      browse: "Parcourir",
+      location: "Emplacement",
+      pageTitle: "Découvrez et Créez des Événements",
+      pageSubtitle: "Recherchez des événements ou créez les vôtres avec l'assistance de l'IA",
     },
     aria: {
       loading: "Chargement",

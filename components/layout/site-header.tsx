@@ -1,0 +1,49 @@
+"use client"
+
+import { Button } from "@/components/ui/button"
+import { Calendar, MapPin, List } from 'lucide-react'
+import { UserNav } from "@/components/auth/user-nav"
+import { LanguageSwitcher } from "@/components/language-switcher"
+import { VersionBadge } from "@/components/version-badge"
+import Link from "next/link"
+import { useI18n } from "@/lib/i18n/context"
+
+export function SiteHeader() {
+  const { t } = useI18n()
+
+  return (
+    <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
+      <div className="container mx-auto flex h-16 items-center justify-between px-4">
+        <Link href="/" className="flex items-center gap-2">
+          <Calendar className="h-6 w-6" />
+          <h1 className="text-xl font-bold">Eventa</h1>
+        </Link>
+
+        <div className="flex items-center gap-3">
+          <div className="hidden md:block">
+            <VersionBadge />
+          </div>
+
+          <Button variant="outline" size="sm" className="gap-2 bg-transparent" asChild>
+            <Link href="/events">
+              <List className="h-4 w-4" />
+              <span className="hidden sm:inline">{t("common.browse")}</span>
+            </Link>
+          </Button>
+
+          <Button variant="outline" size="sm" className="gap-2 bg-transparent" onClick={() => {}}>
+            <MapPin className="h-4 w-4" />
+            <span className="hidden sm:inline">{t("common.location")}</span>
+          </Button>
+
+          <LanguageSwitcher />
+
+          <UserNav />
+        </div>
+      </div>
+      <div className="md:hidden flex justify-center pb-2">
+        <VersionBadge />
+      </div>
+    </header>
+  )
+}

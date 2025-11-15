@@ -2,12 +2,16 @@ import type React from "react"
 import "./globals.css"
 import AppProviders from "./providers"
 import { VersionDisplay } from "@/components/version-display"
+import { SiteHeader } from "@/components/layout/site-header"
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <AppProviders>{children}</AppProviders>
+        <AppProviders>
+          <SiteHeader />
+          {children}
+        </AppProviders>
         <VersionDisplay />
         <script
           dangerouslySetInnerHTML={{

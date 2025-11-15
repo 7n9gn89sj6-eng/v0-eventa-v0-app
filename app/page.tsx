@@ -2,10 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Calendar, MapPin, Volume2, VolumeX, List } from "lucide-react"
-import { UserNav } from "@/components/auth/user-nav"
-import { LanguageSwitcher } from "@/components/language-switcher"
-import { VersionBadge } from "@/components/version-badge"
+import { Volume2, VolumeX } from 'lucide-react'
 import { ResultCard } from "@/components/search/result-card"
 import { DraftEventCard } from "@/components/events/draft-event-card"
 import { DraftsList } from "@/components/events/drafts-list"
@@ -14,6 +11,7 @@ import { speak, stopSpeaking } from "@/lib/tts"
 import { toast } from "@/hooks/use-toast"
 import { SmartInputBar } from "@/components/search/smart-input-bar"
 import ClientOnly from "@/components/ClientOnly"
+import { useI18n } from "@/lib/i18n/context"
 
 interface DraftEvent {
   id: string
@@ -28,6 +26,7 @@ interface DraftEvent {
 }
 
 export default function HomePage() {
+  const { t } = useI18n()
   const locale = "en"
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [searchParaphrase, setSearchParaphrase] = useState("")
@@ -344,47 +343,14 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2">
-            <Calendar className="h-6 w-6" />
-            <h1 className="text-xl font-bold">Eventa</h1>
-          </Link>
-
-          <div className="flex items-center gap-3">
-            <div className="hidden md:block">
-              <VersionBadge />
-            </div>
-
-            <Button variant="outline" size="sm" className="gap-2 bg-transparent" asChild>
-              <Link href="/events">
-                <List className="h-4 w-4" />
-                <span className="hidden sm:inline">Browse</span>
-              </Link>
-            </Button>
-
-            <Button variant="outline" size="sm" className="gap-2 bg-transparent" onClick={() => {}}>
-              <MapPin className="h-4 w-4" />
-              <span className="hidden sm:inline">Location</span>
-            </Button>
-
-            <LanguageSwitcher />
-
-            <UserNav />
-          </div>
-        </div>
-        <div className="md:hidden flex justify-center pb-2">
-          <VersionBadge />
-        </div>
-      </header>
-
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="mx-auto max-w-3xl py-16 text-center">
-          <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance sm:text-5xl">Discover & Create Events</h2>
+          <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance sm:text-5xl">
+            {t("common.pageTitle")}
+          </h2>
           <p className="mb-8 text-lg text-muted-foreground text-balance">
-            Search for events or create your own with AI assistance
+            {t("common.pageSubtitle")}
           </p>
 
           <SmartInputBar
