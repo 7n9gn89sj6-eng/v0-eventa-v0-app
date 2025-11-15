@@ -267,9 +267,12 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
       {/* Results Count */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          {t("events.results.showing")
-            .replace("{filtered}", filteredResults.length.toString())
-            .replace("{total}", results.length.toString())}
+          {(() => {
+            const template = t("events.results.showing") || "Showing {filtered} of {total} events"
+            return String(template)
+              .replace("{filtered}", filteredResults.length.toString())
+              .replace("{total}", results.length.toString())
+          })()}
         </p>
       </div>
 
