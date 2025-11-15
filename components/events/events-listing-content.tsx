@@ -159,6 +159,11 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
   const hasActiveFilters =
     selectedCategory !== "All" || selectedPriceFilter !== "all" || q.trim() !== "" || sortBy !== "date-asc"
 
+  const tEvents = t("events")
+  const showingText = (tEvents("results.showing") || "Showing {filtered} of {total} events")
+    .replace("{filtered}", filteredResults.length.toString())
+    .replace("{total}", results.length.toString())
+
   return (
     <div className="space-y-6">
       {/* Filters Section */}
@@ -167,10 +172,10 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <SlidersHorizontal className="h-5 w-5" />
-              <CardTitle>{t("events.filters.title")}</CardTitle>
+              <CardTitle>{tEvents("filters.title")}</CardTitle>
             </div>
             <Button variant="ghost" size="sm" onClick={() => setShowFilters(!showFilters)}>
-              {showFilters ? t("events.filters.hide") : t("events.filters.show")}
+              {showFilters ? tEvents("filters.hide") : tEvents("filters.show")}
             </Button>
           </div>
         </CardHeader>
@@ -178,36 +183,36 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
         {showFilters && (
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="search">{t("events.filters.search")}</Label>
+              <Label htmlFor="search">{tEvents("filters.search")}</Label>
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     id="search"
-                    placeholder={t("events.filters.searchPlaceholder")}
+                    placeholder={tEvents("filters.searchPlaceholder")}
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") runSearch()
                     }}
                     className="pl-9"
-                    aria-label={t("events.filters.searchAriaLabel")}
+                    aria-label={tEvents("filters.searchAriaLabel")}
                   />
                 </div>
                 <Button onClick={runSearch} disabled={loading}>
-                  {loading ? t("events.filters.processing") : t("events.filters.go")}
+                  {loading ? tEvents("filters.processing") : tEvents("filters.go")}
                 </Button>
               </div>
               {error && <p className="text-sm text-red-600">{error}</p>}
               {!error && !loading && results.length === 0 && q.trim() && (
-                <p className="text-sm opacity-70">{t("events.results.noResultsFound")}</p>
+                <p className="text-sm opacity-70">{tEvents("results.noResultsFound")}</p>
               )}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3">
               {/* Category Filter */}
               <div className="space-y-2">
-                <Label htmlFor="category">{t("events.filters.category")}</Label>
+                <Label htmlFor="category">{tEvents("filters.category")}</Label>
                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
                   <SelectTrigger id="category">
                     <SelectValue />
@@ -224,31 +229,31 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
 
               {/* Price Filter */}
               <div className="space-y-2">
-                <Label htmlFor="price">{t("events.filters.price")}</Label>
+                <Label htmlFor="price">{tEvents("filters.price")}</Label>
                 <Select value={selectedPriceFilter} onValueChange={setSelectedPriceFilter}>
                   <SelectTrigger id="price">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">{t("events.priceOptions.all")}</SelectItem>
-                    <SelectItem value="free">{t("events.priceOptions.free")}</SelectItem>
-                    <SelectItem value="paid">{t("events.priceOptions.paid")}</SelectItem>
+                    <SelectItem value="all">{tEvents("priceOptions.all")}</SelectItem>
+                    <SelectItem value="free">{tEvents("priceOptions.free")}</SelectItem>
+                    <SelectItem value="paid">{tEvents("priceOptions.paid")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               {/* Sort */}
               <div className="space-y-2">
-                <Label htmlFor="sort">{t("events.filters.sortBy")}</Label>
+                <Label htmlFor="sort">{tEvents("filters.sortBy")}</Label>
                 <Select value={sortBy} onValueChange={setSortBy}>
                   <SelectTrigger id="sort">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="date-asc">{t("events.sortOptions.dateAsc")}</SelectItem>
-                    <SelectItem value="date-desc">{t("events.sortOptions.dateDesc")}</SelectItem>
-                    <SelectItem value="title-asc">{t("events.sortOptions.titleAsc")}</SelectItem>
-                    <SelectItem value="title-desc">{t("events.sortOptions.titleDesc")}</SelectItem>
+                    <SelectItem value="date-asc">{tEvents("sortOptions.dateAsc")}</SelectItem>
+                    <SelectItem value="date-desc">{tEvents("sortOptions.dateDesc")}</SelectItem>
+                    <SelectItem value="title-asc">{tEvents("sortOptions.titleAsc")}</SelectItem>
+                    <SelectItem value="title-desc">{tEvents("sortOptions.titleDesc")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -257,7 +262,7 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
             {hasActiveFilters && (
               <Button variant="outline" size="sm" onClick={clearFilters} className="w-full sm:w-auto bg-transparent">
                 <X className="h-4 w-4 mr-2" />
-                {t("events.filters.clearFilters")}
+                {tEvents("filters.clearFilters")}
               </Button>
             )}
           </CardContent>
@@ -267,12 +272,7 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
       {/* Results Count */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          {(() => {
-            const template = t("events.results.showing") || "Showing {filtered} of {total} events"
-            return String(template)
-              .replace("{filtered}", filteredResults.length.toString())
-              .replace("{total}", results.length.toString())
-          })()}
+          {showingText}
         </p>
       </div>
 
@@ -281,11 +281,11 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
       ) : filteredResults.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-lg text-muted-foreground mb-2">{t("events.results.noEvents")}</p>
-            <p className="text-sm text-muted-foreground mb-4">{t("events.results.noEventsHint")}</p>
+            <p className="text-lg text-muted-foreground mb-2">{tEvents("results.noEvents")}</p>
+            <p className="text-sm text-muted-foreground mb-4">{tEvents("results.noEventsHint")}</p>
             {hasActiveFilters && (
               <Button variant="outline" onClick={clearFilters}>
-                {t("events.filters.clearFilters")}
+                {tEvents("filters.clearFilters")}
               </Button>
             )}
           </CardContent>
@@ -311,7 +311,7 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
                   <div className="mb-2 flex flex-wrap gap-2">
                     {event.priceFree && (
                       <Badge variant="secondary" className="text-xs">
-                        {t("events.card.free")}
+                        {tEvents("card.free")}
                       </Badge>
                     )}
                     {event.source && (
@@ -388,13 +388,13 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
                   {event.externalUrl ? (
                     <Button asChild className="w-full">
                       <a href={event.externalUrl} target="_blank" rel="noopener noreferrer">
-                        {t("events.card.viewOn").replace("{source}", event.source || "External Site")}
+                        {tEvents("card.viewOn").replace("{source}", event.source || "External Site")}
                       </a>
                     </Button>
                   ) : (
                     <Button asChild className="w-full">
                       <Link href={`/events/${event.id}`}>
-                        {t("events.card.viewDetails")}
+                        {tEvents("card.viewDetails")}
                       </Link>
                     </Button>
                   )}
