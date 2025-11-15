@@ -347,10 +347,10 @@ export default function HomePage() {
       <main className="container mx-auto px-4 py-8">
         <div className="mx-auto max-w-3xl py-16 text-center">
           <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance sm:text-5xl">
-            {t("common.pageTitle")}
+            {t("home.hero.title")}
           </h2>
           <p className="mb-8 text-lg text-muted-foreground text-balance">
-            {t("common.pageSubtitle")}
+            {t("home.hero.subtitle")}
           </p>
 
           <SmartInputBar
@@ -358,7 +358,7 @@ export default function HomePage() {
             onCreate={handleSmartCreate}
             onError={(error) => {
               toast({
-                title: "Error",
+                title: t("home.toast.error"),
                 description: error,
                 variant: "destructive",
               })
@@ -373,12 +373,12 @@ export default function HomePage() {
               className="mt-6 bg-transparent"
               onClick={() => setShowDraftsList(!showDraftsList)}
             >
-              View Drafts ({drafts.length})
+              {t("home.drafts.viewDrafts").replace("{count}", drafts.length.toString())}
             </Button>
           )}
 
           <p className="mt-8 text-sm text-muted-foreground">
-            Search for events or create new ones using natural language.
+            {t("home.hero.naturalLanguageHint")}
           </p>
         </div>
 
@@ -403,7 +403,7 @@ export default function HomePage() {
 
         {showDraftsList && (
           <div className="mx-auto max-w-2xl mt-12">
-            <h3 className="text-2xl font-semibold mb-6">Your Drafts</h3>
+            <h3 className="text-2xl font-semibold mb-6">{t("home.drafts.title")}</h3>
             <DraftsList drafts={drafts} onEdit={handleEditDraft} onDelete={handleDeleteDraft} />
           </div>
         )}
@@ -419,7 +419,7 @@ export default function HomePage() {
                   size="icon"
                   className="h-8 w-8"
                   onClick={handleSpeakSearch}
-                  title={isSpeakingSearch ? "Stop speaking" : "Speak"}
+                  title={isSpeakingSearch ? t("home.search.speaking") : t("home.search.speak")}
                 >
                   {isSpeakingSearch ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
                 </Button>
@@ -450,7 +450,7 @@ export default function HomePage() {
               </div>
             ) : (
               <div className="text-center py-12">
-                <p className="text-lg text-muted-foreground">No results found</p>
+                <p className="text-lg text-muted-foreground">{t("home.search.noResults")}</p>
               </div>
             )}
           </div>
@@ -460,7 +460,7 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="mt-16 border-t bg-muted/30 py-8">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>Eventa – AI-powered event discovery</p>
+          <p>{t("home.footer.tagline")}</p>
         </div>
       </footer>
     </div>

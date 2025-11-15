@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form"
 import { Loader2, CheckCircle2, Sparkles } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { useI18n } from "@/lib/i18n/context"
 
 const API_URL = "/api/events/submit"
 
@@ -67,6 +68,7 @@ interface AddEventFormProps {
 
 export function AddEventForm({ initialData }: AddEventFormProps) {
   const router = useRouter()
+  const { t } = useI18n()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -283,16 +285,18 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
               <CheckCircle2 className="size-8 text-primary" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-2xl font-semibold">Thanks for Posting your event</h2>
+              <h2 className="text-2xl font-semibold">{t("form.success.title")}</h2>
               <p className="text-muted-foreground text-pretty">
-                A confirmation email has been sent
+                {t("form.success.message")}
               </p>
             </div>
             <div className="flex gap-3 mt-4">
               <Button onClick={() => router.push("/")} variant="outline">
-                Back to Home
+                {t("form.buttons.backToHome")}
               </Button>
-              <Button onClick={() => setIsSuccess(false)}>Submit another event</Button>
+              <Button onClick={() => setIsSuccess(false)}>
+                {t("form.buttons.submitAnother")}
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -307,7 +311,7 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
           <Alert>
             <Sparkles className="h-4 w-4" />
             <AlertDescription>
-              We've prefilled some fields based on your draft. Please review and complete the remaining details.
+              {t("form.alerts.prefilled")}
             </AlertDescription>
           </Alert>
         )}
@@ -316,22 +320,18 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
           <CardContent className="pt-6 space-y-6">
             {/* Your Information */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Your Information</h3>
+              <h3 className="text-lg font-semibold">{t("form.sections.yourInfo")}</h3>
 
               <FormField
                 control={form.control}
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Your Name</FormLabel>
+                    <FormLabel>{t("form.fields.name")}</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="John Doe"
-                        value={field.value}
-                        onChange={field.onChange}
-                        onBlur={field.onBlur}
-                        name={field.name}
-                        ref={field.ref}
+                        placeholder={t("form.fields.namePlaceholder")}
+                        {...field}
                         disabled={isSubmitting}
                       />
                     </FormControl>
@@ -345,20 +345,16 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Contact Email</FormLabel>
+                    <FormLabel>{t("form.fields.email")}</FormLabel>
                     <FormControl>
                       <Input
                         type="email"
-                        placeholder="you@example.com"
-                        value={field.value}
-                        onChange={field.onChange}
-                        onBlur={field.onBlur}
-                        name={field.name}
-                        ref={field.ref}
+                        placeholder={t("form.fields.emailPlaceholder")}
+                        {...field}
                         disabled={isSubmitting}
                       />
                     </FormControl>
-                    <FormDescription>We'll send a confirmation link to this email</FormDescription>
+                    <FormDescription>{t("form.fields.emailHint")}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -369,16 +365,12 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                 name="humanCheck"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Human Check</FormLabel>
-                    <FormDescription>Type the last word of this sentence: eventa connects communities</FormDescription>
+                    <FormLabel>{t("form.fields.humanCheck")}</FormLabel>
+                    <FormDescription>{t("form.fields.humanCheckHint")}</FormDescription>
                     <FormControl>
                       <Input
-                        placeholder="Type the last word..."
-                        value={field.value}
-                        onChange={field.onChange}
-                        onBlur={field.onBlur}
-                        name={field.name}
-                        ref={field.ref}
+                        placeholder={t("form.fields.humanCheckPlaceholder")}
+                        {...field}
                         disabled={isSubmitting}
                       />
                     </FormControl>
@@ -390,22 +382,18 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
 
             {/* Event Details */}
             <div className="space-y-4 pt-4 border-t">
-              <h3 className="text-lg font-semibold">Event Details</h3>
+              <h3 className="text-lg font-semibold">{t("form.sections.eventDetails")}</h3>
 
               <FormField
                 control={form.control}
                 name="title"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Event Title</FormLabel>
+                    <FormLabel>{t("form.fields.title")}</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="e.g., Athens Farmers Market"
-                        value={field.value}
-                        onChange={field.onChange}
-                        onBlur={field.onBlur}
-                        name={field.name}
-                        ref={field.ref}
+                        placeholder={t("form.fields.titlePlaceholder")}
+                        {...field}
                         disabled={isSubmitting}
                       />
                     </FormControl>
@@ -419,21 +407,17 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Description</FormLabel>
+                    <FormLabel>{t("form.fields.description")}</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Describe your event in detail..."
+                        placeholder={t("form.fields.descriptionPlaceholder")}
                         rows={5}
-                        value={field.value}
-                        onChange={field.onChange}
-                        onBlur={field.onBlur}
-                        name={field.name}
-                        ref={field.ref}
+                        {...field}
                         disabled={isSubmitting}
                       />
                     </FormControl>
                     <FormDescription>
-                      Include what makes your event special, what attendees can expect, and any important details
+                      {t("form.fields.descriptionHint")}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -443,22 +427,18 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
 
             {/* Location */}
             <div className="space-y-4 pt-4 border-t">
-              <h3 className="text-lg font-semibold">Location</h3>
+              <h3 className="text-lg font-semibold">{t("form.sections.location")}</h3>
 
               <FormField
                 control={form.control}
                 name="address"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Address</FormLabel>
+                    <FormLabel>{t("form.fields.address")}</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="123 Main Street"
-                        value={field.value}
-                        onChange={field.onChange}
-                        onBlur={field.onBlur}
-                        name={field.name}
-                        ref={field.ref}
+                        placeholder={t("form.fields.addressPlaceholder")}
+                        {...field}
                         disabled={isSubmitting}
                       />
                     </FormControl>
@@ -472,19 +452,15 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                 name="postcode"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Postcode / ZIP Code</FormLabel>
+                    <FormLabel>{t("form.fields.postcode")}</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="12345"
-                        value={field.value}
-                        onChange={field.onChange}
-                        onBlur={field.onBlur}
-                        name={field.name}
-                        ref={field.ref}
+                        placeholder={t("form.fields.postcodePlaceholder")}
+                        {...field}
                         disabled={isSubmitting}
                       />
                     </FormControl>
-                    <FormDescription>Optional</FormDescription>
+                    <FormDescription>{t("form.fields.postcodeOptional")}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -496,15 +472,11 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                   name="city"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>City</FormLabel>
+                      <FormLabel>{t("form.fields.city")}</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="Athens"
-                          value={field.value}
-                          onChange={field.onChange}
-                          onBlur={field.onBlur}
-                          name={field.name}
-                          ref={field.ref}
+                          placeholder={t("form.fields.cityPlaceholder")}
+                          {...field}
                           disabled={isSubmitting}
                         />
                       </FormControl>
@@ -518,15 +490,11 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                   name="country"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Country</FormLabel>
+                      <FormLabel>{t("form.fields.country")}</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="Greece"
-                          value={field.value}
-                          onChange={field.onChange}
-                          onBlur={field.onBlur}
-                          name={field.name}
-                          ref={field.ref}
+                          placeholder={t("form.fields.countryPlaceholder")}
+                          {...field}
                           disabled={isSubmitting}
                         />
                       </FormControl>
@@ -539,7 +507,7 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
 
             {/* Date & Time */}
             <div className="space-y-4 pt-4 border-t">
-              <h3 className="text-lg font-semibold">Date & Time</h3>
+              <h3 className="text-lg font-semibold">{t("form.sections.dateTime")}</h3>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <FormField
@@ -547,15 +515,11 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                   name="startAt"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Start Date & Time</FormLabel>
+                      <FormLabel>{t("form.fields.startAt")}</FormLabel>
                       <FormControl>
                         <Input
                           type="datetime-local"
-                          value={field.value}
-                          onChange={field.onChange}
-                          onBlur={field.onBlur}
-                          name={field.name}
-                          ref={field.ref}
+                          {...field}
                           disabled={isSubmitting}
                         />
                       </FormControl>
@@ -569,19 +533,15 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                   name="endAt"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>End Date & Time</FormLabel>
+                      <FormLabel>{t("form.fields.endAt")}</FormLabel>
                       <FormControl>
                         <Input
                           type="datetime-local"
-                          value={field.value}
-                          onChange={field.onChange}
-                          onBlur={field.onBlur}
-                          name={field.name}
-                          ref={field.ref}
+                          {...field}
                           disabled={isSubmitting}
                         />
                       </FormControl>
-                      <FormDescription>Events auto-hide after the end time.</FormDescription>
+                      <FormDescription>{t("form.fields.endAtHint")}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -591,27 +551,23 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
 
             {/* Optional Information */}
             <div className="space-y-4 pt-4 border-t">
-              <h3 className="text-lg font-semibold">Optional Information</h3>
+              <h3 className="text-lg font-semibold">{t("form.sections.optional")}</h3>
 
               <FormField
                 control={form.control}
                 name="imageUrl"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Image URL (optional)</FormLabel>
+                    <FormLabel>{t("form.fields.imageUrl")}</FormLabel>
                     <FormControl>
                       <Input
                         type="url"
-                        placeholder="https://example.com/image.jpg"
-                        value={field.value}
-                        onChange={field.onChange}
-                        onBlur={field.onBlur}
-                        name={field.name}
-                        ref={field.ref}
+                        placeholder={t("form.fields.imageUrlPlaceholder")}
+                        {...field}
                         disabled={isSubmitting}
                       />
                     </FormControl>
-                    <FormDescription>Link to an image for your event</FormDescription>
+                    <FormDescription>{t("form.fields.imageUrlHint")}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -622,20 +578,16 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                 name="externalUrl"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>External URL (optional)</FormLabel>
+                    <FormLabel>{t("form.fields.externalUrl")}</FormLabel>
                     <FormControl>
                       <Input
                         type="url"
-                        placeholder="https://example.com"
-                        value={field.value}
-                        onChange={field.onChange}
-                        onBlur={field.onBlur}
-                        name={field.name}
-                        ref={field.ref}
+                        placeholder={t("form.fields.externalUrlPlaceholder")}
+                        {...field}
                         disabled={isSubmitting}
                       />
                     </FormControl>
-                    <FormDescription>Link to your event website or registration page</FormDescription>
+                    <FormDescription>{t("form.fields.externalUrlHint")}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -654,10 +606,10 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
           {isSubmitting ? (
             <>
               <Loader2 className="mr-2 size-4 animate-spin" />
-              Submitting event...
+              {t("form.buttons.submitting")}
             </>
           ) : (
-            "Submit Event"
+            t("form.buttons.submit")
           )}
         </Button>
       </form>
