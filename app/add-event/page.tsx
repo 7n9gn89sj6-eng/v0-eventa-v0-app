@@ -14,13 +14,14 @@ export default function AddEventPage({
   searchParams: { title?: string; description?: string; location?: string; date?: string; draft?: string }
 }) {
   const { t } = useI18n()
+  const tForm = t("form")
 
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-balance">{t("form.sections.eventDetails")}</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-balance">{tForm("page.title")}</h1>
         <p className="mt-2 text-muted-foreground text-pretty">
-          {t("form.fields.emailHint")}
+          {tForm("page.subtitle")}
         </p>
       </div>
       <Suspense fallback={<div>Loading...</div>}>

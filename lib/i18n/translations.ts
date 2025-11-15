@@ -114,6 +114,10 @@ export const translations = {
       },
     },
     form: {
+      page: {
+        title: "Post a New Event",
+        subtitle: "Share your event with the community. Fill in the details below and we'll send you a verification email to finish publishing.",
+      },
       sections: {
         yourInfo: "Your Information",
         eventDetails: "Event Details",
@@ -302,6 +306,10 @@ export const translations = {
       },
     },
     form: {
+      page: {
+        title: "Pubblica un Nuovo Evento",
+        subtitle: "Condividi il tuo evento con la comunità. Compila i dettagli qui sotto e ti invieremo un'email di verifica per completare la pubblicazione.",
+      },
       sections: {
         yourInfo: "Le Tue Informazioni",
         eventDetails: "Dettagli Evento",
@@ -314,7 +322,7 @@ export const translations = {
         namePlaceholder: "Mario Rossi",
         email: "Email di Contatto",
         emailPlaceholder: "tu@esempio.com",
-        emailHint: "Ti invieremo un link di conferma a questa email",
+        emailHint: "Ti invieremo un'URL di conferma a questa email",
         humanCheck: "Controllo Umano",
         humanCheckHint: "Digita l'ultima parola di questa frase: eventa collega le comunità",
         humanCheckPlaceholder: "Digita l'ultima parola...",
@@ -490,6 +498,10 @@ export const translations = {
       },
     },
     form: {
+      page: {
+        title: "Δημοσιεύστε μια Νέα Εκδήλωση",
+        subtitle: "Μοιραστείτε την εκδήλωσή σας με την κοινότητα. Συμπληρώστε τα στοιχεία παρακάτω και θα σας στείλουμε ένα email επαλήθευσης για να ολοκληρώσετε τη δημοσίευση.",
+      },
       sections: {
         yourInfo: "Οι Πληροφορίες σας",
         eventDetails: "Λεπτομέρειες Εκδήλωσης",
@@ -678,6 +690,10 @@ export const translations = {
       },
     },
     form: {
+      page: {
+        title: "Publicar un Nuevo Evento",
+        subtitle: "Comparte tu evento con la comunidad. Completa los detalles a continuación y te enviaremos un correo de verificación para finalizar la publicación.",
+      },
       sections: {
         yourInfo: "Tu Información",
         eventDetails: "Detalles del Evento",
@@ -866,6 +882,10 @@ export const translations = {
       },
     },
     form: {
+      page: {
+        title: "Publier un Nouvel Événement",
+        subtitle: "Partagez votre événement avec la communauté. Remplissez les détails ci-dessous et nous vous enverrons un email de vérification pour finaliser la publication.",
+      },
       sections: {
         yourInfo: "Vos Informations",
         eventDetails: "Détails de l'Événement",

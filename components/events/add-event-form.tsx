@@ -69,6 +69,7 @@ interface AddEventFormProps {
 export function AddEventForm({ initialData }: AddEventFormProps) {
   const router = useRouter()
   const { t } = useI18n()
+  const tForm = t("form")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -285,17 +286,17 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
               <CheckCircle2 className="size-8 text-primary" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-2xl font-semibold">{t("form.success.title")}</h2>
+              <h2 className="text-2xl font-semibold">{tForm("success.title")}</h2>
               <p className="text-muted-foreground text-pretty">
-                {t("form.success.message")}
+                {tForm("success.message")}
               </p>
             </div>
             <div className="flex gap-3 mt-4">
               <Button onClick={() => router.push("/")} variant="outline">
-                {t("form.buttons.backToHome")}
+                {tForm("buttons.backToHome")}
               </Button>
               <Button onClick={() => setIsSuccess(false)}>
-                {t("form.buttons.submitAnother")}
+                {tForm("buttons.submitAnother")}
               </Button>
             </div>
           </div>
@@ -311,7 +312,7 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
           <Alert>
             <Sparkles className="h-4 w-4" />
             <AlertDescription>
-              {t("form.alerts.prefilled")}
+              {tForm("alerts.prefilled")}
             </AlertDescription>
           </Alert>
         )}
@@ -320,17 +321,17 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
           <CardContent className="pt-6 space-y-6">
             {/* Your Information */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">{t("form.sections.yourInfo")}</h3>
+              <h3 className="text-lg font-semibold">{tForm("sections.yourInfo")}</h3>
 
               <FormField
                 control={form.control}
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t("form.fields.name")}</FormLabel>
+                    <FormLabel>{tForm("fields.name")}</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder={t("form.fields.namePlaceholder")}
+                        placeholder={tForm("fields.namePlaceholder")}
                         {...field}
                         disabled={isSubmitting}
                       />
@@ -345,16 +346,16 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t("form.fields.email")}</FormLabel>
+                    <FormLabel>{tForm("fields.email")}</FormLabel>
                     <FormControl>
                       <Input
                         type="email"
-                        placeholder={t("form.fields.emailPlaceholder")}
+                        placeholder={tForm("fields.emailPlaceholder")}
                         {...field}
                         disabled={isSubmitting}
                       />
                     </FormControl>
-                    <FormDescription>{t("form.fields.emailHint")}</FormDescription>
+                    <FormDescription>{tForm("fields.emailHint")}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -365,11 +366,11 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                 name="humanCheck"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t("form.fields.humanCheck")}</FormLabel>
-                    <FormDescription>{t("form.fields.humanCheckHint")}</FormDescription>
+                    <FormLabel>{tForm("fields.humanCheck")}</FormLabel>
+                    <FormDescription>{tForm("fields.humanCheckHint")}</FormDescription>
                     <FormControl>
                       <Input
-                        placeholder={t("form.fields.humanCheckPlaceholder")}
+                        placeholder={tForm("fields.humanCheckPlaceholder")}
                         {...field}
                         disabled={isSubmitting}
                       />
@@ -382,17 +383,17 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
 
             {/* Event Details */}
             <div className="space-y-4 pt-4 border-t">
-              <h3 className="text-lg font-semibold">{t("form.sections.eventDetails")}</h3>
+              <h3 className="text-lg font-semibold">{tForm("sections.eventDetails")}</h3>
 
               <FormField
                 control={form.control}
                 name="title"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t("form.fields.title")}</FormLabel>
+                    <FormLabel>{tForm("fields.title")}</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder={t("form.fields.titlePlaceholder")}
+                        placeholder={tForm("fields.titlePlaceholder")}
                         {...field}
                         disabled={isSubmitting}
                       />
@@ -407,17 +408,17 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t("form.fields.description")}</FormLabel>
+                    <FormLabel>{tForm("fields.description")}</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder={t("form.fields.descriptionPlaceholder")}
+                        placeholder={tForm("fields.descriptionPlaceholder")}
                         rows={5}
                         {...field}
                         disabled={isSubmitting}
                       />
                     </FormControl>
                     <FormDescription>
-                      {t("form.fields.descriptionHint")}
+                      {tForm("fields.descriptionHint")}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -427,17 +428,17 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
 
             {/* Location */}
             <div className="space-y-4 pt-4 border-t">
-              <h3 className="text-lg font-semibold">{t("form.sections.location")}</h3>
+              <h3 className="text-lg font-semibold">{tForm("sections.location")}</h3>
 
               <FormField
                 control={form.control}
                 name="address"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t("form.fields.address")}</FormLabel>
+                    <FormLabel>{tForm("fields.address")}</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder={t("form.fields.addressPlaceholder")}
+                        placeholder={tForm("fields.addressPlaceholder")}
                         {...field}
                         disabled={isSubmitting}
                       />
@@ -452,15 +453,15 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                 name="postcode"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t("form.fields.postcode")}</FormLabel>
+                    <FormLabel>{tForm("fields.postcode")}</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder={t("form.fields.postcodePlaceholder")}
+                        placeholder={tForm("fields.postcodePlaceholder")}
                         {...field}
                         disabled={isSubmitting}
                       />
                     </FormControl>
-                    <FormDescription>{t("form.fields.postcodeOptional")}</FormDescription>
+                    <FormDescription>{tForm("fields.postcodeOptional")}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -472,10 +473,10 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                   name="city"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t("form.fields.city")}</FormLabel>
+                      <FormLabel>{tForm("fields.city")}</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder={t("form.fields.cityPlaceholder")}
+                          placeholder={tForm("fields.cityPlaceholder")}
                           {...field}
                           disabled={isSubmitting}
                         />
@@ -490,10 +491,10 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                   name="country"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t("form.fields.country")}</FormLabel>
+                      <FormLabel>{tForm("fields.country")}</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder={t("form.fields.countryPlaceholder")}
+                          placeholder={tForm("fields.countryPlaceholder")}
                           {...field}
                           disabled={isSubmitting}
                         />
@@ -507,7 +508,7 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
 
             {/* Date & Time */}
             <div className="space-y-4 pt-4 border-t">
-              <h3 className="text-lg font-semibold">{t("form.sections.dateTime")}</h3>
+              <h3 className="text-lg font-semibold">{tForm("sections.dateTime")}</h3>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <FormField
@@ -515,7 +516,7 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                   name="startAt"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t("form.fields.startAt")}</FormLabel>
+                      <FormLabel>{tForm("fields.startAt")}</FormLabel>
                       <FormControl>
                         <Input
                           type="datetime-local"
@@ -533,7 +534,7 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                   name="endAt"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t("form.fields.endAt")}</FormLabel>
+                      <FormLabel>{tForm("fields.endAt")}</FormLabel>
                       <FormControl>
                         <Input
                           type="datetime-local"
@@ -541,7 +542,7 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                           disabled={isSubmitting}
                         />
                       </FormControl>
-                      <FormDescription>{t("form.fields.endAtHint")}</FormDescription>
+                      <FormDescription>{tForm("fields.endAtHint")}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -551,23 +552,23 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
 
             {/* Optional Information */}
             <div className="space-y-4 pt-4 border-t">
-              <h3 className="text-lg font-semibold">{t("form.sections.optional")}</h3>
+              <h3 className="text-lg font-semibold">{tForm("sections.optional")}</h3>
 
               <FormField
                 control={form.control}
                 name="imageUrl"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t("form.fields.imageUrl")}</FormLabel>
+                    <FormLabel>{tForm("fields.imageUrl")}</FormLabel>
                     <FormControl>
                       <Input
                         type="url"
-                        placeholder={t("form.fields.imageUrlPlaceholder")}
+                        placeholder={tForm("fields.imageUrlPlaceholder")}
                         {...field}
                         disabled={isSubmitting}
                       />
                     </FormControl>
-                    <FormDescription>{t("form.fields.imageUrlHint")}</FormDescription>
+                    <FormDescription>{tForm("fields.imageUrlHint")}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -578,16 +579,16 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                 name="externalUrl"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t("form.fields.externalUrl")}</FormLabel>
+                    <FormLabel>{tForm("fields.externalUrl")}</FormLabel>
                     <FormControl>
                       <Input
                         type="url"
-                        placeholder={t("form.fields.externalUrlPlaceholder")}
+                        placeholder={tForm("fields.externalUrlPlaceholder")}
                         {...field}
                         disabled={isSubmitting}
                       />
                     </FormControl>
-                    <FormDescription>{t("form.fields.externalUrlHint")}</FormDescription>
+                    <FormDescription>{tForm("fields.externalUrlHint")}</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -606,10 +607,10 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
           {isSubmitting ? (
             <>
               <Loader2 className="mr-2 size-4 animate-spin" />
-              {t("form.buttons.submitting")}
+              {tForm("buttons.submitting")}
             </>
           ) : (
-            t("form.buttons.submit")
+            tForm("buttons.submit")
           )}
         </Button>
       </form>
