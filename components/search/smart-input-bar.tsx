@@ -3,10 +3,11 @@
 import type React from "react"
 
 import { useState, useEffect, forwardRef, useImperativeHandle } from "react"
-import { Search, Sparkles, Loader2, AlertCircle, X } from "lucide-react"
+import { Search, Sparkles, Loader2, AlertCircle, X } from 'lucide-react'
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
+import { useI18n } from "@/lib/i18n/context"
 
 interface SmartInputBarProps {
   onSearch?: (query: string) => Promise<void>
@@ -21,15 +22,11 @@ export interface SmartInputBarRef {
 
 const INTENT_PATTERNS = /^\s*(create|make|host|post|add|schedule|organize|set up|i want to run|my event)\b/i
 
-const SEARCH_EXAMPLES = ["jazz this weekend", "Athens food", "kids Saturday"]
-const CREATE_EXAMPLES = [
-  "Open mic at The Dock next Saturday 8pm",
-  "yoga in Lisbon on Saturday",
-  "community picnic tomorrow 2pm",
-]
-
 export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
   ({ onSearch, onCreate, onError, className }, ref) => {
+    const { t } = useI18n()
+    const tHome = t("home")
+    
     const [query, setQuery] = useState("")
     const [mode, setMode] = useState<"search" | "create">("search")
     const [detectedMode, setDetectedMode] = useState<"create" | null>(null)
@@ -119,9 +116,20 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
       }
     }
 
-    const examples = mode === "search" ? SEARCH_EXAMPLES : CREATE_EXAMPLES
+    const searchExamples = [
+      tHome("chips.jazzWeekend"),
+      tHome("chips.athensFood"),
+      tHome("chips.kidsSaturday"),
+    ]
+    const createExamples = [
+      tHome("chips.openMicDock"),
+      tHome("chips.yogaLisbon"),
+      tHome("chips.communityPicnic"),
+    ]
+
+    const examples = mode === "search" ? searchExamples : createExamples
     const guidanceText =
-      mode === "search" ? "Find events by location, date, or type..." : "Describe your event in plain language..."
+      mode === "search" ? tHome("search.searchGuidance") : tHome("search.createGuidance")
 
     return (
       <div className={cn("w-full space-y-3", className)}>
@@ -153,7 +161,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
                 )}
                 disabled={isProcessing}
               >
-                Search
+                {tHome("search.searchMode")}
               </button>
               <button
                 type="button"
@@ -166,7 +174,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
                 )}
                 disabled={isProcessing}
               >
-                Create
+                {tHome("search.createMode")}
               </button>
             </div>
 
@@ -180,17 +188,17 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
               {isProcessing ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Processing
+                  {tHome("search.processing")}
                 </>
               ) : mode === "search" ? (
                 <>
                   <Search className="h-4 w-4" />
-                  Go
+                  {tHome("search.go")}
                 </>
               ) : (
                 <>
                   <Sparkles className="h-4 w-4" />
-                  Create
+                  {tHome("search.createMode")}
                 </>
               )}
             </Button>
@@ -210,7 +218,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
               )}
               disabled={isProcessing}
             >
-              Search
+              {tHome("search.searchMode")}
             </button>
             <button
               type="button"
@@ -223,7 +231,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
               )}
               disabled={isProcessing}
             >
-              Create
+              {tHome("search.createMode")}
             </button>
           </div>
 
@@ -236,12 +244,12 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
             {isProcessing ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Processing
+                {tHome("search.processing")}
               </>
             ) : mode === "search" ? (
-              "Go"
+              tHome("search.go")
             ) : (
-              "Create"
+              tHome("search.createMode")
             )}
           </Button>
         </div>
@@ -257,14 +265,14 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
           <Alert className="border-primary/50 bg-primary/10">
             <AlertCircle className="h-4 w-4 text-primary" />
             <AlertDescription className="flex items-center justify-between gap-2">
-              <span className="text-sm text-primary">Switched to Create mode</span>
+              <span className="text-sm text-primary">{tHome("search.switchedToCreateMode")}</span>
               <div className="flex gap-2">
                 <Button variant="ghost" size="sm" onClick={handleSwitchToCreate} className="h-7 text-xs">
-                  Continue
+                  {tHome("search.continue")}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={handleUndoSwitch} className="h-7 text-xs">
                   <X className="h-3 w-3 mr-1" />
-                  Undo
+                  {tHome("search.undo")}
                 </Button>
               </div>
             </AlertDescription>
@@ -273,7 +281,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
 
         {showExamples && (
           <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">Try these:</p>
+            <p className="text-sm text-muted-foreground">{tHome("search.tryThese")}</p>
             <div className="flex flex-wrap gap-2">
               {examples.map((example) => (
                 <button
