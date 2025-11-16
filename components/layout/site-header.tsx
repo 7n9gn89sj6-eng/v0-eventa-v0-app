@@ -10,6 +10,7 @@ import { useI18n } from "@/lib/i18n/context"
 
 export function SiteHeader() {
   const { t } = useI18n()
+  const tCommon = t("common")
 
   return (
     <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
@@ -27,13 +28,13 @@ export function SiteHeader() {
           <Button variant="outline" size="sm" className="gap-2 bg-transparent" asChild>
             <Link href="/events">
               <List className="h-4 w-4" />
-              <span className="hidden sm:inline">{t("common.browse")}</span>
+              <span className="hidden sm:inline">{tCommon("browse")}</span>
             </Link>
           </Button>
 
           <Button variant="outline" size="sm" className="gap-2 bg-transparent" onClick={() => {}}>
             <MapPin className="h-4 w-4" />
-            <span className="hidden sm:inline">{t("common.location")}</span>
+            <span className="hidden sm:inline">{tCommon("location")}</span>
           </Button>
 
           <LanguageSwitcher />

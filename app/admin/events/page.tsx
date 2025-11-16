@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation"
+import { redirect } from 'next/navigation'
 import { getSession } from "@/lib/jwt"
 import { db } from "@/lib/db"
 import { AdminEventsTable } from "@/components/admin/admin-events-table"
@@ -10,21 +10,6 @@ export default async function AdminEventsPage({
 }: {
   searchParams: Promise<{ status?: string }>
 }) {
-  const session = await getSession()
-
-  if (!session) {
-    redirect("/verify")
-  }
-
-  const user = await db.user.findUnique({
-    where: { id: session.userId },
-    select: { isAdmin: true },
-  })
-
-  if (!user?.isAdmin) {
-    redirect("/")
-  }
-
   const params = await searchParams
   const statusFilter = params.status
 

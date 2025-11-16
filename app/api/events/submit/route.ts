@@ -113,6 +113,7 @@ export async function POST(request: NextRequest) {
         "searchText",
         "createdById",
         status,
+        "aiStatus",
         "createdAt",
         "updatedAt"
       )
@@ -132,12 +133,61 @@ export async function POST(request: NextRequest) {
         ${searchText},
         ${userId},
         'DRAFT',
+        'PENDING',
         NOW(),
         NOW()
       )
     `
 
     console.log("[v0] Event created successfully")
+
+    console.log("[v0] Starting AI moderation...")
+    try {
+      const { moderateEventContent } = await import("@/lib/ai-moderation")
+      const moderationResult = await moderateEventContent({
+        title: validatedData.title,
+        description: validatedData.description,
+        city,
+        country,
+        externalUrl: validatedData.externalUrl || undefined,
+      })
+
+      console.log("[v0] AI moderation completed:", moderationResult)
+
+      let aiStatus: "SAFE" | "NEEDS_REVIEW" | "REJECTED"
+      let eventStatus: "DRAFT" | "PUBLISHED"
+
+      if (moderationResult.status === "approved") {
+        aiStatus = "SAFE"
+        eventStatus = "PUBLISHED"
+      } else if (moderationResult.status === "flagged") {
+        aiStatus = "NEEDS_REVIEW"
+        eventStatus = "DRAFT"
+      } else {
+        aiStatus = "REJECTED"
+        eventStatus = "DRAFT"
+      }
+
+      await sql`
+        UPDATE "Event"
+        SET 
+          "aiStatus" = ${aiStatus},
+          "aiReason" = ${moderationResult.reason},
+          "aiAnalyzedAt" = NOW(),
+          status = ${eventStatus},
+          "publishedAt" = ${aiStatus === "SAFE" ? new Date().toISOString() : null},
+          "updatedAt" = NOW()
+        WHERE id = ${eventId}
+      `
+
+      console.log("[v0] Event updated with AI moderation results:", {
+        aiStatus,
+        eventStatus,
+        reason: moderationResult.reason,
+      })
+    } catch (aiError) {
+      console.error("[v0] AI moderation failed, event will remain pending:", aiError)
+    }
 
     const token = generateId()
     const tokenHash = await bcrypt.hash(token, 10)

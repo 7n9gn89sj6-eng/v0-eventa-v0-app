@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation"
-import { getSession } from "@/lib/jwt"
 import { db } from "@/lib/db"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -12,21 +10,6 @@ import ClientOnly from "@/components/ClientOnly"
 export const dynamic = "force-dynamic"
 
 export default async function AdminPage() {
-  const session = await getSession()
-
-  if (!session) {
-    redirect("/verify")
-  }
-
-  const user = await db.user.findUnique({
-    where: { id: session.userId },
-    select: { isAdmin: true },
-  })
-
-  if (!user?.isAdmin) {
-    redirect("/")
-  }
-
   const events = await db.event.findMany({
     include: {
       createdBy: {
