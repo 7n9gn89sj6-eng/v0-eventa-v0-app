@@ -25,9 +25,16 @@ export default async function AdminLayout({
     redirect("/")
   }
 
+  const needsReviewCount = await db.event.count({
+    where: {
+      status: "DRAFT",
+      aiStatus: "NEEDS_REVIEW",
+    },
+  })
+
   return (
     <div className="flex min-h-screen">
-      <AdminSidebar />
+      <AdminSidebar needsReviewCount={needsReviewCount} />
       
       <main className="flex-1">
         {children}

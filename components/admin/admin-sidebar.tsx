@@ -6,22 +6,26 @@ import { LayoutDashboard, Shield } from 'lucide-react'
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 
-const navigation = [
-  {
-    name: "Dashboard",
-    href: "/admin",
-    icon: LayoutDashboard,
-  },
-  {
-    name: "Moderation",
-    href: "/admin/events",
-    icon: Shield,
-    badge: 0, // Placeholder badge count
-  },
-]
+interface AdminSidebarProps {
+  needsReviewCount?: number
+}
 
-export function AdminSidebar() {
+export function AdminSidebar({ needsReviewCount = 0 }: AdminSidebarProps) {
   const pathname = usePathname()
+
+  const navigation = [
+    {
+      name: "Dashboard",
+      href: "/admin",
+      icon: LayoutDashboard,
+    },
+    {
+      name: "Moderation",
+      href: "/admin/events",
+      icon: Shield,
+      badge: needsReviewCount,
+    },
+  ]
 
   return (
     <aside className="w-60 border-r border-border bg-sidebar">

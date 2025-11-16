@@ -6,10 +6,34 @@ import { AdminEventActions } from "@/components/admin/admin-event-actions"
 import { AIModerationSummary } from "@/components/admin/ai-moderation-summary"
 import { AIEventAnalysis } from "@/components/admin/ai-event-analysis"
 import ClientOnly from "@/components/ClientOnly"
+// Adding moderation metrics components
+import { AdminStatCard } from "@/components/admin/admin-stat-card"
+import { AlertTriangle, XCircle, CheckCircle2 } from 'lucide-react'
 
 export const dynamic = "force-dynamic"
 
 export default async function AdminPage() {
+  // Fetch moderation-specific counts
+  const [needsReviewCount, aiRejectedCount, publishedCount] = await Promise.all([
+    db.event.count({
+      where: {
+        status: "DRAFT",
+        aiStatus: "NEEDS_REVIEW",
+      },
+    }),
+    db.event.count({
+      where: {
+        status: "DRAFT",
+        aiStatus: "REJECTED",
+      },
+    }),
+    db.event.count({
+      where: {
+        status: "PUBLISHED",
+      },
+    }),
+  ])
+
   const events = await db.event.findMany({
     include: {
       createdBy: {
@@ -34,6 +58,28 @@ export default async function AdminPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Admin Panel</h1>
         <p className="text-muted-foreground">AI-powered event moderation and management</p>
+      </div>
+
+      {/* Moderation Metrics */}
+      <div className="mb-8 grid gap-4 md:grid-cols-3">
+        <AdminStatCard
+          title="Needs Review"
+          count={needsReviewCount}
+          icon={AlertTriangle}
+          variant="warning"
+        />
+        <AdminStatCard
+          title="AI Rejected"
+          count={aiRejectedCount}
+          icon={XCircle}
+          variant="destructive"
+        />
+        <AdminStatCard
+          title="Published"
+          count={publishedCount}
+          icon={CheckCircle2}
+          variant="success"
+        />
       </div>
 
       <div className="mb-8">

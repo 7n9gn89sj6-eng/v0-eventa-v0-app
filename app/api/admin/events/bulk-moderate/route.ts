@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/jwt"
 import { db } from "@/lib/db"
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest) {
   try {
     const session = await getSession()
 
@@ -19,72 +19,77 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 })
     }
 
-    const { id } = params
-    const { action, notes, adminId, reason } = await request.json()
+    const { action, ids, reason } = await request.json()
 
     if (!["approve", "reject"].includes(action)) {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 })
+    }
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return NextResponse.json({ error: "No event IDs provided" }, { status: 400 })
     }
 
     if (action === "reject" && !reason) {
       return NextResponse.json({ error: "Rejection reason is required" }, { status: 400 })
     }
 
-    const event = await db.event.findUnique({
-      where: { id },
+    // Fetch events to be updated
+    const events = await db.event.findMany({
+      where: { id: { in: ids } },
       include: {
         createdBy: {
-          select: {
-            email: true,
-            name: true,
-          },
+          select: { email: true, name: true },
         },
       },
     })
 
-    if (!event) {
-      return NextResponse.json({ error: "Event not found" }, { status: 404 })
+    if (events.length === 0) {
+      return NextResponse.json({ error: "No events found" }, { status: 404 })
     }
 
     const newStatus = action === "approve" ? "APPROVED" : "REJECTED"
-    const oldStatus = event.moderationStatus
 
-    const updatedEvent = await db.event.update({
-      where: { id },
+    // Bulk update all events
+    await db.event.updateMany({
+      where: { id: { in: ids } },
       data: {
         moderationStatus: newStatus,
         moderatedAt: new Date(),
-        moderatedBy: adminId,
+        moderatedBy: user.id,
         status: action === "approve" ? "PUBLISHED" : "ARCHIVED",
         aiStatus: action === "approve" ? "SAFE" : "REJECTED",
         publishedAt: action === "approve" ? new Date() : null,
-        reviewedBy: adminId,
+        reviewedBy: user.id,
         reviewedAt: new Date(),
         adminNotes: action === "reject" ? reason : undefined,
       },
     })
 
-    // Create audit log entry
-    await db.eventAuditLog.create({
-      data: {
-        eventId: id,
-        actor: "admin",
-        actorId: adminId,
-        action: action === "approve" ? "approved" : "rejected",
-        oldStatus,
-        newStatus,
-        notes,
-        reason: action === "reject" ? reason : (notes || `Event ${action}d by admin`),
-      },
+    // Create audit log entries for each event
+    await Promise.all(
+      events.map((event) =>
+        db.eventAuditLog.create({
+          data: {
+            eventId: event.id,
+            actor: "admin",
+            actorId: user.id,
+            action: action === "approve" ? "bulk_approved" : "bulk_rejected",
+            oldStatus: event.moderationStatus,
+            newStatus,
+            notes: reason || `Event ${action}d by admin (bulk action)`,
+            reason: reason || undefined,
+          },
+        })
+      )
+    )
+
+    return NextResponse.json({
+      success: true,
+      count: events.length,
+      message: `${events.length} event(s) ${action}d successfully`,
     })
-
-    if (action === "reject") {
-      console.log("[v0] Email disabled - Would have sent rejection email to:", event.createdBy.email)
-    }
-
-    return NextResponse.json({ success: true, event: updatedEvent })
   } catch (error) {
-    console.error("Error moderating event:", error)
+    console.error("Error bulk moderating events:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -1,14 +1,23 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter } from 'next/navigation'
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { CheckCircle2, XCircle, AlertTriangle, Clock, Sparkles, User, Mail, Tag } from "lucide-react"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { CheckCircle2, XCircle, AlertTriangle, Clock, Sparkles, User, Mail, Tag, ChevronDown, FileText } from 'lucide-react'
 import { CATEGORY_LABELS } from "@/lib/ai-extraction-constants"
 import type { BroadEventCategory } from "@/lib/types"
 import ClientOnly from "@/components/ClientOnly"
@@ -24,8 +33,16 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
   const [loading, setLoading] = useState(false)
   const [reviewNotes, setReviewNotes] = useState("")
   const [error, setError] = useState("")
+  const [isAIAnalysisOpen, setIsAIAnalysisOpen] = useState(false)
+  const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false)
+  const [rejectReason, setRejectReason] = useState("")
 
   const handleModeration = async (action: "approve" | "reject") => {
+    if (action === "reject") {
+      setIsRejectDialogOpen(true)
+      return
+    }
+
     setLoading(true)
     setError("")
 
@@ -53,23 +70,29 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
     }
   }
 
-  const handleAppealDecision = async (appealId: string, action: "approve" | "reject") => {
+  const handleConfirmReject = async () => {
+    if (!rejectReason.trim()) {
+      setError("Rejection reason is required")
+      return
+    }
+
     setLoading(true)
     setError("")
 
     try {
-      const response = await fetch(`/api/admin/events/${event.id}/appeal`, {
+      const response = await fetch(`/api/admin/events/${event.id}/moderate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          appealId,
-          action,
-          reviewNotes,
+          action: "reject",
+          notes: reviewNotes,
+          adminId,
+          reason: rejectReason,
         }),
       })
 
       if (!response.ok) {
-        throw new Error("Failed to process appeal")
+        throw new Error("Failed to reject event")
       }
 
       router.refresh()
@@ -78,19 +101,33 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
       setError(err instanceof Error ? err.message : "An error occurred")
     } finally {
       setLoading(false)
+      setIsRejectDialogOpen(false)
     }
   }
 
-  const getModerationIcon = (status: string) => {
+  const getStatusIcon = (status: string) => {
     switch (status) {
-      case "APPROVED":
+      case "PUBLISHED":
         return <CheckCircle2 className="h-5 w-5 text-green-600" />
-      case "REJECTED":
+      case "ARCHIVED":
         return <XCircle className="h-5 w-5 text-red-600" />
-      case "FLAGGED":
-        return <AlertTriangle className="h-5 w-5 text-yellow-600" />
+      case "DRAFT":
+        return <Clock className="h-5 w-5 text-yellow-600" />
       default:
         return <Clock className="h-5 w-5 text-gray-600" />
+    }
+  }
+
+  const getAIStatusIcon = (aiStatus: string) => {
+    switch (aiStatus) {
+      case "SAFE":
+        return <CheckCircle2 className="h-4 w-4 text-green-600" />
+      case "REJECTED":
+        return <XCircle className="h-4 w-4 text-red-600" />
+      case "NEEDS_REVIEW":
+        return <AlertTriangle className="h-4 w-4 text-yellow-600" />
+      default:
+        return <Clock className="h-4 w-4 text-gray-600" />
     }
   }
 
@@ -102,27 +139,48 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold">{event.title}</h1>
           <p className="text-muted-foreground">Submitted by {event.createdBy.name || event.createdBy.email}</p>
         </div>
-        <div className="flex items-center gap-2">
-          {getModerationIcon(event.moderationStatus)}
-          <Badge
-            variant={
-              event.moderationStatus === "APPROVED"
-                ? "default"
-                : event.moderationStatus === "REJECTED"
-                  ? "outline"
-                  : event.moderationStatus === "FLAGGED"
-                    ? "destructive"
-                    : "secondary"
-            }
-          >
-            {event.moderationStatus}
-          </Badge>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            {getStatusIcon(event.status)}
+            <div className="flex flex-col">
+              <span className="text-xs text-muted-foreground">Status</span>
+              <Badge
+                variant={
+                  event.status === "PUBLISHED"
+                    ? "default"
+                    : event.status === "ARCHIVED"
+                      ? "destructive"
+                      : "secondary"
+                }
+              >
+                {event.status}
+              </Badge>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {getAIStatusIcon(event.aiStatus)}
+            <div className="flex flex-col">
+              <span className="text-xs text-muted-foreground">AI Status</span>
+              <Badge
+                variant={
+                  event.aiStatus === "SAFE"
+                    ? "default"
+                    : event.aiStatus === "REJECTED"
+                      ? "destructive"
+                      : event.aiStatus === "NEEDS_REVIEW"
+                        ? "secondary"
+                        : "outline"
+                }
+              >
+                {event.aiStatus}
+              </Badge>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -131,6 +189,91 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
+
+      {event.adminNotes && (
+        <Card className="border-red-200 bg-red-50/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-900">
+              <FileText className="h-5 w-5" />
+              Admin Notes
+            </CardTitle>
+            <CardDescription>Reason provided by admin during moderation</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-lg border bg-white p-4">
+              <p className="text-sm whitespace-pre-wrap">{event.adminNotes}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Collapsible open={isAIAnalysisOpen} onOpenChange={setIsAIAnalysisOpen}>
+        <Card>
+          <CollapsibleTrigger className="w-full">
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">AI Analysis</CardTitle>
+                <ChevronDown
+                  className={`h-5 w-5 text-muted-foreground transition-transform ${
+                    isAIAnalysisOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </div>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="space-y-4 pt-0">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label className="text-sm font-medium">AI Status</Label>
+                  <div className="mt-1 flex items-center gap-2">
+                    {getAIStatusIcon(event.aiStatus)}
+                    <Badge
+                      variant={
+                        event.aiStatus === "SAFE"
+                          ? "default"
+                          : event.aiStatus === "REJECTED"
+                            ? "destructive"
+                            : event.aiStatus === "NEEDS_REVIEW"
+                              ? "secondary"
+                              : "outline"
+                      }
+                    >
+                      {event.aiStatus}
+                    </Badge>
+                  </div>
+                </div>
+
+                {event.aiAnalyzedAt && (
+                  <div>
+                    <Label className="text-sm font-medium">Analyzed At</Label>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      <ClientOnly>
+                        {new Date(event.aiAnalyzedAt).toLocaleString()}
+                      </ClientOnly>
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {event.aiSummary && (
+                <div>
+                  <Label className="text-sm font-medium">AI Summary</Label>
+                  <div className="mt-1 rounded-lg border bg-muted/50 p-3">
+                    <p className="text-sm text-muted-foreground">{event.aiSummary}</p>
+                  </div>
+                </div>
+              )}
+
+              {!event.aiAnalyzedAt && !event.aiSummary && event.aiStatus === "PENDING" && (
+                <p className="text-sm text-muted-foreground italic">
+                  AI analysis has not yet been performed on this event.
+                </p>
+              )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {(event.sourceText || event.extractionConfidence || event.tags?.length > 0) && (
         <Card className="border-purple-200 bg-purple-50/50">
@@ -142,7 +285,6 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
             <CardDescription>Information extracted from user input via AI</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Source Text */}
             {event.sourceText && (
               <div>
                 <Label className="text-sm font-medium">Original User Input</Label>
@@ -152,7 +294,6 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
               </div>
             )}
 
-            {/* Extraction Confidence Scores */}
             {event.extractionConfidence && (
               <div>
                 <Label className="text-sm font-medium">Extraction Confidence Scores</Label>
@@ -189,7 +330,6 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
             )}
 
             <div className="grid gap-4 sm:grid-cols-2">
-              {/* Category */}
               {event.category && (
                 <div>
                   <Label className="text-sm font-medium">AI-Assigned Category</Label>
@@ -201,7 +341,6 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
                 </div>
               )}
 
-              {/* Tags */}
               {event.tags && event.tags.length > 0 && (
                 <div>
                   <Label className="text-sm font-medium flex items-center gap-1">
@@ -219,7 +358,6 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
               )}
             </div>
 
-            {/* Organizer Info */}
             {(event.organizerName || event.organizerContact) && (
               <div>
                 <Label className="text-sm font-medium">Extracted Organizer Information</Label>
@@ -243,7 +381,6 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
         </Card>
       )}
 
-      {/* Moderation Status Card */}
       {event.moderationReason && (
         <Card>
           <CardHeader>
@@ -276,7 +413,6 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
         </Card>
       )}
 
-      {/* Event Details */}
       <Card>
         <CardHeader>
           <CardTitle>Event Details</CardTitle>
@@ -322,7 +458,6 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
         </CardContent>
       </Card>
 
-      {/* Appeals with Actions */}
       {event.appeals && event.appeals.length > 0 && (
         <Card>
           <CardHeader>
@@ -369,7 +504,6 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
         </Card>
       )}
 
-      {/* Audit Log */}
       {event.auditLogs && event.auditLogs.length > 0 && (
         <Card>
           <CardHeader>
@@ -393,8 +527,7 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
         </Card>
       )}
 
-      {/* Moderation Actions */}
-      {(event.moderationStatus === "PENDING" || event.moderationStatus === "FLAGGED") && (
+      {(event.status === "DRAFT" && (event.aiStatus === "NEEDS_REVIEW" || event.aiStatus === "REJECTED" || event.aiStatus === "PENDING")) && (
         <Card>
           <CardHeader>
             <CardTitle>Moderation Actions</CardTitle>
@@ -429,6 +562,52 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Event</DialogTitle>
+            <DialogDescription>
+              Please provide a reason for rejecting this event. This will be saved and visible to other admins.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="rejectReason">Rejection Reason *</Label>
+              <Textarea
+                id="rejectReason"
+                placeholder="Enter the reason for rejection..."
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                rows={4}
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                This reason will be stored in the admin notes and audit log.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsRejectDialogOpen(false)
+                setRejectReason("")
+              }}
+              disabled={loading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmReject}
+              disabled={loading || !rejectReason.trim()}
+            >
+              {loading ? "Rejecting..." : "Confirm Reject"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
