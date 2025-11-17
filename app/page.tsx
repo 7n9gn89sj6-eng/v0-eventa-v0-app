@@ -27,6 +27,11 @@ interface DraftEvent {
 
 export default function HomePage() {
   const { t } = useI18n()
+  const tHomeHero = t("home.hero")
+  const tHomeToast = t("home.toast")
+  const tHomeDrafts = t("home.drafts")
+  const tHomeSearch = t("home.search")
+  const tHomeFooter = t("home.footer")
   
   console.log("[v0] Post Event translation:", t("event.postEvent"))
   
@@ -217,17 +222,17 @@ export default function HomePage() {
       <main className="container mx-auto px-4 py-8">
         <div className="mx-auto max-w-3xl py-16 text-center">
           <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance sm:text-5xl">
-            {t("home.hero.title")}
+            {tHomeHero("title")}
           </h2>
           <p className="mb-8 text-lg text-muted-foreground text-balance">
-            {t("home.hero.subtitle")}
+            {tHomeHero("subtitle")}
           </p>
 
           <SmartInputBar
             onSearch={handleSmartSearch}
             onError={(error) => {
               toast({
-                title: t("home.toast.error"),
+                title: tHomeToast("error"),
                 description: error,
                 variant: "destructive",
               })
@@ -252,12 +257,12 @@ export default function HomePage() {
               className="mt-6 bg-transparent"
               onClick={() => setShowDraftsList(!showDraftsList)}
             >
-              {t("home.drafts.viewDrafts").replace("{count}", drafts.length.toString())}
+              {tHomeDrafts("viewDrafts").replace("{count}", drafts.length.toString())}
             </Button>
           )}
 
           <p className="mt-8 text-sm text-muted-foreground">
-            {t("home.hero.naturalLanguageHint")}
+            {tHomeHero("naturalLanguageHint")}
           </p>
         </div>
 
@@ -282,7 +287,7 @@ export default function HomePage() {
 
         {showDraftsList && (
           <div className="mx-auto max-w-2xl mt-12">
-            <h3 className="text-2xl font-semibold mb-6">{t("home.drafts.title")}</h3>
+            <h3 className="text-2xl font-semibold mb-6">{tHomeDrafts("title")}</h3>
             <DraftsList drafts={drafts} onEdit={handleEditDraft} onDelete={handleDeleteDraft} />
           </div>
         )}
@@ -297,7 +302,7 @@ export default function HomePage() {
                   size="icon"
                   className="h-8 w-8"
                   onClick={handleSpeakSearch}
-                  title={isSpeakingSearch ? t("home.search.speaking") : t("home.search.speak")}
+                  title={isSpeakingSearch ? tHomeSearch("speaking") : tHomeSearch("speak")}
                 >
                   {isSpeakingSearch ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
                 </Button>
@@ -328,7 +333,7 @@ export default function HomePage() {
               </div>
             ) : (
               <div className="text-center py-12">
-                <p className="text-lg text-muted-foreground">{t("home.search.noResults")}</p>
+                <p className="text-lg text-muted-foreground">{tHomeSearch("noResults")}</p>
               </div>
             )}
           </div>
@@ -337,7 +342,7 @@ export default function HomePage() {
 
       <footer className="mt-16 border-t bg-muted/30 py-8">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>{t("home.footer.tagline")}</p>
+          <p>{tHomeFooter("tagline")}</p>
         </div>
       </footer>
     </div>
