@@ -149,43 +149,51 @@ export async function moderateEventContent(event: {
   country: string
   externalUrl?: string
 }): Promise<ModerationResult> {
-  const { object } = await generateObject({
-    model: "openai/gpt-4o-mini",
-    schema: {
-      type: "object",
-      properties: {
-        status: {
-          type: "string",
-          enum: ["approved", "flagged", "rejected"],
-          description: "Moderation decision",
+  const controller = new AbortController()
+  const timeout = setTimeout(() => {
+    console.error("[v0] AI moderation timeout after 10 seconds")
+    controller.abort()
+  }, 10000)
+
+  try {
+    const { object } = await generateObject({
+      model: "openai/gpt-4o-mini",
+      abortSignal: controller.signal,
+      schema: {
+        type: "object",
+        properties: {
+          status: {
+            type: "string",
+            enum: ["approved", "flagged", "rejected"],
+            description: "Moderation decision",
+          },
+          reason: {
+            type: "string",
+            description: "Explanation of the moderation decision",
+          },
+          severity_level: {
+            type: "string",
+            enum: ["low", "medium", "high"],
+            description: "Severity of any issues found",
+          },
+          policy_category: {
+            type: "string",
+            description:
+              "Category of policy violation if any (e.g., grooming, hate_event, exploitation, criminal_activity, extremism, spam, inappropriate_content, safe)",
+          },
+          confidence: {
+            type: "number",
+            description: "Confidence level in the moderation decision (0-1)",
+          },
+          details: {
+            type: "array",
+            items: { type: "string" },
+            description: "Specific details about any issues found",
+          },
         },
-        reason: {
-          type: "string",
-          description: "Explanation of the moderation decision",
-        },
-        severity_level: {
-          type: "string",
-          enum: ["low", "medium", "high"],
-          description: "Severity of any issues found",
-        },
-        policy_category: {
-          type: "string",
-          description:
-            "Category of policy violation if any (e.g., grooming, hate_event, exploitation, criminal_activity, extremism, spam, inappropriate_content, safe)",
-        },
-        confidence: {
-          type: "number",
-          description: "Confidence level in the moderation decision (0-1)",
-        },
-        details: {
-          type: "array",
-          items: { type: "string" },
-          description: "Specific details about any issues found",
-        },
+        required: ["status", "reason", "severity_level", "policy_category", "confidence", "details"],
       },
-      required: ["status", "reason", "severity_level", "policy_category", "confidence", "details"],
-    },
-    prompt: `You are a content moderation AI protecting a community events platform. Analyze this event submission for harmful, inappropriate, or policy-violating content.
+      prompt: `You are a content moderation AI protecting a community events platform. Analyze this event submission for harmful, inappropriate, or policy-violating content.
 
 Event Details:
 Title: ${event.title}
@@ -216,7 +224,13 @@ Provide:
 6. Details: Specific issues or red flags found
 
 Be thorough but fair. Legitimate events should be approved. When in doubt, flag for human review rather than auto-rejecting.`,
-  })
+    })
 
-  return object as ModerationResult
+    clearTimeout(timeout)
+    return object as ModerationResult
+  } catch (error) {
+    clearTimeout(timeout)
+    console.error("[v0] AI moderation error:", error)
+    throw error
+  }
 }

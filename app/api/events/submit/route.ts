@@ -141,7 +141,36 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] Event created successfully")
 
+    let token = ""
+    let editUrl = ""
+    try {
+      token = generateId()
+      const tokenHash = await bcrypt.hash(token, 10)
+      const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      await sql`
+        INSERT INTO "EventEditToken" (id, "eventId", "tokenHash", expires, "createdAt")
+        VALUES (${generateId()}, ${eventId}, ${tokenHash}, ${expires.toISOString()}, NOW())
+      `
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      editUrl = `${appUrl}/event/confirm?token=${token}`
+      console.log("[v0] Edit token generated:", `${token.slice(0, 10)}...`)
+    } catch (tokenError) {
+      console.error("[v0] Token generation failed, user can regenerate later:", tokenError)
+    }
+
+    try {
+      const { sendEventEditLinkEmail } = await import("@/lib/email")
+      await sendEventEditLinkEmail(creatorEmail, validatedData.title, eventId, token)
+      console.log("[v0] Submission email sent successfully to:", creatorEmail)
+    } catch (emailError) {
+      console.error("[v0] Failed to send submission email, but event was created:", emailError)
+    }
+
     console.log("[v0] Starting AI moderation...")
+    let aiStatus: "SAFE" | "NEEDS_REVIEW" | "REJECTED" = "PENDING" as any
+    let finalEventStatus: "DRAFT" | "PUBLISHED" = "DRAFT"
+    let moderationReason = "Awaiting AI moderation"
+
     try {
       const { moderateEventContent } = await import("@/lib/ai-moderation")
       const moderationResult = await moderateEventContent({
@@ -154,19 +183,18 @@ export async function POST(request: NextRequest) {
 
       console.log("[v0] AI moderation completed:", moderationResult)
 
-      let aiStatus: "SAFE" | "NEEDS_REVIEW" | "REJECTED"
-      let eventStatus: "DRAFT" | "PUBLISHED"
-
       if (moderationResult.status === "approved") {
         aiStatus = "SAFE"
-        eventStatus = "PUBLISHED"
+        finalEventStatus = "PUBLISHED"
       } else if (moderationResult.status === "flagged") {
         aiStatus = "NEEDS_REVIEW"
-        eventStatus = "DRAFT"
+        finalEventStatus = "DRAFT"
       } else {
         aiStatus = "REJECTED"
-        eventStatus = "DRAFT"
+        finalEventStatus = "DRAFT"
       }
+
+      moderationReason = moderationResult.reason
 
       await sql`
         UPDATE "Event"
@@ -174,7 +202,7 @@ export async function POST(request: NextRequest) {
           "aiStatus" = ${aiStatus},
           "aiReason" = ${moderationResult.reason},
           "aiAnalyzedAt" = NOW(),
-          status = ${eventStatus},
+          status = ${finalEventStatus},
           "publishedAt" = ${aiStatus === "SAFE" ? new Date().toISOString() : null},
           "updatedAt" = NOW()
         WHERE id = ${eventId}
@@ -182,39 +210,48 @@ export async function POST(request: NextRequest) {
 
       console.log("[v0] Event updated with AI moderation results:", {
         aiStatus,
-        eventStatus,
+        eventStatus: finalEventStatus,
         reason: moderationResult.reason,
       })
     } catch (aiError) {
-      console.error("[v0] AI moderation failed, event will remain pending:", aiError)
+      console.error("[v0] AI moderation failed, flagging event for manual review:", aiError)
+      
+      try {
+        await sql`
+          UPDATE "Event"
+          SET 
+            "aiStatus" = 'NEEDS_REVIEW',
+            "aiReason" = 'AI moderation system error - requires manual review',
+            "aiAnalyzedAt" = NOW(),
+            "updatedAt" = NOW()
+          WHERE id = ${eventId}
+        `
+        aiStatus = "NEEDS_REVIEW"
+        moderationReason = "AI moderation system error - requires manual review"
+        console.log("[v0] Event flagged for manual review due to AI failure")
+      } catch (updateError) {
+        console.error("[v0] Failed to update event after AI failure:", updateError)
+      }
+      
+      // TODO: Send admin notification about AI failure (implement in Phase C)
     }
 
-    const token = generateId()
-    const tokenHash = await bcrypt.hash(token, 10)
-    const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-    await sql`
-      INSERT INTO "EventEditToken" (id, "eventId", "tokenHash", expires, "createdAt")
-      VALUES (${generateId()}, ${eventId}, ${tokenHash}, ${expires.toISOString()}, NOW())
-    `
-
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-    const editUrl = `${appUrl}/event/confirm?token=${token}`
-
-    try {
-      const { sendEventEditLinkEmail } = await import("@/lib/email")
-      await sendEventEditLinkEmail(creatorEmail, validatedData.title, eventId, token)
-      console.log("[v0] Submission email sent successfully to:", creatorEmail)
-      console.log("[v0] Edit token generated:", `${token.slice(0, 10)}...`)
-    } catch (emailError) {
-      console.error("[v0] Failed to send submission email, but event was created:", emailError)
-    }
+    const message = 
+      aiStatus === "SAFE" 
+        ? "Event created and published successfully! Your event is now live." 
+        : aiStatus === "NEEDS_REVIEW"
+        ? "Event created successfully! Your submission is under review and will be published once approved."
+        : aiStatus === "REJECTED"
+        ? "Event created but requires changes. Please check your email for details."
+        : "Event created successfully! Your submission is awaiting approval."
 
     return NextResponse.json({
       ok: true,
       eventId,
       token,
       editUrl,
-      message: "Event created successfully! Your submission is awaiting approval.",
+      message,
+      aiStatus, // Include for client debugging
     })
   } catch (error) {
     console.error("[v0] Error in POST /api/events/submit:", error)

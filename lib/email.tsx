@@ -24,12 +24,39 @@ function getResendClient() {
   })
 }
 
+async function sendEmailWithRetry(
+  transporter: nodemailer.Transporter,
+  mailOptions: nodemailer.SendMailOptions,
+  retries = 3
+): Promise<nodemailer.SentMessageInfo> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const info = await transporter.sendMail(mailOptions)
+      return info
+    } catch (error) {
+      console.error(`[v0] Email send attempt ${i + 1} failed:`, error)
+      
+      // If this was the last retry, throw the error
+      if (i === retries - 1) {
+        throw error
+      }
+      
+      // Exponential backoff: wait 1s, 2s, 4s before retrying
+      const waitTime = 1000 * Math.pow(2, i)
+      console.log(`[v0] Retrying email send in ${waitTime}ms...`)
+      await new Promise(resolve => setTimeout(resolve, waitTime))
+    }
+  }
+  
+  throw new Error("Email send failed after all retries")
+}
+
 export async function sendVerificationEmail(email: string, code: string) {
   try {
     const transporter = getResendClient()
     const from = process.env.EMAIL_FROM || "noreply@example.com"
 
-    const info = await transporter.sendMail({
+    const info = await sendEmailWithRetry(transporter, {
       from,
       to: email,
       subject: "Verify your email",
@@ -59,7 +86,7 @@ export async function sendEventEditLinkEmail(to: string, eventTitle: string, eve
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
     const editLink = `${appUrl}/edit/${token}`
 
-    const info = await transporter.sendMail({
+    const info = await sendEmailWithRetry(transporter, {
       from,
       to,
       subject: `Event Submitted: ${eventTitle}`,
@@ -67,6 +94,21 @@ export async function sendEventEditLinkEmail(to: string, eventTitle: string, eve
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2>Thank You for Your Submission!</h2>
           <p>Your event "<strong>${eventTitle}</strong>" has been submitted successfully and is awaiting approval.</p>
+          
+          <div style="margin: 30px 0; text-align: center;">
+            <a href="${editLink}" 
+               style="background-color: #000; color: #fff; padding: 12px 30px; 
+                      text-decoration: none; border-radius: 6px; display: inline-block; 
+                      font-weight: bold;">
+              Edit Your Event
+            </a>
+          </div>
+          
+          <p style="color: #666; font-size: 14px; text-align: center;">
+            You can use this link to edit your event details at any time.<br>
+            This link expires in 30 days.
+          </p>
+          
           <p style="color: #666; margin-top: 30px;">
             Our team will review your submission shortly. You'll receive another email once your event is approved.
           </p>
@@ -96,7 +138,7 @@ export async function sendEmail({
     const transporter = getResendClient()
     const from = process.env.EMAIL_FROM || "noreply@example.com"
 
-    const info = await transporter.sendMail({
+    const info = await sendEmailWithRetry(transporter, {
       from,
       to,
       subject,
