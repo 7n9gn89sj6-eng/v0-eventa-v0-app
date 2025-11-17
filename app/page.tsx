@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Volume2, VolumeX } from 'lucide-react'
+import { Volume2, VolumeX, Plus } from 'lucide-react'
 import { ResultCard } from "@/components/search/result-card"
 import { DraftEventCard } from "@/components/events/draft-event-card"
 import { DraftsList } from "@/components/events/drafts-list"
@@ -58,63 +58,6 @@ export default function HomePage() {
     setSearchParaphrase(paraphrase)
     setShowResults(true)
     setShowDraftCard(false)
-  }
-
-  const handleCreate = (extracted: any, paraphrase: string) => {
-    setShowResults(false)
-    setShowDraftCard(true)
-    setDraftParaphrase(paraphrase)
-
-    // Check for validation errors
-    if (extracted.validation?.pastDate) {
-      toast({
-        title: "Past Date Detected",
-        description: "The date you specified is in the past. Please choose a future date.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if (extracted.validation?.timeConflicts) {
-      toast({
-        title: "Conflicting Times",
-        description: `Multiple conflicting times detected: ${extracted.validation.timeConflicts.join(", ")}. Please clarify.`,
-        variant: "destructive",
-      })
-    }
-
-    if (extracted.validation?.invalidDate) {
-      toast({
-        title: "Invalid Date",
-        description: "The date format is invalid. Please use a valid date.",
-        variant: "destructive",
-      })
-    }
-
-    // Set draft with extracted data
-    setCurrentDraft({
-      title: extracted.title || "",
-      category: extracted.type || "",
-      city: extracted.city || "",
-      venue: extracted.venue || "",
-      date: extracted.date_iso || "",
-      time: extracted.time_24h || "",
-      description: extracted.description || "",
-    })
-
-    // Check for missing fields and ask follow-up
-    if (extracted.missingFields && extracted.missingFields.length > 0) {
-      const missing = extracted.missingFields[0]
-      if (missing === "date") {
-        setFollowUpQuestion("When would you like this event to take place?")
-      } else if (missing === "time") {
-        setFollowUpQuestion("What time should the event start?")
-      } else if (missing === "location") {
-        setFollowUpQuestion("Where will this event be held?")
-      } else if (missing === "title") {
-        setFollowUpQuestion("What would you like to call this event?")
-      }
-    }
   }
 
   const handleConfirmDraft = (draft: DraftEvent) => {
@@ -177,7 +120,6 @@ export default function HomePage() {
       speak(searchParaphrase, locale)
       setIsSpeakingSearch(true)
 
-      // Reset speaking state when speech ends
       if (typeof window !== "undefined" && "speechSynthesis" in window) {
         const checkSpeaking = setInterval(() => {
           if (!window.speechSynthesis.speaking) {
@@ -249,6 +191,13 @@ export default function HomePage() {
         setShowResults(true)
         setShowDraftCard(false)
       }
+
+      if (/create|make|host|post|add|schedule|organize|set up/i.test(query)) {
+        toast({
+          title: "Want to create an event?",
+          description: "Use the Post Event button to submit your event.",
+        })
+      }
     } catch (error: any) {
       console.error("[v0] Search error:", error)
       toast({
@@ -260,90 +209,8 @@ export default function HomePage() {
     }
   }
 
-  const handleSmartCreate = async (query: string) => {
-    console.log("[v0] Smart create:", query)
-
-    try {
-      const extractResponse = await fetch("/api/ai/extract-event", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source_text: query }),
-      })
-
-      if (!extractResponse.ok) {
-        const errorText = await extractResponse.text()
-        console.error("[v0] Extract API failed:", extractResponse.status, errorText)
-        throw new Error(`Event extraction failed (${extractResponse.status})`)
-      }
-
-      const extracted = await extractResponse.json()
-      console.log("[v0] Extracted data:", extracted)
-
-      // Check confidence
-      const avgConfidence =
-        (extracted.confidence.datetime + extracted.confidence.location + extracted.confidence.title) / 3
-
-      if (avgConfidence < 0.6) {
-        // Low confidence - ask follow-up or route to advanced form
-        const lowConfidenceFields = []
-        if (extracted.confidence.datetime < 0.6) lowConfidenceFields.push("date/time")
-        if (extracted.confidence.location < 0.6) lowConfidenceFields.push("location")
-
-        toast({
-          title: "Need More Details",
-          description: `Please clarify: ${lowConfidenceFields.join(", ")}`,
-        })
-
-        // Route to advanced form with prefilled data
-        const params = new URLSearchParams({
-          title: extracted.title || "",
-          description: extracted.description || "",
-          location: extracted.location?.address || "",
-        })
-        window.location.href = `/events/new?${params.toString()}`
-        return
-      }
-
-      // Create draft and redirect to review
-      const draftId = `draft-${Date.now()}`
-      const draft = {
-        id: draftId,
-        title: extracted.title || "",
-        category: extracted.category || "",
-        city: extracted.location?.city || "",
-        venue: extracted.location?.venue || "",
-        date: extracted.datetime?.date || "",
-        time: extracted.datetime?.time || "",
-        description: extracted.description || "",
-        sourceText: query,
-      }
-
-      // Save to localStorage
-      const existingDrafts = JSON.parse(localStorage.getItem("eventa-drafts") || "[]")
-      localStorage.setItem("eventa-drafts", JSON.stringify([...existingDrafts, draft]))
-
-      // Redirect to advanced form with draft
-      window.location.href = `/events/new?draftId=${draftId}`
-    } catch (error: any) {
-      console.error("[v0] Create error:", error)
-
-      toast({
-        title: "Creation Failed",
-        description: error?.message || "Failed to extract event details. Redirecting to form...",
-        variant: "destructive",
-      })
-
-      // Route to advanced form on failure
-      const params = new URLSearchParams({ description: query })
-      window.location.href = `/events/new?${params.toString()}`
-
-      throw error
-    }
-  }
-
   return (
     <div className="min-h-screen bg-background">
-      {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="mx-auto max-w-3xl py-16 text-center">
           <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance sm:text-5xl">
@@ -355,7 +222,6 @@ export default function HomePage() {
 
           <SmartInputBar
             onSearch={handleSmartSearch}
-            onCreate={handleSmartCreate}
             onError={(error) => {
               toast({
                 title: t("home.toast.error"),
@@ -365,7 +231,14 @@ export default function HomePage() {
             }}
           />
 
-          <div className="mt-6">{/* SearchFiltersComponent removed */}</div>
+          <div className="mt-6 flex justify-center">
+            <Button asChild size="lg" className="gap-2">
+              <Link href="/add-event">
+                <Plus className="h-5 w-5" />
+                {t("event.postEvent")}
+              </Link>
+            </Button>
+          </div>
 
           {drafts.length > 0 && (
             <Button
@@ -408,7 +281,6 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Search results */}
         {showResults && (
           <div className="mx-auto max-w-4xl mt-12">
             {searchParaphrase && (
@@ -457,7 +329,6 @@ export default function HomePage() {
         )}
       </main>
 
-      {/* Footer */}
       <footer className="mt-16 border-t bg-muted/30 py-8">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
           <p>{t("home.footer.tagline")}</p>
