@@ -131,7 +131,6 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
           const formatted = date.toISOString().slice(0, 16)
           form.setValue("startAt", formatted)
         } catch (e) {
-          console.error("[v0] Failed to parse date:", e)
         }
       }
 
@@ -143,7 +142,6 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
           const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000)
           form.setValue("endAt", endDate.toISOString().slice(0, 16))
         } catch (e) {
-          console.error("[v0] Failed to calculate end date:", e)
         }
       }
 

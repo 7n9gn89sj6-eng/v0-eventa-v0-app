@@ -1,32 +1,26 @@
-"use client"
-
-import { Suspense } from "react"
+import { use, Suspense } from "react"
 import { AddEventFormWrapper } from "@/components/events/add-event-form-wrapper"
-import type { Metadata } from "next"
-import { useI18n } from "@/lib/i18n/context"
 
-// Note: metadata export removed since this is now a client component
-// Metadata would need to be handled differently for client components
 
 export default function AddEventPage({
   searchParams,
 }: {
-  searchParams: { title?: string; description?: string; location?: string; date?: string; draft?: string }
+  searchParams: Promise<{ title?: string; description?: string; location?: string; date?: string; draft?: string }>
 }) {
-  const { t } = useI18n()
-  const tForm = t("form")
+  const params = use(searchParams)
+
+  const initialData = {
+    title: params.title,
+    description: params.description,
+    location: params.location,
+    date: params.date,
+  }
+  
+  const draftId = params.draft
 
   return (
-    <div className="container mx-auto max-w-2xl px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-balance">{tForm("page.title")}</h1>
-        <p className="mt-2 text-muted-foreground text-pretty">
-          {tForm("page.subtitle")}
-        </p>
-      </div>
-      <Suspense fallback={<div>Loading...</div>}>
-        <AddEventFormWrapper initialData={searchParams} draftId={searchParams.draft} />
-      </Suspense>
-    </div>
+    <Suspense fallback={<div className="container mx-auto max-w-2xl px-4 py-8">Loading...</div>}>
+      <AddEventFormWrapper initialData={initialData} draftId={draftId} />
+    </Suspense>
   )
 }
