@@ -1,6 +1,5 @@
 import "server-only"
 import { generateObject } from "ai"
-import { openai } from "@ai-sdk/openai"
 import type { EventExtractionInput, EventExtractionOutput } from "./types"
 import { nextSaturday, nextSunday, set } from "date-fns"
 export { CATEGORY_LABELS, categoryToEnum } from "./ai-extraction-constants"
@@ -79,7 +78,7 @@ function parseWeekendBlock(text: string) {
 
 export async function extractEventFromText(input: EventExtractionInput): Promise<EventExtractionOutput> {
   const { object } = await generateObject({
-    model: openai("gpt-4o"),
+    model: "openai/gpt-4o",
     schema: {
       type: "object",
       properties: {
@@ -315,7 +314,7 @@ export async function suggestFollowUpQuestion(
   missingField: "datetime" | "location",
 ): Promise<string> {
   const { text } = await generateObject({
-    model: openai("gpt-4o-mini"),
+    model: "openai/gpt-4o-mini",
     schema: {
       type: "object",
       properties: {
