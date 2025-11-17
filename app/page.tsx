@@ -221,13 +221,6 @@ export default function HomePage() {
     <div className="min-h-screen bg-background">
       <main className="container mx-auto px-4 py-8">
         <div className="mx-auto max-w-3xl py-16 text-center">
-          <h2 className="mb-4 text-4xl font-bold tracking-tight text-balance sm:text-5xl">
-            {tHomeHero("title")}
-          </h2>
-          <p className="mb-8 text-lg text-muted-foreground text-balance">
-            {tHomeHero("subtitle")}
-          </p>
-
           <SmartInputBar
             onSearch={handleSmartSearch}
             onError={(error) => {
@@ -260,10 +253,6 @@ export default function HomePage() {
               {tHomeDrafts("viewDrafts").replace("{count}", drafts.length.toString())}
             </Button>
           )}
-
-          <p className="mt-8 text-sm text-muted-foreground">
-            {tHomeHero("naturalLanguageHint")}
-          </p>
         </div>
 
         {showDraftCard && currentDraft && (
@@ -339,12 +328,6 @@ export default function HomePage() {
           </div>
         )}
       </main>
-
-      <footer className="mt-16 border-t bg-muted/30 py-8">
-        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>{tHomeFooter("tagline")}</p>
-        </div>
-      </footer>
     </div>
   )
 }
