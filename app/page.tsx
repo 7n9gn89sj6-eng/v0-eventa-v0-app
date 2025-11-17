@@ -27,6 +27,9 @@ interface DraftEvent {
 
 export default function HomePage() {
   const { t } = useI18n()
+  
+  console.log("[v0] Post Event translation:", t("event.postEvent"))
+  
   const locale = "en"
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [searchParaphrase, setSearchParaphrase] = useState("")
@@ -231,11 +234,14 @@ export default function HomePage() {
             }}
           />
 
-          <div className="mt-6 flex justify-center">
-            <Button asChild size="lg" className="gap-2">
-              <Link href="/add-event">
+          <div className="mt-8 flex flex-col items-center gap-4">
+            <p className="text-2xl font-bold text-foreground">
+              To create an event, please use this button:
+            </p>
+            <Button asChild size="lg" className="gap-2 min-w-[200px]">
+              <Link href="/add-event" className="flex items-center gap-2">
                 <Plus className="h-5 w-5" />
-                {t("event.postEvent")}
+                <span>Post Event</span>
               </Link>
             </Button>
           </div>

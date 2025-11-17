@@ -77,6 +77,9 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
       tHome("chips.jazzWeekend"),
       tHome("chips.athensFood"),
       tHome("chips.kidsSaturday"),
+      tHome("chips.communityMarkets"),
+      tHome("chips.garageSale"),
+      tHome("chips.celebrations"),
     ]
 
     const guidanceText = tHome("search.searchGuidance")
