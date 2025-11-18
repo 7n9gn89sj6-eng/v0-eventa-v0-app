@@ -116,6 +116,17 @@ export interface EventVisibilityShape {
   aiStatus: EventAIStatus | null
 }
 
+/**
+ * Admin-friendly status display for events.
+ * Combines status and aiStatus into a single, human-readable representation.
+ */
+export interface AdminDisplayStatus {
+  label: string // e.g. "Published", "Needs Review", "Rejected", "Draft"
+  description: string // One-sentence explanation of what this means
+  variant: "success" | "warning" | "destructive" | "default" // Badge color
+  icon: "check" | "alert" | "x" | "clock" // Icon to display
+}
+
 export interface EventExtractionOutput {
   title: string
   start: string // ISO8601

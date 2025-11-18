@@ -11,6 +11,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CheckCircle2, XCircle, AlertTriangle, Clock, Inbox, ChevronLeft, ChevronRight, FileText } from 'lucide-react'
 import ClientOnly from "@/components/ClientOnly"
 import { BulkActionBar } from "@/components/admin/bulk-action-bar"
+import { getAdminDisplayStatus } from "@/lib/events"
+import type { EventStatus, EventAIStatus } from "@/lib/types"
 
 interface Event {
   id: string
@@ -93,81 +95,32 @@ export function AdminEventsTable({ events, stats, currentTab, currentPage, total
     }
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "PUBLISHED":
-        return (
-          <div className="flex items-center gap-1.5">
-            <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-            <Badge variant="default">PUBLISHED</Badge>
-          </div>
-        )
-      case "ARCHIVED":
-        return (
-          <div className="flex items-center gap-1.5">
-            <XCircle className="h-3.5 w-3.5 text-red-600" />
-            <Badge variant="destructive">ARCHIVED</Badge>
-          </div>
-        )
-      case "DRAFT":
-        return (
-          <div className="flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5 text-yellow-600" />
-            <Badge variant="secondary">DRAFT</Badge>
-          </div>
-        )
-      default:
-        return (
-          <div className="flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5 text-gray-600" />
-            <Badge variant="secondary">{status}</Badge>
-          </div>
-        )
-    }
-  }
+  const getStatusBadge = (event: Event) => {
+    const displayStatus = getAdminDisplayStatus({
+      status: event.status as EventStatus,
+      aiStatus: event.aiStatus as EventAIStatus | null,
+    })
 
-  const getAIStatusBadge = (aiStatus: string | null) => {
-    if (!aiStatus) {
-      return <span className="text-sm text-muted-foreground">-</span>
-    }
+    const IconComponent = 
+      displayStatus.icon === "check" ? CheckCircle2 :
+      displayStatus.icon === "alert" ? AlertTriangle :
+      displayStatus.icon === "x" ? XCircle :
+      Clock
 
-    switch (aiStatus) {
-      case "SAFE":
-        return (
-          <div className="flex items-center gap-1.5">
-            <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-            <Badge variant="default">SAFE</Badge>
-          </div>
-        )
-      case "REJECTED":
-        return (
-          <div className="flex items-center gap-1.5">
-            <XCircle className="h-3.5 w-3.5 text-red-600" />
-            <Badge variant="destructive">REJECTED</Badge>
-          </div>
-        )
-      case "NEEDS_REVIEW":
-        return (
-          <div className="flex items-center gap-1.5">
-            <AlertTriangle className="h-3.5 w-3.5 text-yellow-600" />
-            <Badge variant="secondary">NEEDS_REVIEW</Badge>
-          </div>
-        )
-      case "PENDING":
-        return (
-          <div className="flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5 text-gray-600" />
-            <Badge variant="outline">PENDING</Badge>
-          </div>
-        )
-      default:
-        return (
-          <div className="flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5 text-gray-600" />
-            <Badge variant="outline">{aiStatus}</Badge>
-          </div>
-        )
-    }
+    const iconColor = 
+      displayStatus.variant === "success" ? "text-green-600" :
+      displayStatus.variant === "warning" ? "text-yellow-600" :
+      displayStatus.variant === "destructive" ? "text-red-600" :
+      "text-gray-600"
+
+    return (
+      <div className="flex items-center gap-1.5" title={displayStatus.description}>
+        <IconComponent className={`h-3.5 w-3.5 ${iconColor}`} />
+        <Badge variant={displayStatus.variant === "success" ? "default" : displayStatus.variant}>
+          {displayStatus.label}
+        </Badge>
+      </div>
+    )
   }
 
   const getEmptyStateMessage = (tab: string) => {
@@ -237,7 +190,6 @@ export function AdminEventsTable({ events, stats, currentTab, currentPage, total
                     <TableHead>Event Title</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>AI Status</TableHead>
                     <TableHead className="w-[50px]">Notes</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -265,10 +217,7 @@ export function AdminEventsTable({ events, stats, currentTab, currentPage, total
                         </span>
                       </TableCell>
                       <TableCell>
-                        {getStatusBadge(event.status)}
-                      </TableCell>
-                      <TableCell>
-                        {getAIStatusBadge(event.aiStatus)}
+                        {getStatusBadge(event)}
                       </TableCell>
                       <TableCell>
                         {event.adminNotes && (

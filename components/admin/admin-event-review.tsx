@@ -19,8 +19,9 @@ import {
 } from "@/components/ui/dialog"
 import { CheckCircle2, XCircle, AlertTriangle, Clock, Sparkles, User, Mail, Tag, ChevronDown, FileText } from 'lucide-react'
 import { CATEGORY_LABELS } from "@/lib/ai-extraction-constants"
-import type { BroadEventCategory } from "@/lib/types"
+import type { BroadEventCategory, EventStatus, EventAIStatus } from "@/lib/types"
 import ClientOnly from "@/components/ClientOnly"
+import { getAdminDisplayStatus } from "@/lib/events"
 
 interface AdminEventReviewProps {
   event: any
@@ -105,37 +106,28 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
     }
   }
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "PUBLISHED":
-        return <CheckCircle2 className="h-5 w-5 text-green-600" />
-      case "ARCHIVED":
-        return <XCircle className="h-5 w-5 text-red-600" />
-      case "DRAFT":
-        return <Clock className="h-5 w-5 text-yellow-600" />
-      default:
-        return <Clock className="h-5 w-5 text-gray-600" />
-    }
-  }
-
-  const getAIStatusIcon = (aiStatus: string) => {
-    switch (aiStatus) {
-      case "SAFE":
-        return <CheckCircle2 className="h-4 w-4 text-green-600" />
-      case "REJECTED":
-        return <XCircle className="h-4 w-4 text-red-600" />
-      case "NEEDS_REVIEW":
-        return <AlertTriangle className="h-4 w-4 text-yellow-600" />
-      default:
-        return <Clock className="h-4 w-4 text-gray-600" />
-    }
-  }
-
   const renderConfidenceScore = (score: number) => {
     const percentage = Math.round(score * 100)
     const color = percentage >= 80 ? "text-green-600" : percentage >= 60 ? "text-yellow-600" : "text-red-600"
     return <span className={`font-semibold ${color}`}>{percentage}%</span>
   }
+
+  const displayStatus = getAdminDisplayStatus({
+    status: event.status as EventStatus,
+    aiStatus: event.aiStatus as EventAIStatus | null,
+  })
+
+  const StatusIcon = 
+    displayStatus.icon === "check" ? CheckCircle2 :
+    displayStatus.icon === "alert" ? AlertTriangle :
+    displayStatus.icon === "x" ? XCircle :
+    Clock
+
+  const iconColor = 
+    displayStatus.variant === "success" ? "text-green-600" :
+    displayStatus.variant === "warning" ? "text-yellow-600" :
+    displayStatus.variant === "destructive" ? "text-red-600" :
+    "text-gray-600"
 
   return (
     <div className="space-y-6">
@@ -146,41 +138,17 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
         </div>
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            {getStatusIcon(event.status)}
+            <StatusIcon className={`h-5 w-5 ${iconColor}`} />
             <div className="flex flex-col">
-              <span className="text-xs text-muted-foreground">Status</span>
-              <Badge
-                variant={
-                  event.status === "PUBLISHED"
-                    ? "default"
-                    : event.status === "ARCHIVED"
-                      ? "destructive"
-                      : "secondary"
-                }
-              >
-                {event.status}
+              <span className="text-xs text-muted-foreground">Event Status</span>
+              <Badge variant={displayStatus.variant === "success" ? "default" : displayStatus.variant}>
+                {displayStatus.label}
               </Badge>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {getAIStatusIcon(event.aiStatus)}
-            <div className="flex flex-col">
-              <span className="text-xs text-muted-foreground">AI Status</span>
-              <Badge
-                variant={
-                  event.aiStatus === "SAFE"
-                    ? "default"
-                    : event.aiStatus === "REJECTED"
-                      ? "destructive"
-                      : event.aiStatus === "NEEDS_REVIEW"
-                        ? "secondary"
-                        : "outline"
-                }
-              >
-                {event.aiStatus}
-              </Badge>
-            </div>
-          </div>
+          <p className="text-xs text-muted-foreground max-w-[200px]">
+            {displayStatus.description}
+          </p>
         </div>
       </div>
 
@@ -227,7 +195,6 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
                 <div>
                   <Label className="text-sm font-medium">AI Status</Label>
                   <div className="mt-1 flex items-center gap-2">
-                    {getAIStatusIcon(event.aiStatus)}
                     <Badge
                       variant={
                         event.aiStatus === "SAFE"
@@ -478,13 +445,13 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
 
                 {appeal.status === "pending" && (
                   <div className="flex gap-2 mt-3">
-                    <Button size="sm" onClick={() => handleAppealDecision(appeal.id, "approve")} disabled={loading}>
+                    <Button size="sm" onClick={() => handleModeration("approve")} disabled={loading}>
                       Approve Appeal
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleAppealDecision(appeal.id, "reject")}
+                      onClick={() => handleModeration("reject")}
                       disabled={loading}
                     >
                       Reject Appeal
