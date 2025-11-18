@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation"
+import { redirect } from 'next/navigation'
 import { getSession } from "@/lib/jwt"
 import { db } from "@/lib/db"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -41,17 +41,40 @@ export default async function FavoritesPage() {
       </div>
 
       {favorites.length === 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>No favorites yet</CardTitle>
-            <CardDescription>Start exploring events and bookmark your favorites!</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button asChild>
-              <Link href="/">Discover Events</Link>
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="flex items-center justify-center py-16">
+          <Card className="max-w-md text-center">
+            <CardHeader>
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-8 w-8 text-muted-foreground"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+                  />
+                </svg>
+              </div>
+              <CardTitle>No favorite events yet</CardTitle>
+              <CardDescription>
+                Tap the heart on events you like, and they'll show up here for easy access.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Button asChild size="lg" className="w-full">
+                <Link href="/events">Browse Events</Link>
+              </Button>
+              <Button asChild variant="outline" size="lg" className="w-full">
+                <Link href="/">Search Events</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {favorites.map(({ event }) => (

@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation"
+import { redirect } from 'next/navigation'
 import { getSession } from "@/lib/jwt"
 import { db } from "@/lib/db"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -56,19 +56,37 @@ export default async function MyEventsPage() {
 
       <Suspense fallback={<LoadingSpinner size="lg" className="py-12" />}>
         {user.events.length === 0 ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>No events yet</CardTitle>
-              <CardDescription>
-                {"You haven't submitted any events. Create your first event to get started!"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button asChild>
-                <Link href="/add-event">Add Your First Event</Link>
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="flex items-center justify-center py-16">
+            <Card className="max-w-md text-center">
+              <CardHeader>
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-8 w-8 text-muted-foreground"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                </div>
+                <CardTitle>{"You haven't posted any events yet"}</CardTitle>
+                <CardDescription>
+                  When you create events, they'll appear here so you can edit and track them.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button asChild size="lg" className="w-full">
+                  <Link href="/add-event">Post Your First Event</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {user.events.map((event) => (
