@@ -7,7 +7,6 @@ import { validateEventEditToken } from "@/lib/eventEditToken"
 import { ok, fail } from "@/lib/http"
 import { createAuditLog } from "@/lib/audit-log"
 import { moderateEventContent } from "@/lib/ai-moderation"
-import { notifyAdminOfFlaggedEvent } from "@/lib/admin-notifications"
 import { sendEmail } from "@/lib/email"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
@@ -229,42 +228,46 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
           notes: `AI re-moderation after edit: ${moderationResult.policy_category}`,
         })
 
-        if (moderationResult.status === "flagged" || moderationResult.status === "rejected") {
-          await notifyAdminOfFlaggedEvent({
-            id,
-            title: body.title,
-            description: body.description,
-            moderationStatus: newStatus,
-            moderationReason: moderationResult.reason,
-            moderationSeverity: moderationResult.severity_level.toUpperCase(),
-            moderationCategory: moderationResult.policy_category,
-          })
+        if (moderationResult.status === "flagged") {
+          try {
+            const { notifyAdminsEventNeedsReview } = await import("@/lib/admin-notifications")
+            await notifyAdminsEventNeedsReview({
+              eventId: id,
+              title: body.title,
+              city: body.city,
+              country: body.country,
+              aiStatus: "NEEDS_REVIEW",
+              aiReason: moderationResult.reason,
+            })
+          } catch (notifyError) {
+            console.error("[v0] Failed to send admin notification after re-moderation:", notifyError)
+          }
+        }
 
-          if (moderationResult.status === "rejected") {
-            try {
-              await sendEmail({
-                to: event.createdBy.email,
-                subject: `Event Rejected: ${body.title}`,
-                html: `
-                  <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h2 style="color: #dc2626;">Event Rejected After Edit</h2>
-                    
-                    <p>Hello ${event.createdBy.name || "there"},</p>
-                    
-                    <p>Your edited event submission has been rejected by our moderation system.</p>
-                    
-                    <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; margin: 16px 0;">
-                      <p style="margin: 0; font-weight: bold;">Event: ${body.title}</p>
-                      <p style="margin: 8px 0 0 0;">Reason: ${moderationResult.reason}</p>
-                    </div>
-                    
-                    <p>You can edit your event again and resubmit it for review.</p>
+        if (moderationResult.status === "rejected") {
+          try {
+            await sendEmail({
+              to: event.createdBy.email,
+              subject: `Event Rejected: ${body.title}`,
+              html: `
+                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h2 style="color: #dc2626;">Event Rejected After Edit</h2>
+                  
+                  <p>Hello ${event.createdBy.name || "there"},</p>
+                  
+                  <p>Your edited event submission has been rejected by our moderation system.</p>
+                  
+                  <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; margin: 16px 0;">
+                    <p style="margin: 0; font-weight: bold;">Event: ${body.title}</p>
+                    <p style="margin: 8px 0 0 0;">Reason: ${moderationResult.reason}</p>
                   </div>
-                `,
-              })
-            } catch (emailError) {
-              console.error("[v0] Failed to send rejection email:", emailError)
-            }
+                  
+                  <p>You can edit your event again and resubmit it for review.</p>
+                </div>
+              `,
+            })
+          } catch (emailError) {
+            console.error("[v0] Failed to send rejection email:", emailError)
           }
         }
       })
@@ -282,7 +285,6 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
           message: errorMessage,
         })
         
-        // Update event to NEEDS_REVIEW instead of leaving it in PENDING
         try {
           const failureReason = isTimeout 
             ? "AI re-moderation timeout - requires manual review"
@@ -297,7 +299,6 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
             },
           })
           
-          // Create audit log for the failure
           await createAuditLog({
             eventId: id,
             actor: "ai",
@@ -309,6 +310,20 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
           })
           
           console.log("[v0] Event flagged for manual review after AI re-moderation failure")
+          
+          try {
+            const { notifyAdminsEventNeedsReview } = await import("@/lib/admin-notifications")
+            await notifyAdminsEventNeedsReview({
+              eventId: id,
+              title: body.title,
+              city: body.city,
+              country: body.country,
+              aiStatus: "NEEDS_REVIEW",
+              aiReason: failureReason,
+            })
+          } catch (notifyError) {
+            console.error("[v0] Failed to send admin notification after re-moderation failure:", notifyError)
+          }
         } catch (updateError) {
           console.error("[v0] Failed to update event after AI re-moderation failure:", updateError)
         }

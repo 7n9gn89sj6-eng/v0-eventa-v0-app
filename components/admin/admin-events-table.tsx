@@ -8,11 +8,12 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { CheckCircle2, XCircle, AlertTriangle, Clock, Inbox, ChevronLeft, ChevronRight, FileText } from 'lucide-react'
+import { CheckCircle2, XCircle, AlertTriangle, Clock, Inbox, ChevronLeft, ChevronRight, FileText, Check, X, Loader2 } from 'lucide-react'
 import ClientOnly from "@/components/ClientOnly"
 import { BulkActionBar } from "@/components/admin/bulk-action-bar"
 import { getAdminDisplayStatus } from "@/lib/events"
-import type { EventStatus, EventAIStatus } from "@/lib/types"
+import type { EventStatus, EventAIStatus, AdminDisplayStatus } from "@/lib/types"
+import { useToast } from "@/hooks/use-toast"
 
 interface Event {
   id: string
@@ -47,9 +48,11 @@ interface AdminEventsTableProps {
 export function AdminEventsTable({ events, stats, currentTab, currentPage, totalPages }: AdminEventsTableProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { toast } = useToast()
   
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [selectAll, setSelectAll] = useState(false)
+  const [loadingEventIds, setLoadingEventIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     setSelectedIds([])
@@ -138,6 +141,62 @@ export function AdminEventsTable({ events, stats, currentTab, currentPage, total
     }
   }
 
+  const handleQuickModeration = async (eventId: string, action: "approve" | "reject") => {
+    setLoadingEventIds(prev => new Set(prev).add(eventId))
+
+    try {
+      const response = await fetch(`/api/admin/events/${eventId}/moderate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          notes: `Quick ${action} from events table`,
+          adminId: "current-admin", // This will be validated by the backend
+          reason: action === "reject" ? "Rejected via quick action" : undefined,
+        }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || `Failed to ${action} event`)
+      }
+
+      toast({
+        title: action === "approve" ? "Event approved" : "Event rejected",
+        description: action === "approve" 
+          ? "The event has been published and is now visible to users."
+          : "The event has been rejected and hidden from public view.",
+        variant: action === "approve" ? "default" : "destructive",
+      })
+
+      router.refresh()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : `Couldn't ${action} this event. Please try again.`,
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingEventIds(prev => {
+        const next = new Set(prev)
+        next.delete(eventId)
+        return next
+      })
+    }
+  }
+
+  const getQuickActions = (event: Event): { canApprove: boolean; canReject: boolean } => {
+    const displayStatus = getAdminDisplayStatus({
+      status: event.status as EventStatus,
+      aiStatus: event.aiStatus as EventAIStatus | null,
+    })
+
+    const canApprove = displayStatus.label !== "Published"
+    const canReject = displayStatus.label !== "Rejected"
+
+    return { canApprove, canReject }
+  }
+
   return (
     <div className="space-y-6">
       <Tabs value={currentTab} onValueChange={handleTabChange}>
@@ -195,45 +254,84 @@ export function AdminEventsTable({ events, stats, currentTab, currentPage, total
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {events.map((event) => (
-                    <TableRow key={event.id}>
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedIds.includes(event.id)}
-                          onCheckedChange={(checked) => 
-                            handleSelectOne(event.id, checked as boolean)
-                          }
-                          aria-label={`Select ${event.title}`}
-                        />
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        <Link href={`/admin/events/${event.id}`} className="hover:underline">
-                          {event.title}
-                        </Link>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm text-muted-foreground">
-                          <ClientOnly>{new Date(event.createdAt).toLocaleDateString()}</ClientOnly>
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        {getStatusBadge(event)}
-                      </TableCell>
-                      <TableCell>
-                        {event.adminNotes && (
-                          <FileText 
-                            className="h-4 w-4 text-muted-foreground" 
-                            title="Has admin notes"
+                  {events.map((event) => {
+                    const { canApprove, canReject } = getQuickActions(event)
+                    const isLoading = loadingEventIds.has(event.id)
+
+                    return (
+                      <TableRow key={event.id}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedIds.includes(event.id)}
+                            onCheckedChange={(checked) => 
+                              handleSelectOne(event.id, checked as boolean)
+                            }
+                            aria-label={`Select ${event.title}`}
                           />
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button asChild variant="outline" size="sm">
-                          <Link href={`/admin/events/${event.id}`}>View</Link>
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          <Link href={`/admin/events/${event.id}`} className="hover:underline">
+                            {event.title}
+                          </Link>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-muted-foreground">
+                            <ClientOnly>{new Date(event.createdAt).toLocaleDateString()}</ClientOnly>
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          {getStatusBadge(event)}
+                        </TableCell>
+                        <TableCell>
+                          {event.adminNotes && (
+                            <FileText 
+                              className="h-4 w-4 text-muted-foreground" 
+                              title="Has admin notes"
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {canApprove && (
+                              <Button 
+                                size="sm" 
+                                variant="ghost"
+                                className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                onClick={() => handleQuickModeration(event.id, "approve")}
+                                disabled={isLoading}
+                                title="Approve and publish"
+                              >
+                                {isLoading ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Check className="h-4 w-4" />
+                                )}
+                              </Button>
+                            )}
+                            {canReject && (
+                              <Button 
+                                size="sm" 
+                                variant="ghost"
+                                className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                onClick={() => handleQuickModeration(event.id, "reject")}
+                                disabled={isLoading}
+                                title="Reject and hide"
+                              >
+                                {isLoading ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <X className="h-4 w-4" />
+                                )}
+                              </Button>
+                            )}
+                            <Button asChild variant="outline" size="sm">
+                              <Link href={`/admin/events/${event.id}`}>View</Link>
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
             </CardContent>

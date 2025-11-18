@@ -238,6 +238,23 @@ export async function POST(request: NextRequest) {
       } catch (auditError) {
         console.error("[v0] Failed to create AI moderation audit log:", auditError)
       }
+      
+      if (aiStatus === "NEEDS_REVIEW") {
+        try {
+          const { notifyAdminsEventNeedsReview } = await import("@/lib/admin-notifications")
+          await notifyAdminsEventNeedsReview({
+            eventId,
+            title: validatedData.title,
+            city,
+            country,
+            aiStatus,
+            aiReason: moderationResult.reason,
+          })
+        } catch (notifyError) {
+          console.error("[v0] Failed to send admin notification:", notifyError)
+          // Don't fail the submission if notification fails
+        }
+      }
     } catch (aiError) {
       console.error("[v0] AI moderation failed, flagging event for manual review:", aiError)
       
@@ -286,11 +303,24 @@ export async function POST(request: NextRequest) {
         } catch (auditError) {
           console.error("[v0] Failed to create AI failure audit log:", auditError)
         }
+        
+        try {
+          const { notifyAdminsEventNeedsReview } = await import("@/lib/admin-notifications")
+          await notifyAdminsEventNeedsReview({
+            eventId,
+            title: validatedData.title,
+            city,
+            country,
+            aiStatus: "NEEDS_REVIEW",
+            aiReason: failureReason,
+          })
+        } catch (notifyError) {
+          console.error("[v0] Failed to send admin notification after AI failure:", notifyError)
+          // Don't fail the submission if notification fails
+        }
       } catch (updateError) {
         console.error("[v0] Failed to update event after AI failure:", updateError)
       }
-      
-      // TODO: Send admin notification about AI failure (implement in Phase C)
     }
 
     const message = 
