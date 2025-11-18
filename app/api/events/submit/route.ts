@@ -158,12 +158,22 @@ export async function POST(request: NextRequest) {
       console.error("[v0] Token generation failed, user can regenerate later:", tokenError)
     }
 
-    try {
+    let emailSent = false
+    let emailWarning = ""
+    
+    if (token) {
       const { sendEventEditLinkEmail } = await import("@/lib/email")
-      await sendEventEditLinkEmail(creatorEmail, validatedData.title, eventId, token)
-      console.log("[v0] Submission email sent successfully to:", creatorEmail)
-    } catch (emailError) {
-      console.error("[v0] Failed to send submission email, but event was created:", emailError)
+      const emailResult = await sendEventEditLinkEmail(creatorEmail, validatedData.title, eventId, token)
+      
+      if (emailResult.success) {
+        console.log("[v0] Submission email sent successfully to:", creatorEmail)
+        emailSent = true
+      } else {
+        console.error("[v0] Failed to send submission email:", emailResult.error)
+        emailWarning = "We created your event, but had trouble sending the confirmation email. You can regenerate the edit link from your event page."
+      }
+    } else {
+      emailWarning = "Event created but edit link could not be generated. Please contact support for assistance."
     }
 
     console.log("[v0] Starting AI moderation...")
@@ -213,22 +223,69 @@ export async function POST(request: NextRequest) {
         eventStatus: finalEventStatus,
         reason: moderationResult.reason,
       })
+      
+      try {
+        const { createAuditLog } = await import("@/lib/audit-log")
+        await createAuditLog({
+          eventId,
+          actor: "ai",
+          action: aiStatus === "SAFE" ? "AI_APPROVED" : aiStatus === "REJECTED" ? "AI_REJECTED" : "AI_FLAGGED",
+          oldStatus: "PENDING",
+          newStatus: aiStatus,
+          reason: moderationResult.reason,
+          notes: `AI moderation completed: ${moderationResult.policy_category} (confidence: ${moderationResult.confidence})`,
+        })
+      } catch (auditError) {
+        console.error("[v0] Failed to create AI moderation audit log:", auditError)
+      }
     } catch (aiError) {
       console.error("[v0] AI moderation failed, flagging event for manual review:", aiError)
       
+      // Extract error details for logging
+      const errorMessage = aiError instanceof Error ? aiError.message : String(aiError)
+      const errorName = aiError instanceof Error ? aiError.name : "Unknown"
+      const isTimeout = errorMessage.includes("abort") || errorMessage.includes("timeout")
+      
+      console.error("[v0] AI moderation failure details:", {
+        errorType: errorName,
+        isTimeout,
+        eventId,
+        message: errorMessage,
+      })
+      
       try {
+        const failureReason = isTimeout 
+          ? "AI moderation timeout - requires manual review"
+          : `AI moderation system error: ${errorName} - requires manual review`
+        
         await sql`
           UPDATE "Event"
           SET 
             "aiStatus" = 'NEEDS_REVIEW',
-            "aiReason" = 'AI moderation system error - requires manual review',
+            "aiReason" = ${failureReason},
             "aiAnalyzedAt" = NOW(),
             "updatedAt" = NOW()
           WHERE id = ${eventId}
         `
         aiStatus = "NEEDS_REVIEW"
-        moderationReason = "AI moderation system error - requires manual review"
+        moderationReason = failureReason
         console.log("[v0] Event flagged for manual review due to AI failure")
+        
+        try {
+          const { createAuditLog } = await import("@/lib/audit-log")
+          await createAuditLog({
+            eventId,
+            actor: "ai",
+            action: "AI_MODERATION_FAILED",
+            oldStatus: "PENDING",
+            newStatus: "NEEDS_REVIEW",
+            reason: errorMessage,
+            notes: `AI moderation failed: ${errorName}. ${isTimeout ? "Timeout after 10 seconds." : "System error."} Event flagged for manual review.`,
+          })
+          console.log("[v0] AI failure audit log created successfully")
+        } catch (auditError) {
+          console.error("[v0] Failed to create AI failure audit log:", auditError)
+        }
       } catch (updateError) {
         console.error("[v0] Failed to update event after AI failure:", updateError)
       }
@@ -251,7 +308,9 @@ export async function POST(request: NextRequest) {
       token,
       editUrl,
       message,
-      aiStatus, // Include for client debugging
+      aiStatus,
+      emailSent,
+      ...(emailWarning && { emailWarning }),
     })
   } catch (error) {
     console.error("[v0] Error in POST /api/events/submit:", error)

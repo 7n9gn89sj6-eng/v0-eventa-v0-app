@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db"
 import { randomUUID } from "crypto"
 import bcrypt from "bcryptjs"
+import { createAuditLog } from "@/lib/audit-log"
 
 /**
  * Creates an event edit token for the given event
@@ -42,6 +43,17 @@ export async function validateEventEditToken(eventId: string, token: string): Pr
   })
 
   if (tokenRecords.length === 0) {
+    console.warn("[v0] Token validation failed: no tokens found for event", eventId)
+    
+    await createAuditLog({
+      eventId,
+      action: "EDIT_TOKEN_INVALID",
+      details: "No edit tokens found for this event",
+      metadata: {
+        tokenProvided: token.substring(0, 8) + "...", // Log first 8 chars for debugging
+      },
+    }).catch((err) => console.error("[v0] Failed to create audit log:", err))
+    
     return "invalid"
   }
 
@@ -49,17 +61,38 @@ export async function validateEventEditToken(eventId: string, token: string): Pr
     const isMatch = await bcrypt.compare(token, record.tokenHash)
 
     if (isMatch) {
-      // Found matching token, check if expired
       const now = new Date()
       if (record.expires <= now) {
+        console.warn("[v0] Token validation failed: token expired for event", eventId)
+        
+        await createAuditLog({
+          eventId,
+          action: "EDIT_TOKEN_EXPIRED",
+          details: `Edit token expired on ${record.expires.toISOString()}`,
+          metadata: {
+            expiredAt: record.expires.toISOString(),
+            attemptedAt: now.toISOString(),
+          },
+        }).catch((err) => console.error("[v0] Failed to create audit log:", err))
+        
         return "expired"
       }
 
-      // Token is valid
+      console.log("[v0] Token validation successful for event", eventId)
       return "ok"
     }
   }
 
-  // No matching token found
+  console.warn("[v0] Token validation failed: token hash mismatch for event", eventId)
+  
+  await createAuditLog({
+    eventId,
+    action: "EDIT_TOKEN_INVALID",
+    details: "Token hash does not match any stored tokens",
+    metadata: {
+      tokenProvided: token.substring(0, 8) + "...",
+    },
+  }).catch((err) => console.error("[v0] Failed to create audit log:", err))
+  
   return "invalid"
 }

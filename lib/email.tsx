@@ -1,6 +1,10 @@
 import "server-only"
 import nodemailer from "nodemailer"
 
+export type EmailResult = 
+  | { success: true; messageId: string }
+  | { success: false; error: string }
+
 function getResendClient() {
   const host = process.env.EMAIL_SERVER_HOST
   const port = process.env.EMAIL_SERVER_PORT
@@ -51,7 +55,79 @@ async function sendEmailWithRetry(
   throw new Error("Email send failed after all retries")
 }
 
-export async function sendVerificationEmail(email: string, code: string) {
+export async function sendSafeEmail({
+  to,
+  subject,
+  html,
+  emailType = "generic",
+  eventId,
+}: {
+  to: string
+  subject: string
+  html: string
+  emailType?: "event_edit_link" | "verification" | "appeal_notification" | "generic"
+  eventId?: string
+}): Promise<EmailResult> {
+  try {
+    const transporter = getResendClient()
+    const from = process.env.EMAIL_FROM || "noreply@example.com"
+
+    const info = await sendEmailWithRetry(transporter, {
+      from,
+      to,
+      subject,
+      html,
+    })
+
+    console.log(`[v0] Email sent successfully - Type: ${emailType}, To: ${to}, ID: ${info.messageId}`)
+    
+    // Create audit log for email success if eventId provided
+    if (eventId) {
+      try {
+        const { createAuditLog } = await import("@/lib/audit-log")
+        await createAuditLog({
+          eventId,
+          actor: "user",
+          action: "EMAIL_SENT",
+          notes: `Email sent successfully - Type: ${emailType}, To: ${to}`,
+        })
+      } catch (auditError) {
+        console.error("[v0] Failed to create email success audit log:", auditError)
+      }
+    }
+
+    return { success: true, messageId: info.messageId }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorName = error instanceof Error ? error.name : "Unknown"
+    
+    console.error(`[v0] Email send failed - Type: ${emailType}, To: ${to}`, {
+      errorType: errorName,
+      errorMessage,
+    })
+
+    // Create audit log for email failure if eventId provided
+    if (eventId) {
+      try {
+        const { createAuditLog } = await import("@/lib/audit-log")
+        await createAuditLog({
+          eventId,
+          actor: "user",
+          action: "EMAIL_SEND_FAILED",
+          notes: `Email send failed - Type: ${emailType}, To: ${to}, Error: ${errorName}`,
+          reason: errorMessage,
+        })
+        console.log("[v0] Email failure audit log created successfully")
+      } catch (auditError) {
+        console.error("[v0] Failed to create email failure audit log:", auditError)
+      }
+    }
+
+    return { success: false, error: errorMessage }
+  }
+}
+
+export async function sendVerificationEmail(email: string, code: string): Promise<EmailResult> {
   try {
     const transporter = getResendClient()
     const from = process.env.EMAIL_FROM || "noreply@example.com"
@@ -73,56 +149,52 @@ export async function sendVerificationEmail(email: string, code: string) {
     })
 
     console.log("[v0] Verification email sent successfully to:", email, "ID:", info.messageId)
+    return { success: true, messageId: info.messageId }
   } catch (error) {
     console.error("[v0] Error sending verification email:", error)
-    throw error instanceof Error ? error : new Error("Failed to send verification email")
+    return { success: false, error: error instanceof Error ? error.message : "Failed to send verification email" }
   }
 }
 
-export async function sendEventEditLinkEmail(to: string, eventTitle: string, eventId: string, token: string) {
-  try {
-    const transporter = getResendClient()
-    const from = process.env.EMAIL_FROM || "noreply@example.com"
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-    const editLink = `${appUrl}/edit/${token}`
+export async function sendEventEditLinkEmail(
+  to: string,
+  eventTitle: string,
+  eventId: string,
+  token: string
+): Promise<EmailResult> {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+  const editLink = `${appUrl}/edit/${eventId}?token=${token}`
 
-    const info = await sendEmailWithRetry(transporter, {
-      from,
-      to,
-      subject: `Event Submitted: ${eventTitle}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2>Thank You for Your Submission!</h2>
-          <p>Your event "<strong>${eventTitle}</strong>" has been submitted successfully and is awaiting approval.</p>
-          
-          <div style="margin: 30px 0; text-align: center;">
-            <a href="${editLink}" 
-               style="background-color: #000; color: #fff; padding: 12px 30px; 
-                      text-decoration: none; border-radius: 6px; display: inline-block; 
-                      font-weight: bold;">
-              Edit Your Event
-            </a>
-          </div>
-          
-          <p style="color: #666; font-size: 14px; text-align: center;">
-            You can use this link to edit your event details at any time.<br>
-            This link expires in 30 days.
-          </p>
-          
-          <p style="color: #666; margin-top: 30px;">
-            Our team will review your submission shortly. You'll receive another email once your event is approved.
-          </p>
+  return sendSafeEmail({
+    to,
+    subject: `Event Submitted: ${eventTitle}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Thank You for Your Submission!</h2>
+        <p>Your event "<strong>${eventTitle}</strong>" has been submitted successfully and is awaiting approval.</p>
+        
+        <div style="margin: 30px 0; text-align: center;">
+          <a href="${editLink}" 
+             style="background-color: #000; color: #fff; padding: 12px 30px; 
+                    text-decoration: none; border-radius: 6px; display: inline-block; 
+                    font-weight: bold;">
+            Edit Your Event
+          </a>
         </div>
-      `,
-    })
-
-    console.log("[v0] Submission email sent successfully")
-    console.log("[v0] Email recipient:", to)
-    console.log("[v0] Email message ID:", info.messageId)
-  } catch (error) {
-    console.error("[v0] Error sending submission email:", error)
-    throw error instanceof Error ? error : new Error("Failed to send submission email")
-  }
+        
+        <p style="color: #666; font-size: 14px; text-align: center;">
+          You can use this link to edit your event details at any time.<br>
+          This link expires in 30 days.
+        </p>
+        
+        <p style="color: #666; margin-top: 30px;">
+          Our team will review your submission shortly. You'll receive another email once your event is approved.
+        </p>
+      </div>
+    `,
+    emailType: "event_edit_link",
+    eventId,
+  })
 }
 
 export async function sendEmail({
@@ -133,21 +205,11 @@ export async function sendEmail({
   to: string
   subject: string
   html: string
-}) {
-  try {
-    const transporter = getResendClient()
-    const from = process.env.EMAIL_FROM || "noreply@example.com"
-
-    const info = await sendEmailWithRetry(transporter, {
-      from,
-      to,
-      subject,
-      html,
-    })
-
-    console.log("[v0] Email sent successfully to:", to, "subject:", subject, "ID:", info.messageId)
-  } catch (error) {
-    console.error("[v0] Error sending email:", error)
-    throw error instanceof Error ? error : new Error("Failed to send email")
-  }
+}): Promise<EmailResult> {
+  return sendSafeEmail({
+    to,
+    subject,
+    html,
+    emailType: "generic",
+  })
 }

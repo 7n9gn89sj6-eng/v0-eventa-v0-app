@@ -85,6 +85,37 @@ export interface ExtractionConfidence {
   category: number // 0..1
 }
 
+/**
+ * Event publication status.
+ * Determines the lifecycle stage of an event.
+ * 
+ * - DRAFT: Event is being created/edited, not visible to public
+ * - PUBLISHED: Event is live and visible to public (if AI also approves)
+ * - ARCHIVED: Event is completed or removed from active listings
+ * - PENDING: Legacy status, same as DRAFT for most purposes
+ */
+export type EventStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED" | "PENDING"
+
+/**
+ * AI moderation status for events.
+ * Determines if AI has reviewed and approved the content.
+ * 
+ * - PENDING: Awaiting AI moderation review
+ * - SAFE: AI approved, content is appropriate
+ * - NEEDS_REVIEW: AI flagged for manual admin review
+ * - REJECTED: AI determined content violates policies
+ */
+export type EventAIStatus = "PENDING" | "SAFE" | "NEEDS_REVIEW" | "REJECTED"
+
+/**
+ * Shape of an event object for visibility checks.
+ * Used by helpers that determine if an event should be publicly visible.
+ */
+export interface EventVisibilityShape {
+  status: EventStatus
+  aiStatus: EventAIStatus | null
+}
+
 export interface EventExtractionOutput {
   title: string
   start: string // ISO8601
@@ -99,4 +130,19 @@ export interface EventExtractionOutput {
   tags: string[] // max 5
   confidence: ExtractionConfidence
   notes_for_user: string[] // short clarifications
+}
+
+/**
+ * Response from the event submission API.
+ * Includes both the event details and email delivery status.
+ */
+export interface EventSubmitResponse {
+  ok: boolean
+  eventId: string
+  token: string
+  editUrl: string
+  message: string
+  aiStatus: EventAIStatus
+  emailSent: boolean
+  emailWarning?: string
 }

@@ -12,6 +12,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { Badge } from "@/components/ui/badge"
 import ClientOnly from "@/components/ClientOnly"
 import { useI18n } from "@/lib/i18n/context"
+import { isEventPublic } from "@/lib/events"
 
 const CATEGORIES = [
   "All",
@@ -42,6 +43,7 @@ interface Event {
   priceAmount?: number
   imageUrls: string[]
   status: string
+  aiStatus: string
   source?: string
   location?: {
     address?: string
@@ -99,6 +101,7 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
           priceFree: false,
           imageUrls: ext.imageUrl ? [ext.imageUrl] : [],
           status: "PUBLISHED",
+          aiStatus: "SAFE",
           source: ext.source,
           imageUrl: ext.imageUrl,
           externalUrl: ext.externalUrl,

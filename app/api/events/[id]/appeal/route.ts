@@ -4,7 +4,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/jwt"
 import { db } from "@/lib/db"
 import { createAuditLog } from "@/lib/audit-log"
-import { sendEmail } from "@/lib/email"
+import { sendSafeEmail } from "@/lib/email"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -80,43 +80,45 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // Notify admin
     const adminEmail = process.env.ADMIN_EMAIL || process.env.EMAIL_FROM
     if (adminEmail) {
-      try {
-        await sendEmail({
-          to: adminEmail,
-          subject: `Appeal Submitted: ${event.title}`,
-          html: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #2563eb;">Event Appeal Submitted</h2>
-              
-              <p>A user has submitted an appeal for a rejected event.</p>
-              
-              <div style="background: #eff6ff; border-left: 4px solid #2563eb; padding: 16px; margin: 16px 0;">
-                <p style="margin: 0; font-weight: bold;">Event: ${event.title}</p>
-                <p style="margin: 8px 0 0 0;">Submitted by: ${event.createdBy.name || event.createdBy.email}</p>
-              </div>
-
-              <h3>Appeal Reason:</h3>
-              <p>${reason}</p>
-
-              <h3>Original Rejection:</h3>
-              <p><strong>Reason:</strong> ${event.moderationReason || "N/A"}</p>
-              <p><strong>Category:</strong> ${event.moderationCategory || "N/A"}</p>
-
-              <div style="margin-top: 24px; padding: 16px; background: #f3f4f6; border-radius: 8px;">
-                <p style="margin: 0;"><strong>Action Required:</strong></p>
-                <p style="margin: 8px 0 0 0;">
-                  Please review this appeal in the admin dashboard.
-                </p>
-                <a href="${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/admin/events/${id}" 
-                   style="display: inline-block; margin-top: 12px; padding: 10px 20px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px;">
-                  Review Appeal
-                </a>
-              </div>
+      const emailResult = await sendSafeEmail({
+        to: adminEmail,
+        subject: `Appeal Submitted: ${event.title}`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">Event Appeal Submitted</h2>
+            
+            <p>A user has submitted an appeal for a rejected event.</p>
+            
+            <div style="background: #eff6ff; border-left: 4px solid #2563eb; padding: 16px; margin: 16px 0;">
+              <p style="margin: 0; font-weight: bold;">Event: ${event.title}</p>
+              <p style="margin: 8px 0 0 0;">Submitted by: ${event.createdBy.name || event.createdBy.email}</p>
             </div>
-          `,
-        })
-      } catch (emailError) {
-        console.error("[v0] Failed to send appeal notification:", emailError)
+
+            <h3>Appeal Reason:</h3>
+            <p>${reason}</p>
+
+            <h3>Original Rejection:</h3>
+            <p><strong>Reason:</strong> ${event.moderationReason || "N/A"}</p>
+            <p><strong>Category:</strong> ${event.moderationCategory || "N/A"}</p>
+
+            <div style="margin-top: 24px; padding: 16px; background: #f3f4f6; border-radius: 8px;">
+              <p style="margin: 0;"><strong>Action Required:</strong></p>
+              <p style="margin: 8px 0 0 0;">
+                Please review this appeal in the admin dashboard.
+              </p>
+              <a href="${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/admin/events/${id}" 
+                 style="display: inline-block; margin-top: 12px; padding: 10px 20px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px;">
+                Review Appeal
+              </a>
+            </div>
+          </div>
+        `,
+        emailType: "appeal_notification",
+        eventId: id,
+      })
+      
+      if (!emailResult.success) {
+        console.error("[v0] Failed to send appeal notification:", emailResult.error)
       }
     }
 

@@ -2,12 +2,11 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/jwt"
 import { db } from "@/lib/db"
 import { createEventEditToken } from "@/lib/eventEditToken"
-import { sendEventEditLinkEmail } from "@/lib/email"
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await getSession()
-    const { id: eventId } = await params
+    const { id: eventId } = params
 
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -48,13 +47,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const sendEmail = body.sendEmail === true
 
     let emailSent = false
+    let emailError = ""
+    
     if (sendEmail && event.createdBy?.email) {
-      try {
-        await sendEventEditLinkEmail(event.createdBy.email, event.title, event.id, token)
-        emailSent = true
+      const { sendEventEditLinkEmail } = await import("@/lib/email")
+      const emailResult = await sendEventEditLinkEmail(
+        event.createdBy.email,
+        event.title,
+        event.id,
+        token
+      )
+      
+      if (emailResult.success) {
         console.log("[v0] Edit link email sent to:", event.createdBy.email)
-      } catch (emailError) {
-        console.error("[v0] Failed to send regeneration email:", emailError)
+        emailSent = true
+      } else {
+        console.error("[v0] Failed to send regeneration email:", emailResult.error)
+        emailError = emailResult.error
       }
     }
 
@@ -62,6 +71,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       token,
       editUrl,
       emailSent,
+      ...(emailError && { emailError }),
     })
   } catch (error) {
     console.error("[v0] Error regenerating edit token:", error)

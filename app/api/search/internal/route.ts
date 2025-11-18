@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { DateTime } from "luxon"
+import { PUBLIC_EVENT_WHERE } from "@/lib/events"
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
@@ -18,8 +19,8 @@ export async function POST(request: NextRequest) {
     }
 
     const where: any = {
-      status: "PUBLISHED",
-      moderationStatus: "APPROVED",
+      ...PUBLIC_EVENT_WHERE,
+      moderationStatus: "APPROVED", // Keep for backward compatibility
       startAt: dateFilter || { gte: new Date() },
     }
 

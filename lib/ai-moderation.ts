@@ -1,4 +1,5 @@
 import { generateObject, generateText } from "ai"
+import type { EventStatus, EventAIStatus } from "./types"
 
 export interface EventAnalysis {
   qualityScore: number // 0-100
@@ -10,6 +11,10 @@ export interface EventAnalysis {
   shouldAutoApprove: boolean
 }
 
+/**
+ * Result of AI content moderation.
+ * Maps to EventAIStatus and event status changes.
+ */
 export interface ModerationResult {
   status: "approved" | "flagged" | "rejected"
   reason: string
@@ -17,6 +22,39 @@ export interface ModerationResult {
   policy_category: string
   confidence: number // 0-1
   details: string[]
+}
+
+/**
+ * Converts moderation result status to EventAIStatus.
+ * 
+ * @param moderationStatus - The moderation result status
+ * @returns Corresponding EventAIStatus value
+ */
+export function moderationStatusToAIStatus(
+  moderationStatus: ModerationResult["status"]
+): EventAIStatus {
+  switch (moderationStatus) {
+    case "approved":
+      return "SAFE"
+    case "flagged":
+      return "NEEDS_REVIEW"
+    case "rejected":
+      return "REJECTED"
+    default:
+      return "NEEDS_REVIEW"
+  }
+}
+
+/**
+ * Determines the event status based on moderation result.
+ * 
+ * @param moderationStatus - The moderation result status
+ * @returns Corresponding EventStatus value
+ */
+export function moderationStatusToEventStatus(
+  moderationStatus: ModerationResult["status"]
+): EventStatus {
+  return moderationStatus === "approved" ? "PUBLISHED" : "DRAFT"
 }
 
 export async function analyzeEventContent(event: {

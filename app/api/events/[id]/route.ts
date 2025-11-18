@@ -268,8 +268,50 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
           }
         }
       })
-      .catch((error) => {
-        console.error("[v0] Re-moderation failed:", error)
+      .catch(async (error) => {
+        console.error("[v0] Re-moderation failed after edit:", error)
+        
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        const errorName = error instanceof Error ? error.name : "Unknown"
+        const isTimeout = errorMessage.includes("abort") || errorMessage.includes("timeout")
+        
+        console.error("[v0] AI re-moderation failure details:", {
+          errorType: errorName,
+          isTimeout,
+          eventId: id,
+          message: errorMessage,
+        })
+        
+        // Update event to NEEDS_REVIEW instead of leaving it in PENDING
+        try {
+          const failureReason = isTimeout 
+            ? "AI re-moderation timeout - requires manual review"
+            : `AI re-moderation system error: ${errorName} - requires manual review`
+          
+          await db.event.update({
+            where: { id },
+            data: {
+              moderationStatus: "NEEDS_REVIEW",
+              moderationReason: failureReason,
+              moderatedAt: new Date(),
+            },
+          })
+          
+          // Create audit log for the failure
+          await createAuditLog({
+            eventId: id,
+            actor: "ai",
+            action: "AI_MODERATION_FAILED",
+            oldStatus: "PENDING",
+            newStatus: "NEEDS_REVIEW",
+            reason: errorMessage,
+            notes: `AI re-moderation failed after edit: ${errorName}. ${isTimeout ? "Timeout after 10 seconds." : "System error."} Event flagged for manual review.`,
+          })
+          
+          console.log("[v0] Event flagged for manual review after AI re-moderation failure")
+        } catch (updateError) {
+          console.error("[v0] Failed to update event after AI re-moderation failure:", updateError)
+        }
       })
 
     return ok({ event: updatedEvent })

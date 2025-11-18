@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/db"
-
-export const runtime = "nodejs"
+import { PUBLIC_EVENT_WHERE } from "@/lib/events"
 
 const EXTERNAL_STUB_EVENTS = [
   {
@@ -36,6 +35,8 @@ const EXTERNAL_STUB_EVENTS = [
   },
 ]
 
+export const runtime = "nodejs"
+
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const q = (url.searchParams.get("query") || url.searchParams.get("q") || "").trim()
@@ -49,12 +50,12 @@ export async function GET(req: NextRequest) {
     if (!q) {
       const [events, count] = await Promise.all([
         prisma.event.findMany({
-          where: { status: "PUBLISHED" },
+          where: PUBLIC_EVENT_WHERE,
           orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
           take,
           skip,
         }),
-        prisma.event.count({ where: { status: "PUBLISHED" } }),
+        prisma.event.count({ where: PUBLIC_EVENT_WHERE }),
       ])
       return NextResponse.json({
         events,
@@ -68,7 +69,7 @@ export async function GET(req: NextRequest) {
     }
 
     const where: any = {
-      status: "PUBLISHED",
+      ...PUBLIC_EVENT_WHERE,
       OR: [
         { title: { contains: q, mode: "insensitive" } },
         { description: { contains: q, mode: "insensitive" } },

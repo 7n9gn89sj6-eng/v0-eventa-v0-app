@@ -1,11 +1,12 @@
-import { redirect } from "next/navigation"
+import { redirect } from 'next/navigation'
 import { db } from "@/lib/db"
 import { EditEventForm } from "@/components/events/edit-event-form"
 import { validateEventEditToken } from "@/lib/eventEditToken"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle, Lock } from "lucide-react"
+import { AlertCircle, Lock, Clock, Mail } from 'lucide-react'
 import Link from "next/link"
+import { Button } from "@/components/ui/button"
 
 export default async function EditEventPage({
   params,
@@ -52,20 +53,39 @@ export default async function EditEventPage({
       return (
         <div className="container mx-auto px-4 py-12">
           <div className="mx-auto max-w-2xl">
-            <Card>
+            <Card className="border-amber-200 dark:border-amber-900">
               <CardHeader>
                 <div className="flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5 text-destructive" />
+                  <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                   <CardTitle>Edit Link Expired</CardTitle>
                 </div>
-                <CardDescription>
-                  This edit link has expired. Edit links are valid for 30 days after creation.
+                <CardDescription className="space-y-2 text-base">
+                  <p>This edit link has expired for security reasons.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Edit links are valid for 30 days from when they're created to protect your event information.
+                  </p>
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <Link href={`/events/${id}`} className="text-primary hover:underline">
-                  View event details →
-                </Link>
+              <CardContent className="space-y-4">
+                <div className="rounded-lg bg-muted p-4">
+                  <h4 className="mb-2 flex items-center gap-2 font-medium">
+                    <Mail className="h-4 w-4" />
+                    What to do next:
+                  </h4>
+                  <ul className="ml-6 list-disc space-y-1 text-sm text-muted-foreground">
+                    <li>Your event still exists and is safe</li>
+                    <li>Check your email for a newer edit link</li>
+                    <li>Or visit the event page below to request a new link</li>
+                  </ul>
+                </div>
+                <div className="flex gap-3">
+                  <Button asChild variant="default">
+                    <Link href={`/events/${id}`}>View Event Details</Link>
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link href="/">Back to Home</Link>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -77,20 +97,36 @@ export default async function EditEventPage({
       return (
         <div className="container mx-auto px-4 py-12">
           <div className="mx-auto max-w-2xl">
-            <Card>
+            <Card className="border-destructive/50">
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <AlertCircle className="h-5 w-5 text-destructive" />
                   <CardTitle>Invalid Edit Link</CardTitle>
                 </div>
-                <CardDescription>
-                  This edit link is invalid. Please check the URL or look for the correct link in your email.
+                <CardDescription className="space-y-2 text-base">
+                  <p>This edit link is not valid.</p>
+                  <p className="text-sm text-muted-foreground">
+                    The link may have been copied incorrectly or may not exist.
+                  </p>
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <Link href={`/events/${id}`} className="text-primary hover:underline">
-                  View event details →
-                </Link>
+              <CardContent className="space-y-4">
+                <div className="rounded-lg bg-muted p-4">
+                  <h4 className="mb-2 font-medium">What to check:</h4>
+                  <ul className="ml-6 list-disc space-y-1 text-sm text-muted-foreground">
+                    <li>Make sure you copied the entire link from your email</li>
+                    <li>Check that the link wasn't broken across multiple lines</li>
+                    <li>Try clicking the link directly from the email instead of copying</li>
+                  </ul>
+                </div>
+                <div className="flex gap-3">
+                  <Button asChild variant="default">
+                    <Link href={`/events/${id}`}>View Event Details</Link>
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link href="/">Back to Home</Link>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>

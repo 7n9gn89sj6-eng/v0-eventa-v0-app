@@ -10,9 +10,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form"
-import { Loader2, CheckCircle2, Sparkles } from 'lucide-react'
+import { Loader2, CheckCircle2, Sparkles, AlertCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useI18n } from "@/lib/i18n/context"
+import type { EventSubmitResponse } from "@/lib/types"
 
 const API_URL = "/api/events/submit"
 
@@ -71,7 +72,7 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
   const { t } = useI18n()
   const tForm = t("form")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isSuccess, setIsSuccess] = useState(false)
+  const [submitResult, setSubmitResult] = useState<EventSubmitResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isPrefilled, setIsPrefilled] = useState(false)
 
@@ -154,17 +155,10 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
   const onSubmit = async (data: AddEventFormData) => {
     setIsSubmitting(true)
     setError(null)
+    setSubmitResult(null)
 
     try {
       console.log("[v0] Starting form submission...")
-      console.log("[v0] Form data:", {
-        title: data.title,
-        email: data.email,
-        startAt: data.startAt,
-        endAt: data.endAt,
-        city: data.city,
-        country: data.country,
-      })
 
       const submitPayload = {
         title: data.title,
@@ -183,7 +177,6 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
         creatorEmail: data.email,
       }
 
-      console.log("[v0] Payload to send:", submitPayload)
       console.log("[v0] Sending POST request to:", API_URL)
 
       const response = await fetch(API_URL, {
@@ -193,29 +186,21 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
       })
 
       console.log("[v0] Response status:", response.status)
-      console.log("[v0] Response ok:", response.ok)
 
       const contentType = response.headers.get("content-type")
-      console.log("[v0] Response content-type:", contentType)
-
       const text = await response.text()
-      console.log("[v0] Response text:", text)
 
-      let json: any = null
+      let json: EventSubmitResponse | null = null
       if (contentType?.includes("application/json")) {
         try {
           json = JSON.parse(text)
-          console.log("[v0] Parsed JSON:", json)
         } catch (parseError) {
           console.error("[v0] Failed to parse response as JSON:", parseError)
-          // If response claims to be JSON but isn't parseable, treat as error
           if (!response.ok) {
             throw new Error(text || `Server error (${response.status})`)
           }
         }
       } else {
-        console.log("[v0] Non-JSON response received")
-        // Plain text response - if error status, throw it
         if (!response.ok) {
           throw new Error(text || `Server error (${response.status})`)
         }
@@ -223,10 +208,18 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
 
       if (!response.ok) {
         const requestId = response.headers.get("x-request-id")
-        let errorMessage = json?.error || json?.details || text || response.statusText || "An error occurred"
+        let errorMessage = "An error occurred while submitting your event"
+        
+        if (json && 'error' in json) {
+          errorMessage = json.error as string
+        } else if (json && 'details' in json) {
+          errorMessage = json.details as string
+        } else if (text) {
+          errorMessage = text
+        }
 
         if (requestId) {
-          errorMessage += ` (req: ${requestId})`
+          errorMessage += ` (Request ID: ${requestId})`
         }
 
         console.error("[v0] Request failed with error:", errorMessage)
@@ -234,7 +227,11 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
       }
 
       console.log("[v0] Form submission successful!")
-      setIsSuccess(true)
+      
+      if (json) {
+        setSubmitResult(json)
+      }
+      
       form.reset()
 
       if (typeof window !== "undefined" && initialData) {
@@ -251,15 +248,17 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
       }
     } catch (err: any) {
       console.error("[v0] Error in form submission:", err)
-      console.error("[v0] Error name:", err.name)
-      console.error("[v0] Error message:", err.message)
-      console.error("[v0] Error stack:", err.stack)
 
       let errorMessage = err.message || "An unexpected error occurred"
-      if (errorMessage.includes("Environment validation failed") || errorMessage.includes("Server configuration")) {
-        errorMessage =
-          "The server is not properly configured. Please contact support or check that all required environment variables are set in the Vars section."
+      
+      if (errorMessage.includes("Failed to fetch") || errorMessage.includes("NetworkError")) {
+        errorMessage = "Network error. Please check your internet connection and try again."
+      } else if (errorMessage.includes("Environment validation failed") || errorMessage.includes("Server configuration")) {
+        errorMessage = "The server is not properly configured. Please contact support."
+      } else if (errorMessage.includes("timeout")) {
+        errorMessage = "Request timed out. Please try again."
       }
+      
       setError(errorMessage)
     } finally {
       setIsSubmitting(false)
@@ -268,14 +267,15 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
 
   const onInvalid = (errors: any) => {
     console.error("[v0] Form validation errors:", errors)
-    // Find the first error message to display
     const firstError = Object.values(errors)[0] as any
     if (firstError?.message) {
-      setError(firstError.message)
+      setError(`Please fix the following: ${firstError.message}`)
     }
   }
 
-  if (isSuccess) {
+  if (submitResult) {
+    const hasEmailWarning = submitResult.emailWarning && !submitResult.emailSent
+    
     return (
       <Card>
         <CardContent className="pt-6">
@@ -286,14 +286,26 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
             <div className="space-y-2">
               <h2 className="text-2xl font-semibold">{tForm("success.title")}</h2>
               <p className="text-muted-foreground text-pretty">
-                {tForm("success.message")}
+                {submitResult.emailSent 
+                  ? "Your event has been submitted successfully! Check your email for a link to edit your event details."
+                  : tForm("success.message")}
               </p>
             </div>
+            
+            {hasEmailWarning && (
+              <Alert className="max-w-md">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="text-left text-sm">
+                  {submitResult.emailWarning}
+                </AlertDescription>
+              </Alert>
+            )}
+            
             <div className="flex gap-3 mt-4">
               <Button onClick={() => router.push("/")} variant="outline">
                 {tForm("buttons.backToHome")}
               </Button>
-              <Button onClick={() => setIsSuccess(false)}>
+              <Button onClick={() => setSubmitResult(null)}>
                 {tForm("buttons.submitAnother")}
               </Button>
             </div>
@@ -597,6 +609,7 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
 
         {error && (
           <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}

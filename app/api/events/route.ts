@@ -6,6 +6,7 @@ import { geocodeAddress } from "@/lib/geocoding"
 import { createSearchTextFolded } from "@/lib/search/accent-fold"
 import { createEventEditToken } from "@/lib/eventEditToken"
 import { ok, fail, validationError } from "@/lib/http"
+import { PUBLIC_EVENT_WHERE } from "@/lib/events"
 
 const EventCreate = z
   .object({
@@ -38,9 +39,12 @@ export async function GET(request: NextRequest) {
     if (status) {
       where.status = status
     } else {
-      where.status = "PUBLISHED"
+      // Default to only showing publicly visible events
+      Object.assign(where, PUBLIC_EVENT_WHERE)
     }
 
+    // Note: Keeping legacy moderationStatus check for backward compatibility
+    // This can be removed in future once fully migrated to aiStatus
     where.moderationStatus = "APPROVED"
 
     if (category) {
