@@ -64,21 +64,25 @@ cp .env.example .env
 #### NextAuth (Required only when NEXT_PUBLIC_AUTH_ENABLED="true")
 - `NEXTAUTH_URL`: Your app URL (e.g., `https://yourdomain.com` or `http://localhost:3000` for dev)
 - `NEXTAUTH_SECRET`: Secret key for NextAuth (generate with: `openssl rand -base64 32`)
-- `EMAIL_SERVER_HOST`: SMTP host (e.g., `smtp.resend.com`)
-- `EMAIL_SERVER_PORT`: SMTP port (usually `587`)
-- `EMAIL_SERVER_USER`: SMTP username
-- `EMAIL_SERVER_PASSWORD`: SMTP password/API key
-- `EMAIL_FROM`: Sender email address (e.g., `noreply@yourdomain.com`)
+- `EMAIL_SERVER_HOST`: SMTP host - Set to `smtp.resend.com` for Resend
+- `EMAIL_SERVER_PORT`: SMTP port - Set to `465` for Resend (secure)
+- `EMAIL_SERVER_USER`: SMTP username - Set to `resend` for Resend
+- `EMAIL_SERVER_PASSWORD`: SMTP password/API key - Your Resend API key (starts with `re_`)
+- `EMAIL_FROM`: Sender email address (e.g., `onboarding@resend.dev` for testing, or `noreply@yourdomain.com` for production)
+- `SMTP_FROM`: Same as EMAIL_FROM
+- `ADMIN_NOTIFICATION_EMAIL`: Admin email to receive event moderation notifications
 
 **Recommended Email Provider: Resend**
-1. Sign up at https://resend.com
-2. Get your API key
+1. Sign up at https://resend.com (free tier: 3,000 emails/month)
+2. Get your API key from the dashboard
 3. Use these settings:
    - Host: `smtp.resend.com`
-   - Port: `587`
+   - Port: `465`
    - User: `resend`
-   - Password: Your Resend API key
-4. **Set `NEXT_PUBLIC_AUTH_ENABLED="true"`** to enable authentication
+   - Password: Your Resend API key (starts with `re_`)
+4. For development/testing: Use `onboarding@resend.dev` as the from address (no domain verification needed)
+5. For production: Verify your own domain in Resend dashboard for better deliverability
+6. **Set `NEXT_PUBLIC_AUTH_ENABLED="true"`** to enable authentication
 
 #### AI Moderation (Required for Phase 2)
 - `OPENAI_API_KEY`: OpenAI API key for AI-powered content moderation
@@ -146,23 +150,38 @@ Visit [http://localhost:3000](http://localhost:3000)
 3. **Configure Environment Variables**: In your Vercel project settings, add environment variables:
    - Go to Settings → Environment Variables (or use the Vars section in v0 sidebar)
    - **Required**: Add `NEON_DATABASE_URL` with your database connection string
-   - **For authentication**: Add all email service variables AND set `NEXT_PUBLIC_AUTH_ENABLED="true"`
+   - **For authentication**: Add all Resend email service variables:
+     - `EMAIL_SERVER_HOST="smtp.resend.com"`
+     - `EMAIL_SERVER_PORT="465"`
+     - `EMAIL_SERVER_USER="resend"`
+     - `EMAIL_SERVER_PASSWORD="re_YourResendAPIKey"`
+     - `EMAIL_FROM="onboarding@resend.dev"` (or your verified domain)
+     - `SMTP_FROM="onboarding@resend.dev"` (same as EMAIL_FROM)
+     - `ADMIN_NOTIFICATION_EMAIL="admin@yourdomain.com"`
+     - Set `NEXT_PUBLIC_AUTH_ENABLED="true"`
    - **Optional**: Add Mapbox, Google PSE, and OpenAI keys for enhanced features
-     - `OPENAI_API_KEY`: Required for `/api/search/intent` AI-powered intent extraction
+     - `OPENAI_API_KEY`: Required for `/api/search/intent` AI-powered intent extraction AND AI moderation
      - `UPSTASH_KV_KV_REST_API_URL` and `UPSTASH_KV_KV_REST_API_TOKEN`: Required for rate limiting
 
 4. **Deploy**: Vercel will automatically deploy your app
    - The `postinstall` script will automatically run `prisma generate` and `prisma migrate deploy`
    - Migrations will be applied to your production database before each deployment
 
+5. **Test Email Delivery**: After deployment, test that emails work in production:
+   - Visit `https://yourdomain.com/api/test-email?email=your-email@example.com`
+   - Check your inbox for the test email
+   - If successful, authentication and notifications are ready to use
+
 **Important Notes**:
 - Migrations run automatically during Vercel deployments via the `postinstall` script
 - The app works in **browse-only mode** by default (authentication disabled)
 - To enable user sign-in and event posting:
-  1. Configure all email service environment variables
+  1. Configure all Resend email service environment variables
   2. Set `NEXT_PUBLIC_AUTH_ENABLED="true"` in Vercel environment variables
   3. Redeploy the app
+  4. Test email delivery using the `/api/test-email` endpoint
 - Users will see a disabled "Sign in" button when authentication is not configured
+- Use Resend's free shared domain (`onboarding@resend.dev`) for testing before verifying your own domain
 
 ## Automated Event Maintenance
 

@@ -11,7 +11,7 @@ Phase 2 includes comprehensive automated testing using Playwright to ensure the 
 1. **Integration Tests** (Primary Focus)
    - Test complete user workflows end-to-end
    - Verify API endpoints with real database
-   - Test email notifications (using Mailtrap)
+   - Test email notifications (using Resend SMTP)
    - Validate moderation decisions
 
 2. **Unit Tests** (Future)
@@ -45,11 +45,12 @@ cp .env.test.example .env.test
 # .env.test
 DATABASE_URL="postgresql://test:test@localhost:5432/eventa_test"
 OPENAI_API_KEY="sk-test-..."
-EMAIL_SERVER_HOST="sandbox.smtp.mailtrap.io"
-EMAIL_SERVER_PORT="2525"
-EMAIL_SERVER_USER="test-user"
-EMAIL_SERVER_PASSWORD="test-password"
-EMAIL_FROM="test@eventa.app"
+EMAIL_SERVER_HOST="smtp.resend.com"
+EMAIL_SERVER_PORT="465"
+EMAIL_SERVER_USER="resend"
+EMAIL_SERVER_PASSWORD="re_YourResendAPIKey"
+EMAIL_FROM="onboarding@resend.dev"
+SMTP_FROM="onboarding@resend.dev"
 NEXT_PUBLIC_APP_URL="http://localhost:3001"
 \`\`\`
 
