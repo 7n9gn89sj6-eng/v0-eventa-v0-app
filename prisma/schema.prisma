@@ -200,6 +200,10 @@ model Event {
   @@index([lat, lng])
   @@index([status])
   @@index([aiStatus])
+  @@index([createdById])
+  @@index([updatedAt])
+  @@index([status, aiStatus])
+  @@index([createdAt])
 }
 
 model EventEditToken {
@@ -249,6 +253,7 @@ model EventAuditLog {
   
   @@index([eventId])
   @@index([createdAt])
+  @@index([actorId])
 }
 
 model EventAppeal {
