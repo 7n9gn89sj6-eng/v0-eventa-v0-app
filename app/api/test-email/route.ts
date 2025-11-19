@@ -5,8 +5,8 @@ export const dynamic = "force-dynamic"
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
-    const testEmail = searchParams.get("email") || "test@example.com"
-
+   const testEmail =
+  searchParams.get("email") || "7n9gn89sj6@privaterelay.appleid.com"
     console.log("[v0] Testing Resend SMTP configuration...")
     console.log("[v0] EMAIL_FROM:", process.env.EMAIL_FROM)
     console.log("[v0] EMAIL_SERVER_HOST:", process.env.EMAIL_SERVER_HOST)
