@@ -140,5 +140,11 @@
   "packageManager": "pnpm@10.0.0",
   "engines": {
     "node": "20.x"
+  },
+  "pnpm": {
+    "overrides": {
+      "@prisma/client": "6.18.0",
+      "prisma": "6.18.0"
+    }
   }
 }
