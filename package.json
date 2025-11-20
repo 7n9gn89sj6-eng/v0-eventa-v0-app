@@ -36,6 +36,7 @@
     "@edge-runtime/vm": "latest",
     "@hookform/resolvers": "latest",
     "@neondatabase/serverless": "latest",
+    "@opentelemetry/api": "latest",
     "@prisma/client": "latest",
     "@radix-ui/react-accordion": "latest",
     "@radix-ui/react-alert-dialog": "latest",
