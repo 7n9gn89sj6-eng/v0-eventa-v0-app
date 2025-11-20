@@ -129,7 +129,7 @@
     "jsdom": "latest",
     "playwright": "1.49.1",
     "postcss": "^8.5",
-    "prisma": "6.18.0",
+    "prisma": "7.0.0",
     "tailwindcss": "^4.1.9",
     "ts-node": "10.9.2",
     "tsx": "4.19.2",
