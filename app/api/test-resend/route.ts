@@ -5,10 +5,10 @@ export async function GET() {
 
   try {
     const data = await resend.emails.send({
-      from: "Ithaki Group Tour <no-reply@ithakigrouptour.com>",
+      from: "Ithaki Group Tour <no-reply@send.ithakigrouptour.com>",
       to: "pana2112nostatos@gmail.com",
-      subject: "Resend Test",
-      html: "<p>Testing Resend with Gmail! 🚀</p>",
+      subject: "Resend Test via Subdomain",
+      html: "<p>Testing Gmail — sending from the <strong>send.ithakigrouptour.com</strong> subdomain. This should deliver without bouncing.</p>",
     });
 
     return Response.json({ success: true, data });
