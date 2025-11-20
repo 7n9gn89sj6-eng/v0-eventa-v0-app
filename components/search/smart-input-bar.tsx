@@ -2,8 +2,8 @@
 
 import type React from "react"
 
-import { useState, forwardRef, useImperativeHandle } from "react"
-import { Search, Loader2, AlertCircle } from 'lucide-react'
+import { useState, forwardRef, useImperativeHandle, useEffect } from "react"
+import { Search, Loader2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
@@ -13,22 +13,29 @@ interface SmartInputBarProps {
   onSearch?: (query: string) => Promise<void>
   onError?: (error: string) => void
   className?: string
+  initialQuery?: string
+  alwaysShowSuggestions?: boolean
 }
 
 export interface SmartInputBarRef {
   setQuery: (query: string) => void
 }
 
-
 export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
-  ({ onSearch, onError, className }, ref) => {
+  ({ onSearch, onError, className, initialQuery, alwaysShowSuggestions = false }, ref) => {
     const { t } = useI18n()
     const tHome = t("home")
-    
-    const [query, setQuery] = useState("")
+
+    const [query, setQuery] = useState(initialQuery || "")
     const [isProcessing, setIsProcessing] = useState(false)
-    const [showExamples, setShowExamples] = useState(true)
+    const [showExamples, setShowExamples] = useState(!initialQuery || alwaysShowSuggestions)
     const [error, setError] = useState<string | null>(null)
+
+    useEffect(() => {
+      if (initialQuery) {
+        setQuery(initialQuery)
+      }
+    }, [initialQuery])
 
     useImperativeHandle(ref, () => ({
       setQuery: (newQuery: string) => {
@@ -36,23 +43,21 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
       },
     }))
 
-
     const handleInputChange = (value: string) => {
       setQuery(value)
       if (value.trim()) {
-        setShowExamples(false)
+        setShowExamples(alwaysShowSuggestions)
       } else {
         setShowExamples(true)
       }
     }
-
 
     const handleSubmit = async () => {
       if (!query.trim()) return
 
       setError(null)
       setIsProcessing(true)
-      setShowExamples(false)
+      setShowExamples(alwaysShowSuggestions)
 
       try {
         await onSearch?.(query)
@@ -101,7 +106,6 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
             />
           </div>
 
-          
           <Button
             type="button"
             onClick={handleSubmit}
@@ -123,14 +127,12 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
           </Button>
         </div>
 
-
         {error && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="text-sm">{error}</AlertDescription>
           </Alert>
         )}
-
 
         {showExamples && (
           <div className="space-y-2">
@@ -142,7 +144,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
                   type="button"
                   onClick={() => {
                     setQuery(example)
-                    setShowExamples(false)
+                    setShowExamples(alwaysShowSuggestions)
                   }}
                   className="rounded-full bg-secondary px-3 py-1.5 text-xs text-secondary-foreground transition-colors hover:bg-secondary/80"
                 >

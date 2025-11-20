@@ -2,11 +2,11 @@
 
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Volume2, VolumeX, Plus } from 'lucide-react'
-import { ResultCard } from "@/components/search/result-card"
+import { Plus } from "lucide-react"
 import { DraftEventCard } from "@/components/events/draft-event-card"
 import { DraftsList } from "@/components/events/drafts-list"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { speak, stopSpeaking } from "@/lib/tts"
 import { toast } from "@/hooks/use-toast"
 import { SmartInputBar } from "@/components/search/smart-input-bar"
@@ -27,14 +27,15 @@ interface DraftEvent {
 
 export default function HomePage() {
   const { t } = useI18n()
+  const router = useRouter()
   const tHomeHero = t("home.hero")
   const tHomeToast = t("home.toast")
   const tHomeDrafts = t("home.drafts")
   const tHomeSearch = t("home.search")
   const tHomeFooter = t("home.footer")
-  
+
   console.log("[v0] Post Event translation:", t("event.postEvent"))
-  
+
   const locale = "en"
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [searchParaphrase, setSearchParaphrase] = useState("")
@@ -142,79 +143,7 @@ export default function HomePage() {
   const handleSmartSearch = async (query: string) => {
     console.log("[v0] Smart search:", query)
 
-    try {
-      const intentResponse = await fetch("/api/search/intent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query,
-          mode: "text",
-          step: 4,
-          uiLang: locale,
-        }),
-      })
-
-      if (!intentResponse.ok) {
-        const errorText = await intentResponse.text()
-        console.error("[v0] Intent API failed:", intentResponse.status, errorText)
-        throw new Error(`Intent recognition failed (${intentResponse.status})`)
-      }
-
-      const intentData = await intentResponse.json()
-      console.log("[v0] Intent data:", intentData)
-
-      if (intentData.paraphrase) {
-        setSearchParaphrase(intentData.paraphrase)
-      }
-
-      const searchResponse = await fetch("/api/search/dual", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query,
-          entities: intentData.extracted,
-          input_mode: "text",
-          uiLang: locale,
-        }),
-      })
-
-      if (!searchResponse.ok) {
-        const errorText = await searchResponse.text()
-        console.error("[v0] Search API failed:", searchResponse.status, errorText)
-        throw new Error(`Search failed (${searchResponse.status})`)
-      }
-
-      const results = await searchResponse.json()
-      const eventsArray = Array.isArray(results) ? results : results.results || []
-
-      if (eventsArray.length === 0) {
-        toast({
-          title: "No Results",
-          description: "No events found. Try different keywords or create your own.",
-        })
-        setSearchResults([])
-        setShowResults(false)
-      } else {
-        setSearchResults(eventsArray)
-        setShowResults(true)
-        setShowDraftCard(false)
-      }
-
-      if (/create|make|host|post|add|schedule|organize|set up/i.test(query)) {
-        toast({
-          title: "Want to create an event?",
-          description: "Use the Post Event button to submit your event.",
-        })
-      }
-    } catch (error: any) {
-      console.error("[v0] Search error:", error)
-      toast({
-        title: "Search Failed",
-        description: error?.message || "Something went wrong. Please try again.",
-        variant: "destructive",
-      })
-      throw error
-    }
+    router.push(`/discover?q=${encodeURIComponent(query)}`)
   }
 
   return (
@@ -233,9 +162,7 @@ export default function HomePage() {
           />
 
           <div className="mt-8 flex flex-col items-center gap-4">
-            <p className="text-2xl font-bold text-foreground">
-              To create an event, please use this button:
-            </p>
+            <p className="text-2xl font-bold text-foreground">To create an event, please use this button:</p>
             <Button asChild size="lg" className="gap-2 min-w-[200px]">
               <Link href="/add-event" className="flex items-center gap-2">
                 <Plus className="h-5 w-5" />
@@ -278,53 +205,6 @@ export default function HomePage() {
           <div className="mx-auto max-w-2xl mt-12">
             <h3 className="text-2xl font-semibold mb-6">{tHomeDrafts("title")}</h3>
             <DraftsList drafts={drafts} onEdit={handleEditDraft} onDelete={handleDeleteDraft} />
-          </div>
-        )}
-
-        {showResults && (
-          <div className="mx-auto max-w-4xl mt-12">
-            {searchParaphrase && (
-              <div className="flex items-center justify-center gap-3 mb-6">
-                <h3 className="text-2xl font-semibold text-center">{searchParaphrase}</h3>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={handleSpeakSearch}
-                  title={isSpeakingSearch ? tHomeSearch("speaking") : tHomeSearch("speak")}
-                >
-                  {isSpeakingSearch ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-                </Button>
-              </div>
-            )}
-
-            {searchResults.length > 0 ? (
-              <div className="grid gap-4 md:grid-cols-2">
-                {searchResults.map((result, index) => (
-                  <ResultCard
-                    key={result.id || `result-${index}`}
-                    result={{
-                      source: result.source === "internal" ? "eventa" : "web",
-                      id: result.id,
-                      title: result.title,
-                      startAt: result.startAt || result.startsAt,
-                      endAt: result.endAt || result.endsAt,
-                      venue: result.venueName || result.venue,
-                      address: result.address || result.locationAddress,
-                      url: result.source === "internal" ? `/events/${result.id}` : result.url,
-                      snippet: result.description?.slice(0, 200) + "..." || result.snippet,
-                      categories: result.categories,
-                      priceFree: result.priceFree,
-                      imageUrl: result.imageUrls?.[0] || result.imageUrl,
-                    }}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <p className="text-lg text-muted-foreground">{tHomeSearch("noResults")}</p>
-              </div>
-            )}
           </div>
         )}
       </main>

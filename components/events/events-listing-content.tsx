@@ -4,15 +4,15 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Calendar, MapPin, Search, SlidersHorizontal, X } from 'lucide-react'
+import { Calendar, MapPin, SlidersHorizontal, X } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { Badge } from "@/components/ui/badge"
 import ClientOnly from "@/components/ClientOnly"
 import { useI18n } from "@/lib/i18n/context"
-import { isEventPublic } from "@/lib/events"
+import { SmartInputBar } from "@/components/search/smart-input-bar"
 
 const CATEGORIES = [
   "All",
@@ -70,6 +70,7 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
   const [selectedPriceFilter, setSelectedPriceFilter] = useState("all")
   const [sortBy, setSortBy] = useState("date-asc")
 
+  const router = useRouter()
   const { t } = useI18n()
 
   async function runSearch() {
@@ -110,6 +111,10 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
 
       setResults(allEvents)
       setTotal(data.count ?? 0)
+
+      if (q.trim()) {
+        router.push(`/discover?q=${encodeURIComponent(q)}`, { scroll: false })
+      }
     } catch (e: any) {
       console.error(e)
       setError(e?.message || "Search failed")
@@ -123,6 +128,56 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
   useEffect(() => {
     runSearch()
   }, [])
+
+  const handleSmartSearch = async (query: string) => {
+    setQ(query)
+    setLoading(true)
+    setError(null)
+    try {
+      const r = await fetch(`/api/search/events?query=${encodeURIComponent(query)}`, {
+        method: "GET",
+        headers: { accept: "application/json" },
+        cache: "no-store",
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data?.error || `Search failed (${r.status})`)
+
+      const allEvents = [
+        ...(data.internal || []),
+        ...(data.external || []).map((ext: any) => ({
+          id: ext.id,
+          title: ext.title,
+          description: ext.description,
+          startAt: ext.startAt,
+          endAt: ext.endAt,
+          city: ext.location?.city || "",
+          country: ext.location?.country || "",
+          address: ext.location?.address || "",
+          venueName: ext.location?.address || "",
+          categories: [],
+          priceFree: false,
+          imageUrls: ext.imageUrl ? [ext.imageUrl] : [],
+          status: "PUBLISHED",
+          aiStatus: "SAFE",
+          source: ext.source,
+          imageUrl: ext.imageUrl,
+          externalUrl: ext.externalUrl,
+        })),
+      ]
+
+      setResults(allEvents)
+      setTotal(data.count ?? 0)
+
+      router.push(`/discover?q=${encodeURIComponent(query)}`, { scroll: false })
+    } catch (e: any) {
+      console.error(e)
+      setError(e?.message || "Search failed")
+      setResults([])
+      setTotal(0)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const filteredResults = results
     .filter((event) => {
@@ -169,7 +224,15 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
 
   return (
     <div className="space-y-6">
-      {/* Filters Section */}
+      <div className="mb-8">
+        <SmartInputBar
+          onSearch={handleSmartSearch}
+          initialQuery={initialQuery}
+          alwaysShowSuggestions={true}
+          onError={(error) => setError(error)}
+        />
+      </div>
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -185,35 +248,7 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
 
         {showFilters && (
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="search">{tEvents("filters.search")}</Label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="search"
-                    placeholder={tEvents("filters.searchPlaceholder")}
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") runSearch()
-                    }}
-                    className="pl-9"
-                    aria-label={tEvents("filters.searchAriaLabel")}
-                  />
-                </div>
-                <Button onClick={runSearch} disabled={loading}>
-                  {loading ? tEvents("filters.processing") : tEvents("filters.go")}
-                </Button>
-              </div>
-              {error && <p className="text-sm text-red-600">{error}</p>}
-              {!error && !loading && results.length === 0 && q.trim() && (
-                <p className="text-sm opacity-70">{tEvents("results.noResultsFound")}</p>
-              )}
-            </div>
-
             <div className="grid gap-4 sm:grid-cols-3">
-              {/* Category Filter */}
               <div className="space-y-2">
                 <Label htmlFor="category">{tEvents("filters.category")}</Label>
                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
@@ -230,7 +265,6 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
                 </Select>
               </div>
 
-              {/* Price Filter */}
               <div className="space-y-2">
                 <Label htmlFor="price">{tEvents("filters.price")}</Label>
                 <Select value={selectedPriceFilter} onValueChange={setSelectedPriceFilter}>
@@ -245,7 +279,6 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
                 </Select>
               </div>
 
-              {/* Sort */}
               <div className="space-y-2">
                 <Label htmlFor="sort">{tEvents("filters.sortBy")}</Label>
                 <Select value={sortBy} onValueChange={setSortBy}>
@@ -272,11 +305,8 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
         )}
       </Card>
 
-      {/* Results Count */}
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          {showingText}
-        </p>
+        <p className="text-sm text-muted-foreground">{showingText}</p>
       </div>
 
       {loading ? (
@@ -396,9 +426,7 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
                     </Button>
                   ) : (
                     <Button asChild className="w-full">
-                      <Link href={`/events/${event.id}`}>
-                        {tEvents("card.viewDetails")}
-                      </Link>
+                      <Link href={`/events/${event.id}`}>{tEvents("card.viewDetails")}</Link>
                     </Button>
                   )}
                 </CardContent>
