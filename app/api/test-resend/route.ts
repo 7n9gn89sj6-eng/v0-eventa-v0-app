@@ -6,7 +6,7 @@ export async function GET() {
   try {
     const data = await resend.emails.send({
       from: "Ithaki Group Tour <no-reply@ithakigrouptour.com>",
-      to: "pana2112nostatos@gmail.com",
+      to: "pana2112gnostatos@gmail.com",
       subject: "Gmail Delivery Test — ithakigrouptour.com",
       html: "<p>This is a test email from the verified root domain.</p>",
     });
