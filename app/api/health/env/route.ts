@@ -15,7 +15,8 @@ export function GET() {
     "GOOGLE_PSE_ID",
     "MAPBOX_TOKEN",
     "OPENAI_API_KEY",
-  ]
+  "RESEND_API_KEY",
+
   const missing = reqd.filter((k) => !process.env[k])
   const optionalMissing = opt.filter((k) => !process.env[k])
   return ok({ missing, optionalMissing })
