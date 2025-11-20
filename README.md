@@ -346,7 +346,19 @@ To access the admin dashboard:
 2. Sign in with admin credentials (requires authentication enabled)
 3. View and moderate events
 
-**Note**: Admin role assignment is currently manual. Set user role to "ADMIN" in the database.
+**Production Setup**
+
+Grant admin access via database:
+
+\`\`\`sql
+UPDATE "User" 
+SET "isAdmin" = true 
+WHERE email = 'admin@example.com';
+\`\`\`
+
+**Where to run this:**
+- Neon Dashboard → SQL Editor
+- Or via `psql` with your database connection string
 
 ### Testing
 

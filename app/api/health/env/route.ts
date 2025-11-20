@@ -1,27 +1,26 @@
-import { ok } from "@/lib/http";
+import { ok } from "@/lib/http"
 
 export function GET() {
   // In production, don't expose environment variable details for security
   if (process.env.NODE_ENV === "production") {
-    return ok({ ok: true });
+    return ok({ ok: true })
   }
 
-  // Required environment variables
-  const reqd = ["NEXTAUTH_SECRET", "NEON_DATABASE_URL"];
+  // Development only: show missing/available environment variables
+  const missing: string[] = []
+  const optionalMissing: string[] = []
 
-  // Optional but important variables for debugging
-  const opt = [
-    "UPSTASH_KV_REST_API_URL",
-    "UPSTASH_KV_REST_API_TOKEN",
-    "GOOGLE_API_KEY",
-    "GOOGLE_PSE_ID",
-    "MAPBOX_TOKEN",
-    "OPENAI_API_KEY",
-    "RESEND_API_KEY",
-  ];
+  // Required variables
+  if (!process.env.NEXTAUTH_SECRET) missing.push("NEXTAUTH_SECRET")
+  if (!process.env.NEON_DATABASE_URL) missing.push("NEON_DATABASE_URL")
 
-  const missing = reqd.filter((k) => !process.env[k]);
-  const optionalMissing = opt.filter((k) => !process.env[k]);
+  // Optional variables
+  if (!process.env.UPSTASH_KV_REST_API_URL) optionalMissing.push("UPSTASH_KV_REST_API_URL")
+  if (!process.env.UPSTASH_KV_REST_API_TOKEN) optionalMissing.push("UPSTASH_KV_REST_API_TOKEN")
+  if (!process.env.GOOGLE_API_KEY) optionalMissing.push("GOOGLE_API_KEY")
+  if (!process.env.GOOGLE_PSE_ID) optionalMissing.push("GOOGLE_PSE_ID")
+  if (!process.env.MAPBOX_TOKEN) optionalMissing.push("MAPBOX_TOKEN")
+  if (!process.env.OPENAI_API_KEY) optionalMissing.push("OPENAI_API_KEY")
 
-  return ok({ missing, optionalMissing });
+  return ok({ missing, optionalMissing })
 }

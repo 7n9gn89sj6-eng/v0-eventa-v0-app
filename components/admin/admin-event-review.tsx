@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from 'next/navigation'
+import { useRouter } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -17,7 +17,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { CheckCircle2, XCircle, AlertTriangle, Clock, Sparkles, User, Mail, Tag, ChevronDown, FileText } from 'lucide-react'
+import {
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Clock,
+  Sparkles,
+  User,
+  Mail,
+  Tag,
+  ChevronDown,
+  FileText,
+} from "lucide-react"
 import { CATEGORY_LABELS } from "@/lib/ai-extraction-constants"
 import type { BroadEventCategory, EventStatus, EventAIStatus } from "@/lib/types"
 import ClientOnly from "@/components/ClientOnly"
@@ -117,26 +128,32 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
     aiStatus: event.aiStatus as EventAIStatus | null,
   })
 
-  const StatusIcon = 
-    displayStatus.icon === "check" ? CheckCircle2 :
-    displayStatus.icon === "alert" ? AlertTriangle :
-    displayStatus.icon === "x" ? XCircle :
-    Clock
+  const StatusIcon =
+    displayStatus.icon === "check"
+      ? CheckCircle2
+      : displayStatus.icon === "alert"
+        ? AlertTriangle
+        : displayStatus.icon === "x"
+          ? XCircle
+          : Clock
 
-  const iconColor = 
-    displayStatus.variant === "success" ? "text-green-600" :
-    displayStatus.variant === "warning" ? "text-yellow-600" :
-    displayStatus.variant === "destructive" ? "text-red-600" :
-    "text-gray-600"
+  const iconColor =
+    displayStatus.variant === "success"
+      ? "text-green-600"
+      : displayStatus.variant === "warning"
+        ? "text-yellow-600"
+        : displayStatus.variant === "destructive"
+          ? "text-red-600"
+          : "text-gray-600"
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24 md:pb-6">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold">{event.title}</h1>
           <p className="text-muted-foreground">Submitted by {event.createdBy.name || event.createdBy.email}</p>
         </div>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 md:static md:top-auto sticky top-4 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-2 -m-2 rounded-lg border md:border-0">
           <div className="flex items-center gap-2">
             <StatusIcon className={`h-5 w-5 ${iconColor}`} />
             <div className="flex flex-col">
@@ -146,9 +163,7 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
               </Badge>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground max-w-[200px]">
-            {displayStatus.description}
-          </p>
+          <p className="text-xs text-muted-foreground max-w-[200px]">{displayStatus.description}</p>
         </div>
       </div>
 
@@ -215,9 +230,7 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
                   <div>
                     <Label className="text-sm font-medium">Analyzed At</Label>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      <ClientOnly>
-                        {new Date(event.aiAnalyzedAt).toLocaleString()}
-                      </ClientOnly>
+                      <ClientOnly>{new Date(event.aiAnalyzedAt).toLocaleString()}</ClientOnly>
                     </p>
                   </div>
                 )}
@@ -448,12 +461,7 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
                     <Button size="sm" onClick={() => handleModeration("approve")} disabled={loading}>
                       Approve Appeal
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleModeration("reject")}
-                      disabled={loading}
-                    >
+                    <Button size="sm" variant="outline" onClick={() => handleModeration("reject")} disabled={loading}>
                       Reject Appeal
                     </Button>
                   </div>
@@ -494,41 +502,83 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
         </Card>
       )}
 
-      {(event.status === "DRAFT" && (event.aiStatus === "NEEDS_REVIEW" || event.aiStatus === "REJECTED" || event.aiStatus === "PENDING")) && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Moderation Actions</CardTitle>
-            <CardDescription>Review and take action on this event</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="reviewNotes">Review Notes (optional)</Label>
-              <Textarea
-                id="reviewNotes"
-                placeholder="Add any notes about your decision..."
-                value={reviewNotes}
-                onChange={(e) => setReviewNotes(e.target.value)}
-                rows={3}
-              />
+      {event.status === "DRAFT" &&
+        (event.aiStatus === "NEEDS_REVIEW" || event.aiStatus === "REJECTED" || event.aiStatus === "PENDING") && (
+          <>
+            <Card className="hidden md:block">
+              <CardHeader>
+                <CardTitle>Moderation Actions</CardTitle>
+                <CardDescription>Review and take action on this event</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="reviewNotes">Review Notes (optional)</Label>
+                  <Textarea
+                    id="reviewNotes"
+                    placeholder="Add any notes about your decision..."
+                    value={reviewNotes}
+                    onChange={(e) => setReviewNotes(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <Button onClick={() => handleModeration("approve")} disabled={loading} className="flex-1">
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    Approve Event
+                  </Button>
+                  <Button
+                    onClick={() => handleModeration("reject")}
+                    disabled={loading}
+                    variant="destructive"
+                    className="flex-1"
+                  >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Reject Event
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background border-t shadow-lg">
+              <div className="p-4 space-y-3">
+                <div>
+                  <Label htmlFor="reviewNotesMobile" className="text-xs">
+                    Review Notes (optional)
+                  </Label>
+                  <Textarea
+                    id="reviewNotesMobile"
+                    placeholder="Add notes..."
+                    value={reviewNotes}
+                    onChange={(e) => setReviewNotes(e.target.value)}
+                    rows={2}
+                    className="text-sm"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => handleModeration("approve")}
+                    disabled={loading}
+                    className="flex-1 h-12 font-semibold"
+                    size="lg"
+                  >
+                    <CheckCircle2 className="mr-2 h-5 w-5" />
+                    Approve
+                  </Button>
+                  <Button
+                    onClick={() => handleModeration("reject")}
+                    disabled={loading}
+                    variant="destructive"
+                    className="flex-1 h-12 font-semibold"
+                    size="lg"
+                  >
+                    <XCircle className="mr-2 h-5 w-5" />
+                    Reject
+                  </Button>
+                </div>
+              </div>
             </div>
-            <div className="flex gap-3">
-              <Button onClick={() => handleModeration("approve")} disabled={loading} className="flex-1">
-                <CheckCircle2 className="mr-2 h-4 w-4" />
-                Approve Event
-              </Button>
-              <Button
-                onClick={() => handleModeration("reject")}
-                disabled={loading}
-                variant="destructive"
-                className="flex-1"
-              >
-                <XCircle className="mr-2 h-4 w-4" />
-                Reject Event
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+          </>
+        )}
 
       <Dialog open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen}>
         <DialogContent>
@@ -565,11 +615,7 @@ export function AdminEventReview({ event, adminId, adminEmail }: AdminEventRevie
             >
               Cancel
             </Button>
-            <Button
-              variant="destructive"
-              onClick={handleConfirmReject}
-              disabled={loading || !rejectReason.trim()}
-            >
+            <Button variant="destructive" onClick={handleConfirmReject} disabled={loading || !rejectReason.trim()}>
               {loading ? "Rejecting..." : "Confirm Reject"}
             </Button>
           </DialogFooter>
