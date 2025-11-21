@@ -21,13 +21,8 @@
     "smoke": "node tests/smoke.mjs",
     "smoke:prod": "node ./scripts/smoke-prod.mjs",
     "start": "next start",
-    "test": "playwright test",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui",
-    "test:headed": "playwright test --headed",
-    "test:ui": "playwright test --ui",
     "typecheck": "tsc --noEmit",
-    "vercel:logs": "vercel logs --prod --since=1h",
+    "vercel:logs": "vercel logs --prod",
     "vercel:promote": "node ./scripts/promote-prev.mjs"
   },
   "dependencies": {
@@ -71,22 +66,14 @@
     "@upstash/redis": "latest",
     "@vercel/analytics": "latest",
     "@vercel/speed-insights": "latest",
-    "@vitest/browser-playwright": "latest",
-    "@vitest/browser-preview": "latest",
-    "@vitest/browser-webdriverio": "latest",
-    "@vitest/ui": "latest",
     "ai": "latest",
     "bcryptjs": "latest",
-    "child_process": "latest",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "latest",
-    "crypto": "latest",
     "date-fns": "latest",
     "date-fns-tz": "latest",
     "embla-carousel-react": "latest",
-    "happy-dom": "latest",
-    "http": "latest",
     "input-otp": "latest",
     "isomorphic-dompurify": "latest",
     "jsdom": "latest",
@@ -97,7 +84,7 @@
     "next-auth": "latest",
     "next-themes": "latest",
     "nodemailer": "latest",
-    "path": "latest",
+    "pg": "latest",
     "react": "19.0.0",
     "react-day-picker": "latest",
     "react-dom": "19.0.0",
@@ -110,17 +97,13 @@
     "swr": "latest",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
-    "util": "latest",
     "vaul": "latest",
-    "vitest": "latest",
     "vue-router": "latest",
     "zod": "3.25.76"
   },
   "devDependencies": {
-    "@playwright/test": "1.49.1",
     "@tailwindcss/postcss": "^4.1.9",
     "@types/bcryptjs": "2.4.6",
-    "@types/dompurify": "3.2.0",
     "@types/jsonwebtoken": "9.0.7",
     "@types/luxon": "3.4.2",
     "@types/node": "^22",
@@ -128,20 +111,14 @@
     "@types/pg": "8.11.10",
     "@types/react": "19.0.0",
     "@types/react-dom": "19.0.0",
-    "axe-playwright": "latest",
-    "playwright": "1.49.1",
     "postcss": "^8.5",
     "prisma": "6.18.0",
     "tailwindcss": "^4.1.9",
     "ts-node": "10.9.2",
     "tsx": "4.19.2",
-    "typescript": "^5",
-    "wait-on": "8.0.1"
+    "typescript": "^5"
   },
   "engines": {
     "node": "20.x"
-  },
-  "trustedDependencies": [
-    "pg-native"
-  ]
+  }
 }
