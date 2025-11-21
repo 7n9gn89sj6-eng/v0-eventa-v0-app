@@ -11,6 +11,7 @@
     "db:bootstrap": "tsx scripts/run-database-setup.ts",
     "db:check": "tsx scripts/db-check.ts",
     "db:dev-setup": "tsx scripts/run-all-setup.ts",
+    "db:fix-event-schema": "tsx scripts/fix-event-schema.ts",
     "db:setup": "tsx scripts/run-all-setup.ts",
     "dev": "next dev",
     "postinstall": "prisma generate",
