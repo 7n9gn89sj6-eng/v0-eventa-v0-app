@@ -30,10 +30,6 @@
     "vercel:logs": "vercel logs --prod --since=1h",
     "vercel:promote": "node ./scripts/promote-prev.mjs"
   },
-  "overrides": {
-    "@prisma/client": "6.18.0",
-    "prisma": "6.18.0"
-  },
   "dependencies": {
     "@ai-sdk/openai": "latest",
     "@auth/core": "0.41.0",
