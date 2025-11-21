@@ -1,3 +1,8 @@
+if (process.env.VERCEL === "1" || process.env.NODE_ENV === "production") {
+  console.log("[v0] Skipping run-database-setup in production / Vercel environment")
+  process.exit(0)
+}
+
 import { neon } from "@neondatabase/serverless"
 
 const sql = neon(process.env.NEON_DATABASE_URL!)
@@ -182,4 +187,6 @@ async function runSetup() {
   }
 }
 
-runSetup()
+if (process.env.VERCEL !== "1" && process.env.NODE_ENV !== "production") {
+  runSetup()
+}

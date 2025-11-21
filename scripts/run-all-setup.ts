@@ -1,3 +1,8 @@
+if (process.env.VERCEL === "1" || process.env.NODE_ENV === "production") {
+  console.log("[v0] Skipping run-all-setup in production / Vercel environment")
+  process.exit(0)
+}
+
 import { neon } from "@neondatabase/serverless"
 import { exec } from "child_process"
 import { promisify } from "util"
@@ -119,8 +124,7 @@ async function runSetup() {
         "searchText" TEXT NOT NULL DEFAULT '',
         "searchTextFolded" TEXT,
         "embedding" vector(1536),
-        "postcode" VARCHAR(16),
-        CONSTRAINT "Event_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE CASCADE
+        "postcode" VARCHAR(16)
       )
     `
 
@@ -165,7 +169,7 @@ async function runSetup() {
     try {
       await sql`ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "status" "EventStatus" DEFAULT 'DRAFT' NOT NULL`
       console.log("[v0] ✓ Status column check complete")
-    } catch (error) {
+    } catch (error: any) {
       console.log("[v0] Note: Status column already exists or error:", error)
     }
 
