@@ -5,6 +5,6 @@
       "schedule": "0 0 * * *"
     }
   ],
-  "installCommand": "npm install",
+  "installCommand": "npm ci --legacy-peer-deps || npm install --legacy-peer-deps",
   "buildCommand": "npm run build"
 }
