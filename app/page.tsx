@@ -141,9 +141,9 @@ export default function HomePage() {
   }
 
   const handleSmartSearch = async (query: string) => {
-    console.log("[v0] Smart search:", query)
-
-    router.push(`/discover?q=${encodeURIComponent(query)}`)
+    console.log("[v0] Landing page search, SmartInputBar will handle navigation")
+    // SmartInputBar already extracts intent and navigates to /discover with params
+    // No need to do anything here
   }
 
   return (

@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/db"
 import { PUBLIC_EVENT_WHERE } from "@/lib/events"
+import type { EventCategory } from "@prisma/client"
 
 const EXTERNAL_STUB_EVENTS = [
   {
@@ -45,17 +46,45 @@ export async function GET(req: NextRequest) {
   const skip = (page - 1) * take
   const city = url.searchParams.get("city")
   const country = url.searchParams.get("country")
+  const category = url.searchParams.get("category")
+  const dateFrom = url.searchParams.get("date_from")
+  const dateTo = url.searchParams.get("date_to")
+
+  console.log("[v0] Search params:", { q, city, category, dateFrom, dateTo })
 
   try {
     if (!q) {
+      const where: any = {
+        ...PUBLIC_EVENT_WHERE,
+      }
+
+      if (category && category !== "all") {
+        const categoryEnum = category.toUpperCase() as EventCategory
+        where.category = categoryEnum
+      }
+
+      if (dateFrom) {
+        where.startAt = { ...where.startAt, gte: new Date(dateFrom) }
+      }
+      if (dateTo) {
+        where.startAt = { ...where.startAt, lte: new Date(dateTo) }
+      }
+
+      if (city) {
+        where.city = { contains: city, mode: "insensitive" }
+      }
+      if (country) {
+        where.country = { contains: country, mode: "insensitive" }
+      }
+
       const [events, count] = await Promise.all([
         prisma.event.findMany({
-          where: PUBLIC_EVENT_WHERE,
+          where,
           orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
           take,
           skip,
         }),
-        prisma.event.count({ where: PUBLIC_EVENT_WHERE }),
+        prisma.event.count({ where }),
       ])
       return NextResponse.json({
         events,
@@ -79,6 +108,18 @@ export async function GET(req: NextRequest) {
       ],
     }
 
+    if (category && category !== "all") {
+      const categoryEnum = category.toUpperCase() as EventCategory
+      where.category = categoryEnum
+    }
+
+    if (dateFrom) {
+      where.startAt = { ...where.startAt, gte: new Date(dateFrom) }
+    }
+    if (dateTo) {
+      where.startAt = { ...where.startAt, lte: new Date(dateTo) }
+    }
+
     if (city) {
       where.city = { contains: city, mode: "insensitive" }
     }
@@ -96,7 +137,7 @@ export async function GET(req: NextRequest) {
       prisma.event.count({ where }),
     ])
 
-    console.log("[v0] Search query:", q, "found:", count, "events")
+    console.log("[v0] Search query:", q, "filters:", { city, category, dateFrom, dateTo }, "found:", count, "events")
 
     const externalEvents = EXTERNAL_STUB_EVENTS.filter((event) => {
       const matchesQuery =

@@ -56,9 +56,23 @@ interface Event {
 
 interface EventsListingContentProps {
   initialQuery?: string
+  initialCity?: string
+  initialCategory?: string
+  initialDateFrom?: string
+  initialDateTo?: string
+  userLat?: number
+  userLng?: number
 }
 
-export function EventsListingContent({ initialQuery }: EventsListingContentProps) {
+export function EventsListingContent({
+  initialQuery,
+  initialCity,
+  initialCategory,
+  initialDateFrom,
+  initialDateTo,
+  userLat,
+  userLng,
+}: EventsListingContentProps) {
   const [q, setQ] = useState(initialQuery || "")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -66,9 +80,10 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
   const [total, setTotal] = useState(0)
 
   const [showFilters, setShowFilters] = useState(false)
-  const [selectedCategory, setSelectedCategory] = useState("All")
+  const [selectedCategory, setSelectedCategory] = useState(initialCategory || "All")
   const [selectedPriceFilter, setSelectedPriceFilter] = useState("all")
   const [sortBy, setSortBy] = useState("date-asc")
+  const [cityFilter, setCityFilter] = useState(initialCity || "")
 
   const router = useRouter()
   const { t } = useI18n()
@@ -78,7 +93,16 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
     setLoading(true)
     setError(null)
     try {
-      const r = await fetch(`/api/search/events?query=${encodeURIComponent(q)}`, {
+      const params = new URLSearchParams()
+      if (q) params.set("query", q)
+      if (cityFilter) params.set("city", cityFilter)
+      if (selectedCategory && selectedCategory !== "All") params.set("category", selectedCategory.toLowerCase())
+      if (initialDateFrom) params.set("date_from", initialDateFrom)
+      if (initialDateTo) params.set("date_to", initialDateTo)
+
+      console.log("[v0] Searching with params:", params.toString())
+
+      const r = await fetch(`/api/search/events?${params.toString()}`, {
         method: "GET",
         headers: { accept: "application/json" },
         cache: "no-store",
@@ -127,14 +151,18 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
 
   useEffect(() => {
     runSearch()
-  }, [])
+  }, [cityFilter, selectedCategory, initialDateFrom, initialDateTo])
 
   const handleSmartSearch = async (query: string) => {
     setQ(query)
     setLoading(true)
     setError(null)
     try {
-      const r = await fetch(`/api/search/events?query=${encodeURIComponent(query)}`, {
+      const params = new URLSearchParams()
+      params.set("query", query)
+      if (cityFilter) params.set("city", cityFilter)
+
+      const r = await fetch(`/api/search/events?${params.toString()}`, {
         method: "GET",
         headers: { accept: "application/json" },
         cache: "no-store",
@@ -212,10 +240,15 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
     setSelectedPriceFilter("all")
     setQ("")
     setSortBy("date-asc")
+    setCityFilter("")
   }
 
   const hasActiveFilters =
-    selectedCategory !== "All" || selectedPriceFilter !== "all" || q.trim() !== "" || sortBy !== "date-asc"
+    selectedCategory !== "All" ||
+    selectedPriceFilter !== "all" ||
+    q.trim() !== "" ||
+    sortBy !== "date-asc" ||
+    cityFilter !== ""
 
   const tEvents = t("events")
   const showingText = (tEvents("results.showing") || "Showing {filtered} of {total} events")
@@ -232,6 +265,44 @@ export function EventsListingContent({ initialQuery }: EventsListingContentProps
           onError={(error) => setError(error)}
         />
       </div>
+
+      {(cityFilter || (selectedCategory && selectedCategory !== "All") || initialDateFrom) && (
+        <div className="flex flex-wrap gap-2">
+          {cityFilter && (
+            <Badge variant="secondary" className="gap-1.5 pl-2 pr-1.5">
+              <MapPin className="h-3 w-3" />
+              <span>{cityFilter}</span>
+              <button onClick={() => setCityFilter("")} className="ml-0.5 rounded-sm hover:bg-secondary-foreground/20">
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+
+          {selectedCategory && selectedCategory !== "All" && (
+            <Badge variant="secondary" className="gap-1.5 pl-2 pr-1.5">
+              <span>{selectedCategory}</span>
+              <button
+                onClick={() => setSelectedCategory("All")}
+                className="ml-0.5 rounded-sm hover:bg-secondary-foreground/20"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+
+          {initialDateFrom && (
+            <Badge variant="secondary" className="gap-1.5 pl-2 pr-1.5">
+              <Calendar className="h-3 w-3" />
+              <span>
+                {new Date(initialDateFrom).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                })}
+              </span>
+            </Badge>
+          )}
+        </div>
+      )}
 
       <Card>
         <CardHeader>
