@@ -1,6 +1,10 @@
 {
-  "buildCommand": "npm install && npx prisma generate && next build",
-  "installCommand": "npm install --legacy-peer-deps",
-  "cache": false
+  "crons": [
+    {
+      "path": "/api/cron/events-maintenance",
+      "schedule": "0 0 * * *"
+    }
+  ],
+  "installCommand": "rm -rf node_modules package-lock.json .next && npm install --legacy-peer-deps",
+  "buildCommand": "npm run build"
 }
-

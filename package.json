@@ -1,6 +1,6 @@
 {
   "name": "eventa-v0",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "build": "next build",
@@ -99,6 +99,7 @@
     "nodemailer": "latest",
     "path": "latest",
     "pg": "latest",
+    "pg-native": "latest",
     "react": "19.0.0",
     "react-day-picker": "latest",
     "react-dom": "19.0.0",
