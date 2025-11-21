@@ -5,6 +5,6 @@
       "schedule": "0 0 * * *"
     }
   ],
-  "installCommand": "rm -rf node_modules package-lock.json .next && npm install --legacy-peer-deps",
+  "installCommand": "rm -rf node_modules package-lock.json .next .vercel .turbo && npm cache clean --force && npm install --legacy-peer-deps --no-cache",
   "buildCommand": "npm run build"
 }
