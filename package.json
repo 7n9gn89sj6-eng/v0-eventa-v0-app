@@ -96,6 +96,8 @@
     "next-themes": "latest",
     "nodemailer": "latest",
     "path": "latest",
+    "pg": "latest",
+    "pg-native": "latest",
     "react": "19.0.0",
     "react-day-picker": "latest",
     "react-dom": "19.0.0",
@@ -148,5 +150,8 @@
       "@prisma/client": "6.18.0",
       "prisma": "6.18.0"
     }
-  }
+  },
+  "trustedDependencies": [
+    "pg-native"
+  ]
 }

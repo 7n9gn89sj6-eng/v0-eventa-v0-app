@@ -1,12 +1,22 @@
-import { prisma } from "@/lib/db"
+import { Client } from "pg"
 
 async function main() {
-  console.log("[fix-event-schema] Starting Event table alignment...")
-  console.log("[fix-event-schema] Adding missing columns to match Prisma schema...")
+  console.log("[fix-event-schema] Starting Event table alignment (pg)...")
+
+  const url = process.env.DATABASE_URL
+  if (!url) {
+    throw new Error("DATABASE_URL is not set")
+  }
+
+  const client = new Client({ connectionString: url })
 
   try {
-    // Add all missing columns in a single ALTER TABLE statement
-    await prisma.$executeRawUnsafe(`
+    await client.connect()
+    console.log("[fix-event-schema] Connected to database")
+
+    console.log("[fix-event-schema] Running ALTER TABLE to add missing columns...")
+
+    await client.query(`
       ALTER TABLE "Event"
         ADD COLUMN IF NOT EXISTS "sourceText" TEXT,
         ADD COLUMN IF NOT EXISTS "category" TEXT,
@@ -28,23 +38,19 @@ async function main() {
         ADD COLUMN IF NOT EXISTS "moderatedBy" TEXT,
         ADD COLUMN IF NOT EXISTS "adminNotes" TEXT,
         ADD COLUMN IF NOT EXISTS "reviewedBy" TEXT,
-        ADD COLUMN IF NOT EXISTS "reviewedAt" TIMESTAMP
+        ADD COLUMN IF NOT EXISTS "reviewedAt" TIMESTAMP;
     `)
 
-    console.log("[fix-event-schema] ✓ Successfully added 21 missing columns")
+    console.log("[fix-event-schema] ✓ Successfully added missing columns via pg")
     console.log("[fix-event-schema] Event table now matches Prisma schema")
     console.log("[fix-event-schema] Alignment complete!")
-  } catch (error) {
-    console.error("[fix-event-schema] Error while aligning Event schema:", error)
-    throw error
+  } catch (err) {
+    console.error("[fix-event-schema] Error aligning Event schema via pg:", err)
+    process.exitCode = 1
+  } finally {
+    await client.end()
+    console.log("[fix-event-schema] Connection closed")
   }
 }
 
 main()
-  .catch((err) => {
-    console.error("[fix-event-schema] Fatal error:", err)
-    process.exit(1)
-  })
-  .finally(async () => {
-    await prisma.$disconnect()
-  })
