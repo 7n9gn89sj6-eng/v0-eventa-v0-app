@@ -1,6 +1,6 @@
 {
   "name": "eventa-v0",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "scripts": {
     "build": "next build",
@@ -127,7 +127,6 @@
     "@types/luxon": "3.4.2",
     "@types/node": "^22",
     "@types/nodemailer": "6.4.17",
-    "@types/pg": "8.11.10",
     "@types/react": "19.0.0",
     "@types/react-dom": "19.0.0",
     "axe-playwright": "latest",
