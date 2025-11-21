@@ -71,16 +71,25 @@
     "@upstash/redis": "latest",
     "@vercel/analytics": "latest",
     "@vercel/speed-insights": "latest",
+    "@vitest/browser-playwright": "latest",
+    "@vitest/browser-preview": "latest",
+    "@vitest/browser-webdriverio": "latest",
+    "@vitest/ui": "latest",
     "ai": "latest",
     "bcryptjs": "latest",
+    "child_process": "latest",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "latest",
+    "crypto": "latest",
     "date-fns": "latest",
     "date-fns-tz": "latest",
     "embla-carousel-react": "latest",
+    "happy-dom": "latest",
+    "http": "latest",
     "input-otp": "latest",
     "isomorphic-dompurify": "latest",
+    "jsdom": "latest",
     "jsonwebtoken": "latest",
     "lucide-react": "^0.454.0",
     "luxon": "latest",
@@ -88,7 +97,9 @@
     "next-auth": "latest",
     "next-themes": "latest",
     "nodemailer": "latest",
+    "path": "latest",
     "pg": "latest",
+    "pg-native": "latest",
     "react": "19.0.0",
     "react-day-picker": "latest",
     "react-dom": "19.0.0",
@@ -101,7 +112,9 @@
     "swr": "latest",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
+    "util": "latest",
     "vaul": "latest",
+    "vitest": "latest",
     "vue-router": "latest",
     "zod": "3.25.76"
   },
@@ -129,5 +142,8 @@
   },
   "engines": {
     "node": "20.x"
-  }
+  },
+  "trustedDependencies": [
+    "pg-native"
+  ]
 }
