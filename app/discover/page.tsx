@@ -1,24 +1,14 @@
+// app/discover/page.tsx
+
 import { Suspense } from "react"
 import { EventsListingContent } from "@/components/events/events-listing-content"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 
 export const dynamic = "force-dynamic"
 
-type SearchParams = {
-  q?: string
-  city?: string
-  category?: string
-  date_from?: string
-  date_to?: string
-  lat?: string
-  lng?: string
-}
+export default async function DiscoverPage(props: { searchParams: Promise<any> }) {
+  const searchParams = await props.searchParams
 
-export default function DiscoverPage({
-  searchParams,
-}: {
-  searchParams: SearchParams
-}) {
   return (
     <div className="container mx-auto px-4 py-12">
       <div className="mb-8">
@@ -26,7 +16,9 @@ export default function DiscoverPage({
           {searchParams.q ? `Results for "${searchParams.q}"` : "Discover Events"}
         </h1>
         <p className="text-lg text-muted-foreground">
-          {searchParams.q ? "Here's what we found for your search" : "Browse upcoming events in your area and beyond"}
+          {searchParams.q
+            ? "Here's what we found for your search"
+            : "Browse upcoming events in your area and beyond"}
         </p>
       </div>
 

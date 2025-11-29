@@ -14,6 +14,9 @@ import ClientOnly from "@/components/ClientOnly"
 import { useI18n } from "@/lib/i18n/context"
 import { SmartInputBar } from "@/components/search/smart-input-bar"
 
+/**
+ * Basic category list – kept simple and UI-focused.
+ */
 const CATEGORIES = [
   "All",
   "Music",
@@ -27,6 +30,76 @@ const CATEGORIES = [
   "Community",
   "Other",
 ]
+
+/**
+ * Multilingual city synonyms map.
+ * Key = canonical city name (what we send to API)
+ * Value = array of possible spellings in different languages.
+ */
+const CITY_SYNONYMS: Record<string, string[]> = {
+  Athens: ["athens", "athina", "athína", "αθήνα"],
+  Thessaloniki: ["thessaloniki", "salonika", "σαλονίκη", "θεσσαλονίκη"],
+  Patras: ["patras", "patra", "πάτρα"],
+  Rome: ["rome", "roma"],
+  Milan: ["milan", "milano"],
+  Naples: ["naples", "napoli"],
+  Florence: ["florence", "firenze"],
+  Venice: ["venice", "venezia"],
+  Paris: ["paris", "παρίσι"],
+  Lyon: ["lyon"],
+  Barcelona: ["barcelona", "barça", "barca"],
+  Madrid: ["madrid"],
+  Berlin: ["berlin", "berlín"],
+  Munich: ["munich", "münchen"],
+  London: ["london", "londres"],
+  Dublin: ["dublin"],
+  NewYork: ["new york", "nyc", "new york city"],
+  Sydney: ["sydney"],
+  Melbourne: ["melbourne"],
+}
+
+/**
+ * Extract a canonical city name from free-text query (T2 behaviour).
+ * Returns the detected city and the remaining text to use as keyword query.
+ */
+function extractCityFromQuery(query: string): { city?: string; remainingQuery: string } {
+  const text = query.toLowerCase()
+  let detectedCity: string | undefined
+  let remaining = text
+
+  for (const [canonical, forms] of Object.entries(CITY_SYNONYMS)) {
+    for (const form of forms) {
+      // match whole word or phrase
+      const pattern = new RegExp(`\\b${form.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i")
+      if (pattern.test(text)) {
+        detectedCity = canonical
+        remaining = text.replace(pattern, " ").replace(/\s+/g, " ").trim()
+        break
+      }
+    }
+    if (detectedCity) break
+  }
+
+  return {
+    city: detectedCity,
+    remainingQuery: remaining || query, // fall back to original if empty
+  }
+}
+
+/**
+ * Simple distance (km) using Haversine formula.
+ */
+function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180
+  const R = 6371 // km
+  const dLat = toRad(lat2 - lat1)
+  const dLng = toRad(lng2 - lng1)
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
 
 interface Event {
   id: string
@@ -49,9 +122,13 @@ interface Event {
     address?: string
     city?: string
     country?: string
+    lat?: number
+    lng?: number
   }
   imageUrl?: string
   externalUrl?: string
+  lat?: number
+  lng?: number
 }
 
 interface EventsListingContentProps {
@@ -87,19 +164,55 @@ export function EventsListingContent({
 
   const router = useRouter()
   const { t } = useI18n()
+  const tEvents = t("events")
+
+  // “Near me” mode = no explicit query/city, but coordinates are known
+  const hasCoords = userLat !== undefined && userLat !== null && userLng !== undefined && userLng !== null
+  const isLocalSearch = !q.trim() && !cityFilter && hasCoords
+
+  /**
+   * Build search params with smart city extraction (T2 hybrid).
+   * - If user already picked a cityFilter, we respect it.
+   * - If not, we try to detect a city from the query.
+   */
+  function buildSearchParams(rawQuery: string) {
+    let effectiveQuery = rawQuery.trim()
+    let effectiveCity = cityFilter
+
+    if (!effectiveCity && effectiveQuery) {
+      const { city, remainingQuery } = extractCityFromQuery(effectiveQuery)
+      if (city) {
+        effectiveCity = city
+        effectiveQuery = remainingQuery
+        setCityFilter(city) // update chip in UI
+      }
+    }
+
+    const params = new URLSearchParams()
+    if (effectiveQuery) params.set("query", effectiveQuery)
+    if (effectiveCity) params.set("city", effectiveCity)
+
+    if (selectedCategory && selectedCategory !== "All") {
+      params.set("category", selectedCategory.toLowerCase())
+    }
+    if (initialDateFrom) params.set("date_from", initialDateFrom)
+    if (initialDateTo) params.set("date_to", initialDateTo)
+
+    if (hasCoords) {
+      params.set("lat", String(userLat))
+      params.set("lng", String(userLng))
+    }
+
+    return { params, effectiveQuery, effectiveCity }
+  }
 
   async function runSearch() {
     if (loading) return
     setLoading(true)
     setError(null)
-    try {
-      const params = new URLSearchParams()
-      if (q) params.set("query", q)
-      if (cityFilter) params.set("city", cityFilter)
-      if (selectedCategory && selectedCategory !== "All") params.set("category", selectedCategory.toLowerCase())
-      if (initialDateFrom) params.set("date_from", initialDateFrom)
-      if (initialDateTo) params.set("date_to", initialDateTo)
 
+    try {
+      const { params } = buildSearchParams(q)
       console.log("[v0] Searching with params:", params.toString())
 
       const r = await fetch(`/api/search/events?${params.toString()}`, {
@@ -110,35 +223,48 @@ export function EventsListingContent({
       const data = await r.json()
       if (!r.ok) throw new Error(data?.error || `Search failed (${r.status})`)
 
-      const allEvents = [
-        ...(data.internal || []),
-        ...(data.external || []).map((ext: any) => ({
-          id: ext.id,
-          title: ext.title,
-          description: ext.description,
-          startAt: ext.startAt,
-          endAt: ext.endAt,
-          city: ext.location?.city || "",
-          country: ext.location?.country || "",
-          address: ext.location?.address || "",
-          venueName: ext.location?.address || "",
-          categories: [],
-          priceFree: false,
-          imageUrls: ext.imageUrl ? [ext.imageUrl] : [],
-          status: "PUBLISHED",
-          aiStatus: "SAFE",
-          source: ext.source,
-          imageUrl: ext.imageUrl,
-          externalUrl: ext.externalUrl,
-        })),
-      ]
+      const internalEvents: Event[] = (data.internal || []) as Event[]
+      const externalEvents: Event[] = (data.external || []).map((ext: any) => ({
+        id: ext.id,
+        title: ext.title,
+        description: ext.description,
+        startAt: ext.startAt,
+        endAt: ext.endAt,
+        city: ext.location?.city || "",
+        country: ext.location?.country || "",
+        address: ext.location?.address || "",
+        venueName: ext.location?.address || "",
+        categories: [],
+        priceFree: false,
+        imageUrls: ext.imageUrl ? [ext.imageUrl] : [],
+        status: "PUBLISHED",
+        aiStatus: "SAFE",
+        source: ext.source || "web",
+        imageUrl: ext.imageUrl,
+        externalUrl: ext.externalUrl,
+        lat: ext.location?.lat,
+        lng: ext.location?.lng,
+      }))
+
+      // COMMUNITY FIRST: internal events always before external ones
+      const allEvents = [...internalEvents, ...externalEvents]
 
       setResults(allEvents)
-      setTotal(data.count ?? 0)
+      setTotal(data.total ?? data.count ?? allEvents.length)
 
-      if (q.trim()) {
-        router.push(`/discover?q=${encodeURIComponent(q)}`, { scroll: false })
+      // Keep URL meaningful but uncluttered
+      const urlParams = new URLSearchParams()
+      if (q.trim()) urlParams.set("q", q.trim())
+      if (cityFilter) urlParams.set("city", cityFilter)
+      if (selectedCategory && selectedCategory !== "All") urlParams.set("category", selectedCategory.toLowerCase())
+      if (initialDateFrom) urlParams.set("date_from", initialDateFrom)
+      if (initialDateTo) urlParams.set("date_to", initialDateTo)
+      if (hasCoords) {
+        urlParams.set("lat", String(userLat))
+        urlParams.set("lng", String(userLng))
       }
+
+      router.push(`/discover?${urlParams.toString()}`, { scroll: false })
     } catch (e: any) {
       console.error(e)
       setError(e?.message || "Search failed")
@@ -151,16 +277,20 @@ export function EventsListingContent({
 
   useEffect(() => {
     runSearch()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cityFilter, selectedCategory, initialDateFrom, initialDateTo])
 
+  /**
+   * SmartInputBar callback – we treat this as “user intent changed”.
+   * We reuse the same buildSearchParams logic so behaviour is consistent.
+   */
   const handleSmartSearch = async (query: string) => {
     setQ(query)
     setLoading(true)
     setError(null)
+
     try {
-      const params = new URLSearchParams()
-      params.set("query", query)
-      if (cityFilter) params.set("city", cityFilter)
+      const { params } = buildSearchParams(query)
 
       const r = await fetch(`/api/search/events?${params.toString()}`, {
         method: "GET",
@@ -170,33 +300,43 @@ export function EventsListingContent({
       const data = await r.json()
       if (!r.ok) throw new Error(data?.error || `Search failed (${r.status})`)
 
-      const allEvents = [
-        ...(data.internal || []),
-        ...(data.external || []).map((ext: any) => ({
-          id: ext.id,
-          title: ext.title,
-          description: ext.description,
-          startAt: ext.startAt,
-          endAt: ext.endAt,
-          city: ext.location?.city || "",
-          country: ext.location?.country || "",
-          address: ext.location?.address || "",
-          venueName: ext.location?.address || "",
-          categories: [],
-          priceFree: false,
-          imageUrls: ext.imageUrl ? [ext.imageUrl] : [],
-          status: "PUBLISHED",
-          aiStatus: "SAFE",
-          source: ext.source,
-          imageUrl: ext.imageUrl,
-          externalUrl: ext.externalUrl,
-        })),
-      ]
+      const internalEvents: Event[] = (data.internal || []) as Event[]
+      const externalEvents: Event[] = (data.external || []).map((ext: any) => ({
+        id: ext.id,
+        title: ext.title,
+        description: ext.description,
+        startAt: ext.startAt,
+        endAt: ext.endAt,
+        city: ext.location?.city || "",
+        country: ext.location?.country || "",
+        address: ext.location?.address || "",
+        venueName: ext.location?.address || "",
+        categories: [],
+        priceFree: false,
+        imageUrls: ext.imageUrl ? [ext.imageUrl] : [],
+        status: "PUBLISHED",
+        aiStatus: "SAFE",
+        source: ext.source || "web",
+        imageUrl: ext.imageUrl,
+        externalUrl: ext.externalUrl,
+        lat: ext.location?.lat,
+        lng: ext.location?.lng,
+      }))
+
+      const allEvents = [...internalEvents, ...externalEvents]
 
       setResults(allEvents)
-      setTotal(data.count ?? 0)
+      setTotal(data.total ?? data.count ?? allEvents.length)
 
-      router.push(`/discover?q=${encodeURIComponent(query)}`, { scroll: false })
+      const urlParams = new URLSearchParams()
+      if (query.trim()) urlParams.set("q", query.trim())
+      if (cityFilter) urlParams.set("city", cityFilter)
+      if (hasCoords) {
+        urlParams.set("lat", String(userLat))
+        urlParams.set("lng", String(userLng))
+      }
+
+      router.push(`/discover?${urlParams.toString()}`, { scroll: false })
     } catch (e: any) {
       console.error(e)
       setError(e?.message || "Search failed")
@@ -207,6 +347,12 @@ export function EventsListingContent({
     }
   }
 
+  /**
+   * Apply filters + smart ordering on the client:
+   * - community events first
+   * - if local search and we have coordinates, sort by distance
+   * - otherwise sort by chosen “sortBy”
+   */
   const filteredResults = results
     .filter((event) => {
       if (selectedCategory !== "All" && !event.categories?.includes(selectedCategory)) {
@@ -221,6 +367,33 @@ export function EventsListingContent({
       return true
     })
     .sort((a, b) => {
+      // 1) Community vs external
+      const isExternalA = !!a.source && a.source !== "internal"
+      const isExternalB = !!b.source && b.source !== "internal"
+      if (isExternalA !== isExternalB) {
+        return isExternalA ? 1 : -1
+      }
+
+      // 2) If we’re in local search and both have coords, sort by distance
+      if (isLocalSearch && hasCoords) {
+        const lat1 = a.lat ?? a.location?.lat
+        const lng1 = a.lng ?? a.location?.lng
+        const lat2 = b.lat ?? b.location?.lat
+        const lng2 = b.lng ?? b.location?.lng
+
+        if (lat1 != null && lng1 != null && lat2 != null && lng2 != null) {
+          const d1 = distanceKm(userLat!, userLng!, lat1, lng1)
+          const d2 = distanceKm(userLat!, userLng!, lat2, lng2)
+          if (d1 !== d2) return d1 - d2
+        } else if (lat1 != null && lng1 != null) {
+          // events with known distance come first
+          return -1
+        } else if (lat2 != null && lng2 != null) {
+          return 1
+        }
+      }
+
+      // 3) Fallback: sort by chosen field
       switch (sortBy) {
         case "date-asc":
           return new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
@@ -250,7 +423,6 @@ export function EventsListingContent({
     sortBy !== "date-asc" ||
     cityFilter !== ""
 
-  const tEvents = t("events")
   const showingText = (tEvents("results.showing") || "Showing {filtered} of {total} events")
     .replace("{filtered}", filteredResults.length.toString())
     .replace("{total}", results.length.toString())
@@ -378,6 +550,11 @@ export function EventsListingContent({
 
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">{showingText}</p>
+        {isLocalSearch && (
+          <p className="text-xs text-muted-foreground">
+            Showing events near your current location (community events first).
+          </p>
+        )}
       </div>
 
       {loading ? (

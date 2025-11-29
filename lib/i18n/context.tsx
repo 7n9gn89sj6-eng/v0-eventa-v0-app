@@ -1,7 +1,17 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import { translations, type Locale, type TranslationNamespace } from "./translations"
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  type ReactNode,
+} from "react"
+import {
+  translations,
+  type Locale,
+  type TranslationNamespace,
+} from "./translations"
 
 interface I18nContextType {
   locale: Locale
@@ -23,7 +33,6 @@ export function I18nProvider({ children }: { children: ReactNode }) {
         setLocaleState(savedLocale)
       }
     } else {
-      // Set default locale cookie if not present (replaces middleware logic)
       document.cookie = `NEXT_LOCALE=en; max-age=31536000; path=/; samesite=lax`
     }
   }, [])
@@ -44,15 +53,17 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     return typeof value === "string" ? value : key
   }
 
-  return <I18nContext.Provider value={{ locale, setLocale, t }}>{children}</I18nContext.Provider>
+  return (
+    <I18nContext.Provider value={{ locale, setLocale, t }}>
+      {children}
+    </I18nContext.Provider>
+  )
 }
 
 export function useI18n() {
-  const context = useContext(I18nContext)
-  if (!context) {
-    throw new Error("useI18n must be used within I18nProvider")
-  }
-  return context
+  const ctx = useContext(I18nContext)
+  if (!ctx) throw new Error("useI18n must be used within I18nProvider")
+  return ctx
 }
 
 export function useTranslations(namespace: TranslationNamespace) {

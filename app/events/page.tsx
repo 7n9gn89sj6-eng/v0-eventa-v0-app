@@ -9,12 +9,13 @@ export const dynamic = "force-dynamic"
 
 export default function EventsPage() {
   const { t } = useI18n()
+  const translate = t("events") // Bind namespace correctly
 
   return (
     <div className="container mx-auto px-4 py-12">
       <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2">{t("events.title")}</h1>
-        <p className="text-lg text-muted-foreground">{t("events.subtitle")}</p>
+        <h1 className="text-4xl font-bold mb-2">{translate("title")}</h1>
+        <p className="text-lg text-muted-foreground">{translate("subtitle")}</p>
       </div>
 
       <Suspense fallback={<LoadingSpinner size="lg" className="py-12" />}>

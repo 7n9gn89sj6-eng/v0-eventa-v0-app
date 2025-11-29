@@ -28,13 +28,18 @@ interface DraftEvent {
 export default function HomePage() {
   const { t } = useI18n()
   const router = useRouter()
-  const tHomeHero = t("home.hero")
-  const tHomeToast = t("home.toast")
-  const tHomeDrafts = t("home.drafts")
-  const tHomeSearch = t("home.search")
-  const tHomeFooter = t("home.footer")
 
-  console.log("[v0] Post Event translation:", t("event.postEvent"))
+  // Bind "home" namespace
+  const tHome = t("home")
+
+  // Individual translation groups
+  const tHomeHero = tHome("hero")
+  const tHomeToast = tHome("toast")
+  const tHomeDrafts = tHome("drafts")
+  const tHomeSearch = tHome("search")
+  const tHomeFooter = tHome("footer")
+
+  console.log("[v0] Post Event translation:", t("event")("postEvent"))
 
   const locale = "en"
   const [searchResults, setSearchResults] = useState<any[]>([])
@@ -51,6 +56,7 @@ export default function HomePage() {
     }
     return []
   })
+
   const [showDraftsList, setShowDraftsList] = useState(false)
   const [followUpQuestion, setFollowUpQuestion] = useState("")
   const [isSpeakingSearch, setIsSpeakingSearch] = useState(false)
@@ -87,7 +93,9 @@ export default function HomePage() {
         description: `"${draft.title}" saved for ${dateDisplay} at ${draft.time} in ${draft.venue || draft.city}`,
       })
     } catch (error) {
-      toast({
+  console.log(tHomeToast);  // This will log the value of tHomeToast to the console
+ 
+   toast({
         title: "Error",
         description: "Failed to save draft. Please try again.",
         variant: "destructive",
@@ -116,7 +124,7 @@ export default function HomePage() {
     })
   }
 
-  const handleError = (error: string) => {
+  const handleError = () => {
     setShowResults(false)
     setSearchResults([])
   }
@@ -140,10 +148,8 @@ export default function HomePage() {
     }
   }
 
-  const handleSmartSearch = async (query: string) => {
-    console.log("[v0] Landing page search, SmartInputBar will handle navigation")
-    // SmartInputBar already extracts intent and navigates to /discover with params
-    // No need to do anything here
+  const handleSmartSearch = async () => {
+    console.log("[v0] Landing page search — SmartInputBar handles navigation.")
   }
 
   return (
@@ -152,17 +158,19 @@ export default function HomePage() {
         <div className="mx-auto max-w-3xl py-16 text-center">
           <SmartInputBar
             onSearch={handleSmartSearch}
-            onError={(error) => {
+            onError={(error) =>
               toast({
                 title: tHomeToast("error"),
                 description: error,
                 variant: "destructive",
               })
-            }}
+            }
           />
 
           <div className="mt-8 flex flex-col items-center gap-4">
-            <p className="text-2xl font-bold text-foreground">To create an event, please use this button:</p>
+            <p className="text-2xl font-bold text-foreground">
+              To create an event, please use this button:
+            </p>
             <Button asChild size="lg" className="gap-2 min-w-[200px]">
               <Link href="/add-event" className="flex items-center gap-2">
                 <Plus className="h-5 w-5" />
@@ -194,17 +202,21 @@ export default function HomePage() {
               paraphrase={draftParaphrase}
               onConfirm={handleConfirmDraft}
               onCancel={handleCancelDraft}
-              onAskFollowUp={(field) => {
-                // Handle follow-up questions
-              }}
+              onAskFollowUp={() => {}}
             />
           </div>
         )}
 
         {showDraftsList && (
           <div className="mx-auto max-w-2xl mt-12">
-            <h3 className="text-2xl font-semibold mb-6">{tHomeDrafts("title")}</h3>
-            <DraftsList drafts={drafts} onEdit={handleEditDraft} onDelete={handleDeleteDraft} />
+            <h3 className="text-2xl font-semibold mb-6">
+              {tHomeDrafts("title")}
+            </h3>
+            <DraftsList
+              drafts={drafts}
+              onEdit={handleEditDraft}
+              onDelete={handleDeleteDraft}
+            />
           </div>
         )}
       </main>

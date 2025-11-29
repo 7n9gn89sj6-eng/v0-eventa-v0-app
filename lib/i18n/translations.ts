@@ -1,1175 +1,222 @@
-export const translations = {
-  en: {
-    auth: {
-      signIn: "Sign In",
-      signInTitle: "Sign In",
-      signInSubtitle: "Enter your email to sign in to your account",
-      signInDescription: "Enter your email to sign in to your account",
-      email: "Email",
-      emailPlaceholder: "name@example.com",
-      signInWithEmail: "Sign in with Email",
-      checkEmail: "Check your email",
-      checkEmailDescription: "We sent you a login link. Be sure to check your spam too.",
-      authError: "Authentication Error",
-      authNotConfigured: "Email authentication is not configured. Please contact the administrator.",
-      postEvent: "Post Event",
-    },
-    event: {
-      addEvent: "Add Event",
-      myEvents: "My Events",
-      favorites: "Favorites",
-      postEvent: "Post Event",
-    },
-    common: {
-      browse: "Browse",
-      location: "Location",
-      pageTitle: "Discover & Create Events",
-      pageSubtitle: "Search for events or create your own with AI assistance",
-    },
-    aria: {
-      loading: "Loading",
-      breadcrumb: "Breadcrumb",
-      toggleSidebar: "Toggle Sidebar",
-    },
-    metadata: {
-      title: "Eventa - Discover Community Events",
-      description: "Find local events, festivals, markets, and cultural activities in your area",
-      signInTitle: "Sign In - Eventa",
-      signInDescription: "Sign in to your Eventa account",
-    },
-    home: {
-      hero: {
-        title: "Discover & Create Events",
-        subtitle: "Search for events or create your own with AI assistance",
-        searchPlaceholder: "Search events, cities, venues...",
-        viewDrafts: "View Drafts",
-        naturalLanguageHint: "Search for events or create new ones using natural language.",
-      },
-      search: {
-        speaking: "Stop speaking",
-        speak: "Speak",
-        noResults: "No results found",
-        showingResults: "Search Results",
-        searchMode: "Search",
-        createMode: "Create",
-        go: "Go",
-        processing: "Processing",
-        searchGuidance: "Find events by location, date, or type...",
-        createGuidance: "Describe your event in plain language...",
-        tryThese: "Try these:",
-        switchedToCreateMode: "Switched to Create mode",
-        continue: "Continue",
-        undo: "Undo",
-      },
-      chips: {
-        jazzWeekend: "jazz this weekend",
-        athensFood: "Athens food",
-        kidsSaturday: "kids Saturday",
-        communityMarkets: "Community Markets",
-        garageSale: "Garage Sale",
-        celebrations: "Celebrations",
-        openMicDock: "Open mic at The Dock next Saturday 8pm",
-        yogaLisbon: "yoga in Lisbon on Saturday",
-        communityPicnic: "community picnic tomorrow 2pm",
-      },
-      drafts: {
-        title: "Your Drafts",
-        viewDrafts: "View Drafts ({count})",
-      },
-      footer: {
-        tagline: "Eventa – AI-powered event discovery",
-      },
-      toast: {
-        needMoreDetails: "Need More Details",
-        clarify: "Please clarify: {fields}",
-        draftSaved: "Draft Saved",
-        draftDeleted: "Draft Deleted",
-        draftDeletedDesc: "Your draft has been removed.",
-        noResultsTitle: "No Results",
-        noResultsDesc: "No events found. Try different keywords or create your own.",
-        searchFailed: "Search Failed",
-        searchFailedDesc: "Something went wrong. Please try again.",
-        creationFailed: "Creation Failed",
-        creationFailedDesc: "Failed to extract event details. Redirecting to form...",
-        error: "Error",
-      },
-    },
-    events: {
-      title: "Browse Events",
-      subtitle: "Discover upcoming events in your area and beyond",
-      filters: {
-        title: "Search & Filters",
-        show: "Show",
-        hide: "Hide",
-        search: "Search",
-        searchPlaceholder: "Search events, cities, venues...",
-        searchAriaLabel: "Search events",
-        category: "Category",
-        price: "Price",
-        sortBy: "Sort By",
-        clearFilters: "Clear Filters",
-        go: "Go",
-        processing: "Processing…",
-      },
-      priceOptions: {
-        all: "All Events",
-        free: "Free Only",
-        paid: "Paid Only",
-      },
-      sortOptions: {
-        dateAsc: "Date (Earliest First)",
-        dateDesc: "Date (Latest First)",
-        titleAsc: "Title (A-Z)",
-        titleDesc: "Title (Z-A)",
-      },
-      results: {
-        showing: "Showing {filtered} of {total} events",
-        noEvents: "No events found",
-        noEventsHint: "Try adjusting your search or filters",
-        noResultsFound: "No results found.",
-      },
-      card: {
-        free: "Free",
-        viewDetails: "View Details",
-        viewOn: "View on {source}",
-      },
-    },
-    form: {
-      page: {
-        title: "Post a New Event",
-        subtitle: "Share your event with the community. Fill in the details below and we'll send you a verification email to finish publishing.",
-      },
-      sections: {
-        yourInfo: "Your Information",
-        eventDetails: "Event Details",
-        location: "Location",
-        dateTime: "Date & Time",
-        optional: "Optional Information",
-      },
-      fields: {
-        name: "Your Name",
-        namePlaceholder: "John Doe",
-        email: "Contact Email",
-        emailPlaceholder: "you@example.com",
-        emailHint: "We'll send a confirmation link to this email",
-        humanCheck: "Human Check",
-        humanCheckHint: "Type the last word of this sentence: eventa connects communities",
-        humanCheckPlaceholder: "Type the last word...",
-        title: "Event Title",
-        titlePlaceholder: "e.g., Athens Farmers Market",
-        description: "Description",
-        descriptionPlaceholder: "Describe your event in detail...",
-        descriptionHint: "Include what makes your event special, what attendees can expect, and any important details",
-        address: "Address",
-        addressPlaceholder: "123 Main Street",
-        postcode: "Postcode / ZIP Code",
-        postcodePlaceholder: "12345",
-        postcodeOptional: "Optional",
-        city: "City",
-        cityPlaceholder: "Athens",
-        country: "Country",
-        countryPlaceholder: "Greece",
-        startAt: "Start Date & Time",
-        endAt: "End Date & Time",
-        endAtHint: "Events auto-hide after the end time.",
-        imageUrl: "Image URL (optional)",
-        imageUrlPlaceholder: "https://example.com/image.jpg",
-        imageUrlHint: "Link to an image for your event",
-        externalUrl: "External URL (optional)",
-        externalUrlPlaceholder: "https://example.com",
-        externalUrlHint: "Link to your event website or registration page",
-        venueName: "Venue Name",
-        venueNamePlaceholder: "e.g., Central Park",
-        categories: "Categories (select all that apply)",
-        price: "Price",
-        priceFree: "This event is free",
-        priceAmount: "Price (in your local currency)",
-        priceAmountPlaceholder: "10.00",
-        websiteUrl: "Website or Registration Link",
-        websiteUrlPlaceholder: "https://example.com",
-        languages: "Event Languages",
-        required: "*",
-        addressGuidance: "We'll automatically geocode this address for map display and distance calculations.",
-      },
-      validation: {
-        nameMin: "Name must be at least 2 characters",
-        emailInvalid: "Please enter a valid email address",
-        humanCheckIncorrect: "Please type the correct word from the challenge",
-        titleMin: "Event title must be at least 5 characters",
-        descriptionMin: "Description must be at least 20 characters",
-        addressMin: "Address is required",
-        cityMin: "City is required",
-        countryMin: "Country is required",
-        startRequired: "Start date and time is required",
-        endRequired: "End date and time is required",
-        urlInvalid: "Please enter a valid URL",
-        endAfterStart: "End must be after start.",
-        titleRequired: "Title is required",
-        descriptionRequired: "Description is required",
-        startInvalid: "Invalid start date/time",
-        endInvalid: "Invalid end date/time",
-        endMustBeAfterStart: "End date/time must be after start date/time",
-      },
-      alerts: {
-        prefilled: "We've prefilled some fields based on your draft. Please review and complete the remaining details.",
-      },
-      buttons: {
-        submit: "Submit Event",
-        submitting: "Submitting event...",
-        backToHome: "Back to Home",
-        submitAnother: "Submit another event",
-        publishEvent: "Publish Event",
-        creatingEvent: "Creating event...",
-        cancel: "Cancel",
-      },
-      success: {
-        title: "Thanks for Posting your event",
-        message: "A confirmation email has been sent",
-      },
-      errors: {
-        serverConfig: "The server is not properly configured. Please contact support or check that all required environment variables are set in the Vars section.",
-        unexpected: "An unexpected error occurred",
-        createFailed: "Failed to create event",
-      },
-    },
-  },
-  it: {
-    auth: {
-      signIn: "Accedi",
-      signInTitle: "Accedi",
-      signInSubtitle: "Inserisci la tua email per accedere al tuo account",
-      signInDescription: "Inserisci la tua email per accedere al tuo account",
-      email: "Email",
-      emailPlaceholder: "nome@esempio.com",
-      signInWithEmail: "Accedi con Email",
-      checkEmail: "Controlla la tua email",
-      checkEmailDescription: "Ti abbiamo inviato un link di accesso. Controlla anche lo spam.",
-      authError: "Errore di Autenticazione",
-      authNotConfigured: "L'autenticazione email non è configurata. Contatta l'amministratore.",
-      postEvent: "Pubblica Evento",
-    },
-    event: {
-      addEvent: "Aggiungi Evento",
-      myEvents: "I Miei Eventi",
-      favorites: "Preferiti",
-      postEvent: "Pubblica Evento",
-    },
-    common: {
-      browse: "Sfoglia",
-      location: "Posizione",
-      pageTitle: "Scopri e Crea Eventi",
-      pageSubtitle: "Cerca eventi o crea i tuoi con l'assistenza dell'IA",
-    },
-    aria: {
-      loading: "Caricamento",
-      breadcrumb: "Breadcrumb",
-      toggleSidebar: "Attiva/Disattiva Barra Laterale",
-    },
-    metadata: {
-      title: "Eventa - Scopri Eventi della Comunità",
-      description: "Trova eventi locali, festival, mercati e attività culturali nella tua zona",
-      signInTitle: "Accedi - Eventa",
-      signInDescription: "Accedi al tuo account Eventa",
-    },
-    home: {
-      hero: {
-        title: "Scopri e Crea Eventi",
-        subtitle: "Cerca eventi o crea i tuoi con l'assistenza dell'IA",
-        searchPlaceholder: "Cerca eventi, città, luoghi...",
-        viewDrafts: "Visualizza Bozze",
-        naturalLanguageHint: "Cerca eventi o creane di nuovi usando il linguaggio naturale.",
-      },
-      search: {
-        speaking: "Ferma la lettura",
-        speak: "Leggi",
-        noResults: "Nessun risultato trovato",
-        showingResults: "Risultati di Ricerca",
-        searchMode: "Cerca",
-        createMode: "Crea",
-        go: "Vai",
-        processing: "Elaborazione",
-        searchGuidance: "Trova eventi per località, data o tipo...",
-        createGuidance: "Descrivi il tuo evento in linguaggio semplice...",
-        tryThese: "Prova questi:",
-        switchedToCreateMode: "Passato alla modalità Crea",
-        continue: "Continua",
-        undo: "Annulla",
-      },
-      chips: {
-        jazzWeekend: "jazz questo weekend",
-        athensFood: "cibo Atene",
-        kidsSaturday: "bambini sabato",
-        communityMarkets: "Mercati Comunitari",
-        garageSale: "Vendita Garage",
-        celebrations: "Celebrazioni",
-        openMicDock: "Microfono aperto al Dock sabato prossimo alle 20",
-        yogaLisbon: "yoga a Lisbona sabato",
-        communityPicnic: "picnic comunitario domani alle 14",
-      },
-      drafts: {
-        title: "Le Tue Bozze",
-        viewDrafts: "Visualizza Bozze ({count})",
-      },
-      footer: {
-        tagline: "Eventa – Scoperta eventi con IA",
-      },
-      toast: {
-        needMoreDetails: "Servono Più Dettagli",
-        clarify: "Si prega di chiarire: {fields}",
-        draftSaved: "Bozza Salvata",
-        draftDeleted: "Bozza Eliminata",
-        draftDeletedDesc: "La tua bozza è stata rimossa.",
-        noResultsTitle: "Nessun Risultato",
-        noResultsDesc: "Nessun evento trovato. Prova con parole chiave diverse o crea il tuo.",
-        searchFailed: "Ricerca Fallita",
-        searchFailedDesc: "Qualcosa è andato storto. Riprova.",
-        creationFailed: "Creazione Fallita",
-        creationFailedDesc: "Impossibile estrarre i dettagli dell'evento. Reindirizzamento al modulo...",
-        error: "Errore",
-      },
-    },
-    events: {
-      title: "Sfoglia Eventi",
-      subtitle: "Scopri eventi imminenti nella tua zona e oltre",
-      filters: {
-        title: "Ricerca e Filtri",
-        show: "Mostra",
-        hide: "Nascondi",
-        search: "Cerca",
-        searchPlaceholder: "Cerca eventi, città, luoghi...",
-        searchAriaLabel: "Cerca eventi",
-        category: "Categoria",
-        price: "Prezzo",
-        sortBy: "Ordina Per",
-        clearFilters: "Cancella Filtri",
-        go: "Vai",
-        processing: "Elaborazione…",
-      },
-      priceOptions: {
-        all: "Tutti gli Eventi",
-        free: "Solo Gratuiti",
-        paid: "Solo a Pagamento",
-      },
-      sortOptions: {
-        dateAsc: "Data (Prima i Più Recenti)",
-        dateDesc: "Data (Prima i Più Vecchi)",
-        titleAsc: "Titolo (A-Z)",
-        titleDesc: "Titolo (Z-A)",
-      },
-      results: {
-        showing: "Mostrando {filtered} di {total} eventi",
-        noEvents: "Nessun evento trovato",
-        noEventsHint: "Prova a modificare la ricerca o i filtri",
-        noResultsFound: "Nessun risultato trovato.",
-      },
-      card: {
-        free: "Gratuito",
-        viewDetails: "Vedi Dettagli",
-        viewOn: "Visualizza su {source}",
-      },
-    },
-    form: {
-      page: {
-        title: "Pubblica un Nuovo Evento",
-        subtitle: "Condividi il tuo evento con la comunità. Compila i dettagli qui sotto e ti invieremo un'email di verifica per completare la pubblicazione.",
-      },
-      sections: {
-        yourInfo: "Le Tue Informazioni",
-        eventDetails: "Dettagli Evento",
-        location: "Posizione",
-        dateTime: "Data e Ora",
-        optional: "Informazioni Opzionali",
-      },
-      fields: {
-        name: "Il Tuo Nome",
-        namePlaceholder: "Mario Rossi",
-        email: "Email di Contatto",
-        emailPlaceholder: "tu@esempio.com",
-        emailHint: "Ti invieremo un'URL di conferma a questa email",
-        humanCheck: "Controllo Umano",
-        humanCheckHint: "Digita l'ultima parola di questa frase: eventa collega le comunità",
-        humanCheckPlaceholder: "Digita l'ultima parola...",
-        title: "Titolo Evento",
-        titlePlaceholder: "es., Mercato Contadino di Atene",
-        description: "Descrizione",
-        descriptionPlaceholder: "Descrivi il tuo evento in dettaglio...",
-        descriptionHint: "Includi ciò che rende speciale il tuo evento, cosa possono aspettarsi i partecipanti e dettagli importanti",
-        address: "Indirizzo",
-        addressPlaceholder: "Via Roma 123",
-        postcode: "Codice Postale",
-        postcodePlaceholder: "12345",
-        postcodeOptional: "Opzionale",
-        city: "Città",
-        cityPlaceholder: "Atene",
-        country: "Paese",
-        countryPlaceholder: "Grecia",
-        startAt: "Data e Ora di Inizio",
-        endAt: "Data e Ora di Fine",
-        endAtHint: "Gli eventi si nascondono automaticamente dopo l'ora di fine.",
-        imageUrl: "URL Immagine (opzionale)",
-        imageUrlPlaceholder: "https://esempio.com/immagine.jpg",
-        imageUrlHint: "Link a un'immagine per il tuo evento",
-        externalUrl: "URL Esterno (opzionale)",
-        externalUrlPlaceholder: "https://esempio.com",
-        externalUrlHint: "Link al sito web del tuo evento o pagina di registrazione",
-        venueName: "Nome del Luogo",
-        venueNamePlaceholder: "es., Parco Centrale",
-        categories: "Categorie (seleziona tutte quelle che si applicano)",
-        price: "Prezzo",
-        priceFree: "Questo evento è gratuito",
-        priceAmount: "Prezzo (in valuta locale)",
-        priceAmountPlaceholder: "10,00",
-        websiteUrl: "Sito Web o Link di Registrazione",
-        websiteUrlPlaceholder: "https://esempio.com",
-        languages: "Lingue dell'Evento",
-        required: "*",
-        addressGuidance: "Coderemo automaticamente questo indirizzo per la visualizzazione sulla mappa e i calcoli di distanza.",
-      },
-      validation: {
-        nameMin: "Il nome deve essere di almeno 2 caratteri",
-        emailInvalid: "Inserisci un indirizzo email valido",
-        humanCheckIncorrect: "Digita la parola corretta dalla sfida",
-        titleMin: "Il titolo dell'evento deve essere di almeno 5 caratteri",
-        descriptionMin: "La descrizione deve essere di almeno 20 caratteri",
-        addressMin: "L'indirizzo è obbligatorio",
-        cityMin: "La città è obbligatoria",
-        countryMin: "Il paese è obbligatorio",
-        startRequired: "La data e l'ora di inizio sono obbligatorie",
-        endRequired: "La data e l'ora di fine sono obbligatorie",
-        urlInvalid: "Inserisci un URL valido",
-        endAfterStart: "La fine deve essere dopo l'inizio.",
-        titleRequired: "Il titolo è obbligatorio",
-        descriptionRequired: "La descrizione è obbligatoria",
-        startInvalid: "Data/ora di inizio non valida",
-        endInvalid: "Data/ora di fine non valida",
-        endMustBeAfterStart: "La fine deve essere dopo l'inizio.",
-      },
-      alerts: {
-        prefilled: "Abbiamo precompilato alcuni campi in base alla tua bozza. Controlla e completa i dettagli rimanenti.",
-      },
-      buttons: {
-        submit: "Invia Evento",
-        submitting: "Invio evento...",
-        backToHome: "Torna alla Home",
-        submitAnother: "Invia un altro evento",
-        publishEvent: "Pubblica Evento",
-        creatingEvent: "Creazione evento...",
-        cancel: "Annulla",
-      },
-      success: {
-        title: "Grazie per aver pubblicato il tuo evento",
-        message: "È stata inviata email di conferma",
-      },
-      errors: {
-        serverConfig: "Il server non è configurato correttamente. Contatta il supporto o verifica che tutte le variabili d'ambiente richieste siano impostate nella sezione Vars.",
-        unexpected: "Si è verificato un errore imprevisto",
-        createFailed: "Impossibile creare l'evento",
-      },
-    },
-  },
-  el: {
-    auth: {
-      signIn: "Σύνδεση",
-      signInTitle: "Σύνδεση",
-      signInSubtitle: "Εισαγάγετε το email σας για να συνδεθείτε στον λογαριασμό σας",
-      signInDescription: "Εισαγάγετε το email σας για να συνδεθείτε στον λογαριασμό σας",
-      email: "Email",
-      emailPlaceholder: "onoma@paradeigma.com",
-      signInWithEmail: "Σύνδεση με Email",
-      checkEmail: "Ελέγξτε το email σας",
-      checkEmailDescription: "Σας στείλαμε έναν σύνδεσμο σύνδεσης. Ελέγξτε και το spam.",
-      authError: "Σφάλμα Ελέγχου Ταυτότητας",
-      authNotConfigured: "Ο έλεγχος ταυτότητας email δεν έχει ρυθμιστεί. Επικοινωνήστε με τον διαχειριστή.",
-      postEvent: "Δημοσίευση Εκδήλωσης",
-    },
-    event: {
-      addEvent: "Προσθήκη Εκδηλώσεις",
-      myEvents: "Οι Εκδηλώσεις μου",
-      favorites: "Αγαπημένα",
-      postEvent: "Δημοσίευση Εκδήλωσης",
-    },
-    common: {
-      browse: "Περιήγηση",
-      location: "Τοποθεσία",
-      pageTitle: "Ανακαλύψτε και Δημιουργήστε Εκδηλώσεις",
-      pageSubtitle: "Αναζητήστε εκδηλώσεις ή δημιουργήστε τις δικές σας με τη βοήθεια της ΤΝ",
-    },
-    aria: {
-      loading: "Φόρτωση",
-      breadcrumb: "Breadcrumb",
-      toggleSidebar: "Εναλλαγή Πλευρικής Μπάρας",
-    },
-    metadata: {
-      title: "Eventa - Ανακαλύψτε Κοινοτικές Εκδηλώσεις",
-      description: "Βρείτε τοπικές εκδηλώσεις, φεστιβάλ, αγορές και πολιτιστικές δραστηριότητες στην περιοχή σας",
-      signInTitle: "Σύνδεση - Eventa",
-      signInDescription: "Συνδεθείτε στον λογαριασμό σας Eventa",
-    },
-    home: {
-      hero: {
-        title: "Ανακαλύψτε και Δημιουργήστε Εκδηλώσεις",
-        subtitle: "Αναζητήστε εκδηλώσεις ή δημιουργήστε τις δικές σας με τη βοήθεια της ΤΝ",
-        searchPlaceholder: "Αναζήτηση εκδηλώσεων, πόλεων, χώρων...",
-        viewDrafts: "Προβολή Προσχεδίων",
-        naturalLanguageHint: "Αναζητήστε εκδηλώσεις ή δημιουργήστε νέες χρησιμοποιώντας φυσική γλώσσα.",
-      },
-      search: {
-        speaking: "Διακοπή ομιλίας",
-        speak: "Ομιλία",
-        noResults: "Δεν βρέθηκαν αποτελέσματα",
-        showingResults: "Αποτελέσματα Αναζήτησης",
-        searchMode: "Αναζήτηση",
-        createMode: "Δημιουργία",
-        go: "Εκτέλεση",
-        processing: "Επεξεργασία",
-        searchGuidance: "Βρείτε εκδηλώσεις ανά τοποθεσία, ημερομηνία ή τύπο...",
-        createGuidance: "Περιγράψτε την εκδήλωσή σας με απλή γλώσσα...",
-        tryThese: "Δοκιμάστε αυτά:",
-        switchedToCreateMode: "Μετάβαση στη λειτουργία Δημιουργίας",
-        continue: "Συνέχεια",
-        undo: "Αναίρεση",
-      },
-      chips: {
-        jazzWeekend: "jazz αυτό το σαββατοκύριακο",
-        athensFood: "φαγητό Αθήνα",
-        kidsSaturday: "παιδιά Σάββατο",
-        communityMarkets: "Κοινοτικές Αγορές",
-        garageSale: "Πώληση Γκαράζ",
-        celebrations: "Εορτασμοί",
-        openMicDock: "Ανοιχτό μικρόφωνο στο Dock το επόμενο Σάββατο στις 8μμ",
-        yogaLisbon: "γιόγκα στη Λισαβόνα το Σάββατο",
-        communityPicnic: "κοινοτικό πικνίκ αύριο στις 2μμ",
-      },
-      drafts: {
-        title: "Τα Προσχέδιά σας",
-        viewDrafts: "Προβολή Προσχεδίων ({count})",
-      },
-      footer: {
-        tagline: "Eventa – Ανακάλυψη εκδηλώσεων με ΤΝ",
-      },
-      toast: {
-        needMoreDetails: "Χρειάζονται Περισσότερες Λεπτομέρειες",
-        clarify: "Παρακαλώ διευκρινίστε: {fields}",
-        draftSaved: "Το Προσχέδιο Αποθηκεύτηκε",
-        draftDeleted: "Το Προσχέδιο Διαγράφηκε",
-        draftDeletedDesc: "Το προσχέδιό σας αφαιρέθηκε.",
-        noResultsTitle: "Κανένα Αποτέλεσμα",
-        noResultsDesc: "Δεν βρέθηκαν εκδηλώσεις. Δοκιμάστε διαφορετικές λέξεις-κλειδιά ή δημιουργήστε τη δική σας.",
-        searchFailed: "Η Αναζήτηση Απέτυχε",
-        searchFailedDesc: "Κάτι πήγε στραβά. Παρακαλώ δοκιμάστε ξανά.",
-        creationFailed: "Η Δημιουργία Απέτυχε",
-        creationFailedDesc: "Αποτυχία εξαγωγής λεπτομερειών εκδήλωσης. Ανακατεύθυνση στη φόρμα...",
-        error: "Σφάλμα",
-      },
-    },
-    events: {
-      title: "Περιήγηση Εκδηλώσεων",
-      subtitle: "Ανακαλύψτε επερχόμενες εκδηλώσεις στην περιοχή σας και πέρα από αυτήν",
-      filters: {
-        title: "Αναζήτηση & Φίλτρα",
-        show: "Εμφάνιση",
-        hide: "Απόκρυψη",
-        search: "Αναζήτηση",
-        searchPlaceholder: "Αναζήτηση εκδηλώσεων, πόλεων, χώρων...",
-        searchAriaLabel: "Αναζήτηση εκδηλώσεων",
-        category: "Κατηγορία",
-        price: "Τιμή",
-        sortBy: "Ταξινόμηση Κατά",
-        clearFilters: "Εκκαθάριση Φίλτρων",
-        go: "Εκτέλεση",
-        processing: "Επεξεργασία…",
-      },
-      priceOptions: {
-        all: "Όλες οι Εκδηλώσεις",
-        free: "Μόνο Δωρεάν",
-        paid: "Μόνο Επί Πληρωμή",
-      },
-      sortOptions: {
-        dateAsc: "Ημερομηνία (Πρώτα οι Παλαιότερες)",
-        dateDesc: "Ημερομηνία (Πρώτα οι Νεότερες)",
-        titleAsc: "Τίτλος (A-Z)",
-        titleDesc: "Τίτλος (Z-A)",
-      },
-      results: {
-        showing: "Εμφάνιση {filtered} από {total} εκδηλώσεις",
-        noEvents: "Δεν βρέθηκαν εκδηλώσεις",
-        noEventsHint: "Δοκιμάστε να προσαρμόσετε την αναζήτηση ή τα φίλτρα σας",
-        noResultsFound: "Δεν βρέθηκαν αποτελέσματα.",
-      },
-      card: {
-        free: "Δωρεάν",
-        viewDetails: "Προβολή Λεπτομερειών",
-        viewOn: "Προβολή στο {source}",
-      },
-    },
-    form: {
-      page: {
-        title: "Δημοσιεύστε μια Νέα Εκδήλωση",
-        subtitle: "Μοιραστείτε την εκδήλωσή σας με την κοινότητα. Συμπληρώστε τα στοιχεία παρακάτω και θα σας στείλουμε ένα email επαλήθευσης για να ολοκληρώσετε τη δημοσίευση.",
-      },
-      sections: {
-        yourInfo: "Οι Πληροφορίες σας",
-        eventDetails: "Λεπτομέρειες Εκδήλωσης",
-        location: "Τοποθεσία",
-        dateTime: "Ημερομηνία & Ώρα",
-        optional: "Προαιρετικές Πληροφορίες",
-      },
-      fields: {
-        name: "Το Όνομά σας",
-        namePlaceholder: "Γιάννης Παπαδόπουλος",
-        email: "Email Επικοινωνίας",
-        emailPlaceholder: "εσυ@παραδειγμα.com",
-        emailHint: "Θα στείλουμε έναν σύνδεσμο επιβεβαίωσης σε αυτό το email",
-        humanCheck: "Έλεγχος Ανθρώπου",
-        humanCheckHint: "Πληκτρολογήστε την τελευταία λέξη αυτής της πρότασης: το eventa συνδέει κοινότητες",
-        humanCheckPlaceholder: "Πληκτρολογήστε την τελευταία λέξη...",
-        title: "Τίτλος Εκδήλωσης",
-        titlePlaceholder: "π.χ., Αγορά Αγροτών Αθήνας",
-        description: "Περιγραφή",
-        descriptionPlaceholder: "Περιγράψτε την εκδήλωσή σας λεπτομερώς...",
-        descriptionHint: "Συμπεριλάβετε τι κάνει την εκδήλωσή σας ξεχωριστή, τι μπορούν να περιμένουν οι συμμετέχοντες και σημαντικές λεπτομέρειες",
-        address: "Διεύθυνση",
-        addressPlaceholder: "Οδός Αθηνάς 123",
-        postcode: "Ταχυδρομικός Κώδικας",
-        postcodePlaceholder: "12345",
-        postcodeOptional: "Προαιρετικό",
-        city: "Πόλη",
-        cityPlaceholder: "Αθήνα",
-        country: "Χώρα",
-        countryPlaceholder: "Ελλάδα",
-        startAt: "Ημερομηνία & Ώρα Έναρξης",
-        endAt: "Ημερομηνία & Ώρα Λήξης",
-        endAtHint: "Οι εκδηλώσεις αποκρύπτονται αυτόματα μετά την ώρα λήξης.",
-        imageUrl: "URL Εικόνας (προαιρετικό)",
-        imageUrlPlaceholder: "https://παραδειγμα.com/εικονα.jpg",
-        imageUrlHint: "Σύνδεσμος σε μια εικόνα για την εκδήλωσή σας",
-        externalUrl: "Εξωτερικό URL (προαιρετικό)",
-        externalUrlPlaceholder: "https://παραδειγμα.com",
-        externalUrlHint: "Σύνδεσμος στον ιστότοπο της εκδήλωσής σας ή τη σελίδα εγγραφής",
-        venueName: "Όνομα Τοποθεσίας",
-        venueNamePlaceholder: "π.χ., Κέντρο Παρκ",
-        categories: "Κατηγορίες (επιλέξτε όλες που προσφέρονται)",
-        price: "Τιμή",
-        priceFree: "Αυτή η εκδήλωση είναι δωρεάν",
-        priceAmount: "Τιμή (στην τοπική σας νομίσματα)",
-        priceAmountPlaceholder: "10,00",
-        websiteUrl: "Ιστότοπος ή Σύνδεσμος Εγγραφής",
-        websiteUrlPlaceholder: "https://παραδειγμα.com",
-        languages: "Γλώσσσεις της Εκδήλωσης",
-        required: "*",
-        addressGuidance: "Θα κωδικοποιηθεί αυτή η διεύθυνση αυτόματα για εμφάνιση στον χάρτη και υπολογισμούς αποστάσεων.",
-      },
-      validation: {
-        nameMin: "Το όνομα πρέπει να έχει τουλάχιστον 2 χαρακτήρες",
-        emailInvalid: "Εισαγάγετε ένα έγκυρο email",
-        humanCheckIncorrect: "Πληκτρολογήστε τη σωστή λέξη από την πρόκληση",
-        titleMin: "Ο τίτλος της εκδήλωσης πρέπει να έχει τουλάχιστον 5 χαρακτήρες",
-        descriptionMin: "Η περιγραφή πρέπει να έχει τουλάχιστον 20 χαρακτήρες",
-        addressMin: "Η διεύθυνση είναι υποχρεωτική",
-        cityMin: "Η πόλη είναι υποχρεωτική",
-        countryMin: "Η χώρα είναι υποχρεωτική",
-        startRequired: "Η ημερομηνία και ώρα έναρξης είναι υποχρεωτικές",
-        endRequired: "Η ημερομηνία και ώρα λήξης είναι υποχρεωτικές",
-        urlInvalid: "Εισαγάγετε ένα έγκυρο URL",
-        endAfterStart: "Η λήξη πρέπει να είναι μετά την έναρξη.",
-        titleRequired: "Ο τίτλος είναι υποχρεωτικός",
-        descriptionRequired: "Η περιγραφή είναι υποχρεωτική",
-        startInvalid: "Η ημερομηνία/ώρα έναρξης δεν είναι έγκυρη",
-        endInvalid: "Η ημερομηνία/ώρα λήξης δεν είναι έγκυρη",
-        endMustBeAfterStart: "Η λήξη πρέπει να είναι μετά την έναρξη.",
-      },
-      alerts: {
-        prefilled: "Έχουμε prefilled ορισμένα πεδία με βάση τη δική σας προσχέδιο. Παρακαλώ ελέγξτε και συμπληρώστε τα υπόλοιπα στοιχεία.",
-      },
-      buttons: {
-        submit: "Υποβολή Εκδήλωσης",
-        submitting: "Υποβολή εκδήλωσης...",
-        backToHome: "Επιστροφή στην Αρχική",
-        submitAnother: "Υποβολή άλλης εκδήλωσης",
-        publishEvent: "Δημοσίευση Εκδήλωσης",
-        creatingEvent: "Δημιουργία εκδήλωσης...",
-        cancel: "Ανάκληση",
-      },
-      success: {
-        title: "Ευχαριστούμε που δημοσιεύσατε την εκδήλωσή σας",
-        message: "Έχει σταλεί email επιβεβαίωσης",
-      },
-      errors: {
-        serverConfig: "Ο διακομιστής δεν είναι σωστά ρυθμισμένος. Παρακαλώ επικοινωνήστε με την υποστήριξη ή ελέγξτε ότι όλες οι απαιτούμενες μεταβλητές περιβάλλοντος έχουν οριστεί στην ενότητα Vars.",
-        unexpected: "Παρουσιάστηκε απρόσμενο σφάλμα",
-        createFailed: "Αποτυχία δημιουργίας εκδήλωσης",
-      },
-    },
-  },
-  es: {
-    auth: {
-      signIn: "Iniciar Sesión",
-      signInTitle: "Iniciar Sesión",
-      signInSubtitle: "Ingresa tu correo electrónico para iniciar sesión en tu cuenta",
-      signInDescription: "Ingresa tu correo electrónico para iniciar sesión en tu cuenta",
-      email: "Correo Electrónico",
-      emailPlaceholder: "nombre@ejemplo.com",
-      signInWithEmail: "Iniciar Sesión con Correo",
-      checkEmail: "Revisa tu correo",
-      checkEmailDescription: "Te enviamos un enlace de inicio de sesión. Revisa también tu spam.",
-      authError: "Error de Autenticación",
-      authNotConfigured: "La autenticación por correo no está configurada. Contacta al administrador.",
-      postEvent: "Publicar Evento",
-    },
-    event: {
-      addEvent: "Agregar Evento",
-      myEvents: "Mis Eventos",
-      favorites: "Favoritos",
-      postEvent: "Publicar Evento",
-    },
-    common: {
-      browse: "Explorar",
-      location: "Ubicación",
-      pageTitle: "Descubre y Crea Eventos",
-      pageSubtitle: "Busca eventos o crea los tuyos con asistencia de IA",
-    },
-    aria: {
-      loading: "Cargando",
-      breadcrumb: "Breadcrumb",
-      toggleSidebar: "Alternar Barra Lateral",
-    },
-    metadata: {
-      title: "Eventa - Descubre Eventos Comunitarios",
-      description: "Encuentra eventos locales, festivales, mercados y actividades culturales en tu área",
-      signInTitle: "Iniciar Sesión - Eventa",
-      signInDescription: "Inicia sesión en tu cuenta Eventa",
-    },
-    home: {
-      hero: {
-        title: "Descubre y Crea Eventos",
-        subtitle: "Busca eventos o crea los tuyos con asistencia de IA",
-        searchPlaceholder: "Buscar eventos, ciudades, lugares...",
-        viewDrafts: "Ver Borradores",
-        naturalLanguageHint: "Busca eventos o crea nuevos usando lenguaje natural.",
-      },
-      search: {
-        speaking: "Detener lectura",
-        speak: "Leer",
-        noResults: "No se encontraron resultados",
-        showingResults: "Resultados de Búsqueda",
-        searchMode: "Buscar",
-        createMode: "Crear",
-        go: "Ir",
-        processing: "Procesando",
-        searchGuidance: "Encuentra eventos por ubicación, fecha o tipo...",
-        createGuidance: "Describe tu evento en lenguaje simple...",
-        tryThese: "Prueba estos:",
-        switchedToCreateMode: "Cambiado al modo Crear",
-        continue: "Continuar",
-        undo: "Deshacer",
-      },
-      chips: {
-        jazzWeekend: "jazz este fin de semana",
-        athensFood: "comida Atenas",
-        kidsSaturday: "niños sábado",
-        communityMarkets: "Mercados Comunitarios",
-        garageSale: "Venta de Garaje",
-        celebrations: "Celebraciones",
-        openMicDock: "Micrófono abierto en The Dock el próximo sábado a las 8pm",
-        yogaLisbon: "yoga en Lisboa el sábado",
-        communityPicnic: "picnic comunitario mañana a las 2pm",
-      },
-      drafts: {
-        title: "Tus Borradores",
-        viewDrafts: "Ver Borradores ({count})",
-      },
-      footer: {
-        tagline: "Eventa – Descubrimiento de eventos con IA",
-      },
-      toast: {
-        needMoreDetails: "Se Necesitan Más Detalles",
-        clarify: "Por favor aclara: {fields}",
-        draftSaved: "Borrador Guardado",
-        draftDeleted: "Borrador Eliminado",
-        draftDeletedDesc: "Tu borrador ha sido eliminado.",
-        noResultsTitle: "Sin Resultados",
-        noResultsDesc: "No se encontraron eventos. Prueba con diferentes palabras clave o crea el tuyo propio.",
-        searchFailed: "Búsqueda Fallida",
-        searchFailedDesc: "Algo salió mal. Por favor intenta de nuevo.",
-        creationFailed: "Creación Fallida",
-        creationFailedDesc: "No se pudieron extraer los detalles del evento. Redirigiendo al formulario...",
-        error: "Error",
-      },
-    },
-    events: {
-      title: "Explorar Eventos",
-      subtitle: "Descubre eventos próximos en tu área y más allá",
-      filters: {
-        title: "Búsqueda y Filtros",
-        show: "Mostrar",
-        hide: "Ocultar",
-        search: "Buscar",
-        searchPlaceholder: "Buscar eventos, ciudades, lugares...",
-        searchAriaLabel: "Buscar eventos",
-        category: "Categoría",
-        price: "Precio",
-        sortBy: "Ordenar Por",
-        clearFilters: "Limpiar Filtros",
-        go: "Ir",
-        processing: "Procesando…",
-      },
-      priceOptions: {
-        all: "Todos los Eventos",
-        free: "Solo Gratis",
-        paid: "Solo de Pago",
-      },
-      sortOptions: {
-        dateAsc: "Fecha (Más Temprano Primero)",
-        dateDesc: "Fecha (Más Tarde Primero)",
-        titleAsc: "Título (A-Z)",
-        titleDesc: "Título (Z-A)",
-      },
-      results: {
-        showing: "Mostrando {filtered} de {total} eventos",
-        noEvents: "No se encontraron eventos",
-        noEventsHint: "Intenta ajustar tu búsqueda o filtros",
-        noResultsFound: "No se encontraron resultados.",
-      },
-      card: {
-        free: "Gratis",
-        viewDetails: "Ver Detalles",
-        viewOn: "Ver en {source}",
-      },
-    },
-    form: {
-      page: {
-        title: "Publicar un Nuevo Evento",
-        subtitle: "Comparte tu evento con la comunidad. Completa los detalles a continuación y te enviaremos un correo de verificación para finalizar la publicación.",
-      },
-      sections: {
-        yourInfo: "Tu Información",
-        eventDetails: "Detalles del Evento",
-        location: "Ubicación",
-        dateTime: "Fecha y Hora",
-        optional: "Información Opcional",
-      },
-      fields: {
-        name: "Tu Nombre",
-        namePlaceholder: "Juan Pérez",
-        email: "Correo de Contacto",
-        emailPlaceholder: "tu@ejemplo.com",
-        emailHint: "Te enviaremos un enlace de confirmación a este correo",
-        humanCheck: "Verificación Humana",
-        humanCheckHint: "Escribe la última palabra de esta oración: eventa conecta comunidades",
-        humanCheckPlaceholder: "Escribe la última palabra...",
-        title: "Título del Evento",
-        titlePlaceholder: "ej., Mercado de Agricultores de Atenas",
-        description: "Descripción",
-        descriptionPlaceholder: "Describe tu evento en detalle...",
-        descriptionHint: "Incluye qué hace especial tu evento, qué pueden esperar los asistentes y detalles importantes",
-        address: "Dirección",
-        addressPlaceholder: "Calle Principal 123",
-        postcode: "Código Postal",
-        postcodePlaceholder: "12345",
-        postcodeOptional: "Opcional",
-        city: "Ciudad",
-        cityPlaceholder: "Atenas",
-        country: "País",
-        countryPlaceholder: "Grecia",
-        startAt: "Fecha y Hora de Inicio",
-        endAt: "Fecha y Hora de Fin",
-        endAtHint: "Los eventos se ocultan automáticamente después de la hora de fin.",
-        imageUrl: "URL de Imagen (opcional)",
-        imageUrlPlaceholder: "https://ejemplo.com/imagen.jpg",
-        imageUrlHint: "Enlace a una imagen para tu evento",
-        externalUrl: "URL Externa (opcional)",
-        externalUrlPlaceholder: "https://ejemplo.com",
-        externalUrlHint: "Enlace al sitio web de tu evento o página de registro",
-        venueName: "Nombre del Lugar",
-        venueNamePlaceholder: "ej., Parque Central",
-        categories: "Categorías (selecciona todas que aplican)",
-        price: "Precio",
-        priceFree: "Este evento es gratuito",
-        priceAmount: "Precio (en tu moneda local)",
-        priceAmountPlaceholder: "10,00",
-        websiteUrl: "Sitio Web o Enlace de Registro",
-        websiteUrlPlaceholder: "https://ejemplo.com",
-        languages: "Idiomas del Evento",
-        required: "*",
-        addressGuidance: "Codificaremos automáticamente esta dirección para la visualización en el mapa y los cálculos de distancia.",
-      },
-      validation: {
-        nameMin: "El nombre debe tener al menos 2 caracteres",
-        emailInvalid: "Por favor ingresa un correo electrónico válido",
-        humanCheckIncorrect: "Por favor escribe la palabra correcta del desafío",
-        titleMin: "El título del evento debe tener al menos 5 caracteres",
-        descriptionMin: "La descripción debe tener al menos 20 caracteres",
-        addressMin: "La dirección es obligatoria",
-        cityMin: "La ciudad es obligatoria",
-        countryMin: "El país es obligatorio",
-        startRequired: "La fecha y hora de inicio son obligatorias",
-        endRequired: "La fecha y hora de fin son obligatorias",
-        urlInvalid: "Por favor ingresa una URL válida",
-        endAfterStart: "El fin debe ser después del inicio.",
-        titleRequired: "El título es requerido",
-        descriptionRequired: "La descripción es requerida",
-        startInvalid: "Fecha/hora de inicio no válida",
-        endInvalid: "Fecha/hora de fin no válida",
-        endMustBeAfterStart: "El fin debe ser después del inicio.",
-      },
-      alerts: {
-        prefilled: "Hemos pre-rellenado algunos campos basándonos en tu borrador. Por favor revisa y completa los detalles restantes.",
-      },
-      buttons: {
-        submit: "Enviar Evento",
-        submitting: "Enviando evento...",
-        backToHome: "Volver al Inicio",
-        submitAnother: "Enviar otro evento",
-        publishEvent: "Publicar Evento",
-        creatingEvent: "Creando evento...",
-        cancel: "Cancelar",
-      },
-      success: {
-        title: "Gracias por publicar tu evento",
-        message: "Se ha enviado un correo de confirmación",
-      },
-      errors: {
-        serverConfig: "El servidor no está configurado correctamente. Por favor contacta al soporte o verifica que todas las variables de entorno requeridas estén configuradas en la sección Vars.",
-        unexpected: "Ocurrió un error inesperado",
-        createFailed: "Error al crear el evento",
-      },
-    },
-  },
-  fr: {
-    auth: {
-      signIn: "Se Connecter",
-      signInTitle: "Se Connecter",
-      signInSubtitle: "Entrez votre email pour vous connecter à votre compte",
-      signInDescription: "Entrez votre email pour vous connecter à votre compte",
-      email: "Email",
-      emailPlaceholder: "nom@exemple.com",
-      signInWithEmail: "Se Connecter avec Email",
-      checkEmail: "Vérifiez votre email",
-      checkEmailDescription: "Nous vous avons envoyé un lien de connexion. Vérifiez aussi vos spams.",
-      authError: "Erreur d'Authentification",
-      authNotConfigured: "L'authentification par email n'est pas configurée. Contactez l'administrateur.",
-      postEvent: "Publier un Événement",
-    },
-    event: {
-      addEvent: "Ajouter un Événement",
-      myEvents: "Mes Événements",
-      favorites: "Favoris",
-      postEvent: "Publier un Événement",
-    },
-    common: {
-      browse: "Parcourir",
-      location: "Emplacement",
-      pageTitle: "Découvrez et Créez des Événements",
-      pageSubtitle: "Recherchez des événements ou créez les vôtres avec l'assistance de l'IA",
-    },
-    aria: {
-      loading: "Chargement",
-      breadcrumb: "Breadcrumb",
-      toggleSidebar: "Basculer la Barre Latérale",
-    },
-    metadata: {
-      title: "Eventa - Découvrez les Événements Communautaires",
-      description: "Trouvez des événements locaux, festivals, marchés et activités culturales dans votre région",
-      signInTitle: "Se Connecter - Eventa",
-      signInDescription: "Connectez-vous à votre compte Eventa",
-    },
-    home: {
-      hero: {
-        title: "Découvrez et Créez des Événements",
-        subtitle: "Recherchez des événements ou créez les vôtres avec l'assistance de l'IA",
-        searchPlaceholder: "Rechercher des événements, villes, lieux...",
-        viewDrafts: "Voir les Brouillons",
-        naturalLanguageHint: "Recherchez des événements ou créez-en de nouveaux en utilisant le langage naturel.",
-      },
-      search: {
-        speaking: "Arrêter la lecture",
-        speak: "Lire",
-        noResults: "Aucun résultat trouvé",
-        showingResults: "Résultats de Recherche",
-        searchMode: "Rechercher",
-        createMode: "Créer",
-        go: "Aller",
-        processing: "Traitement",
-        searchGuidance: "Trouvez des événements par lieu, date ou type...",
-        createGuidance: "Décrivez votre événement en langage simple...",
-        tryThese: "Essayez ceux-ci:",
-        switchedToCreateMode: "Passé en mode Créer",
-        continue: "Continuer",
-        undo: "Annuler",
-      },
-      chips: {
-        jazzWeekend: "jazz ce week-end",
-        athensFood: "nourriture Athènes",
-        kidsSaturday: "enfants samedi",
-        communityMarkets: "Marchés Communautaires",
-        garageSale: "Vente de Garage",
-        celebrations: "Célébrations",
-        openMicDock: "Micro ouvert au Dock samedi prochain à 20h",
-        yogaLisbon: "yoga à Lisbonne samedi",
-        communityPicnic: "pique-nique communautaire demain à 14h",
-      },
-      drafts: {
-        title: "Vos Brouillons",
-        viewDrafts: "Voir les Brouillons ({count})",
-      },
-      footer: {
-        tagline: "Eventa – Découverte d'événements avec IA",
-      },
-      toast: {
-        needMoreDetails: "Besoin de Plus de Détails",
-        clarify: "Veuillez clarifier : {fields}",
-        draftSaved: "Brouillon Enregistré",
-        draftDeleted: "Brouillon Supprimé",
-        draftDeletedDesc: "Votre brouillon a été supprimé.",
-        noResultsTitle: "Aucun Résultat",
-        noResultsDesc: "Aucun événement trouvé. Essayez des mots-clés différents ou créez le vôtre.",
-        searchFailed: "Recherche Échouée",
-        searchFailedDesc: "Quelque chose s'est mal passé. Veuillez réessayer.",
-        creationFailed: "Création Échouée",
-        creationFailedDesc: "Échec de l'extraction des détails de l'événement. Redirection vers le formulaire...",
-        error: "Erreur",
-      },
-    },
-    events: {
-      title: "Parcourir les Événements",
-      subtitle: "Découvrez les événements à venir dans votre région et au-delà",
-      filters: {
-        title: "Recherche et Filtres",
-        show: "Afficher",
-        hide: "Masquer",
-        search: "Rechercher",
-        searchPlaceholder: "Rechercher des événements, villes, lieux...",
-        searchAriaLabel: "Rechercher des événements",
-        category: "Catégorie",
-        price: "Prix",
-        sortBy: "Trier Par",
-        clearFilters: "Effacer les Filtres",
-        go: "Aller",
-        processing: "Traitement…",
-      },
-      priceOptions: {
-        all: "Tous les Événements",
-        free: "Gratuits Uniquement",
-        paid: "Payants Uniquement",
-      },
-      sortOptions: {
-        dateAsc: "Date (Plus Tôt en Premier)",
-        dateDesc: "Date (Plus Tard en Premier)",
-        titleAsc: "Titre (A-Z)",
-        titleDesc: "Titre (Z-A)",
-      },
-      results: {
-        showing: "Affichage de {filtered} sur {total} événements",
-        noEvents: "Aucun événement trouvé",
-        noEventsHint: "Essayez d'ajuster votre recherche ou vos filtres",
-        noResultsFound: "Aucun résultat trouvé.",
-      },
-      card: {
-        free: "Gratuit",
-        viewDetails: "Voir les Détails",
-        viewOn: "Voir sur {source}",
-      },
-    },
-    form: {
-      page: {
-        title: "Publier un Nouvel Événement",
-        subtitle: "Partagez votre événement avec la communauté. Remplissez les détails ci-dessous et nous vous enverrons un email de vérification pour finaliser la publication.",
-      },
-      sections: {
-        yourInfo: "Vos Informations",
-        eventDetails: "Détails de l'Événement",
-        location: "Emplacement",
-        dateTime: "Date et Heure",
-        optional: "Informations Optionnelles",
-      },
-      fields: {
-        name: "Votre Nom",
-        namePlaceholder: "Jean Dupont",
-        email: "Email de Contact",
-        emailPlaceholder: "vous@exemple.com",
-        emailHint: "Nous vous enverrons un lien de confirmation à cet email",
-        humanCheck: "Vérification Humaine",
-        humanCheckHint: "Tapez le dernier mot de cette phrase : eventa connecte les communautés",
-        humanCheckPlaceholder: "Tapez le dernier mot...",
-        title: "Titre de l'Événement",
-        titlePlaceholder: "par ex., Marché Fermier d'Athènes",
-        description: "Description",
-        descriptionPlaceholder: "Décrivez votre événement en détail...",
-        descriptionHint: "Incluez ce qui rend votre événement spécial, ce que les participants peuvent attendre et les détails importants",
-        address: "Adresse",
-        addressPlaceholder: "123 Rue Principale",
-        postcode: "Code Postal",
-        postcodePlaceholder: "12345",
-        postcodeOptional: "Optionnel",
-        city: "Ville",
-        cityPlaceholder: "Athènes",
-        country: "Pays",
-        countryPlaceholder: "Grèce",
-        startAt: "Date et Heure de Début",
-        endAt: "Date et Heure de Fin",
-        endAtHint: "Les événements se masquent automatiquement après l'heure de fin.",
-        imageUrl: "URL de l'Image (optionnel)",
-        imageUrlPlaceholder: "https://exemple.com/image.jpg",
-        imageUrlHint: "Lien vers une image pour votre événement",
-        externalUrl: "URL Externe (optionnel)",
-        externalUrlPlaceholder: "https://exemple.com",
-        externalUrlHint: "Lien vers le site web de votre événement ou page d'inscription",
-        venueName: "Nom du Lieu",
-        venueNamePlaceholder: "par ex., Parc Central",
-        categories: "Catégories (sélectionnez toutes celles qui s'appliquent)",
-        price: "Prix",
-        priceFree: "Cet événement est gratuit",
-        priceAmount: "Prix (dans votre devise locale)",
-        priceAmountPlaceholder: "10,00",
-        websiteUrl: "Site Web ou Lien d'Inscription",
-        websiteUrlPlaceholder: "https://exemple.com",
-        languages: "Langues de l'Événement",
-        required: "*",
-        addressGuidance: "Nous coderons automatiquement cette adresse pour l'affichage sur la carte et les calculs de distance.",
-      },
-      validation: {
-        nameMin: "Le nom doit contenir au moins 2 caractères",
-        emailInvalid: "Veuillez entrer une adresse email valide",
-        humanCheckIncorrect: "Veuillez taper le mot correct du défi",
-        titleMin: "Le titre de l'événement doit contenir au moins 5 caractères",
-        descriptionMin: "La description doit contenir au moins 20 caractères",
-        addressMin: "L'adresse est obligatoire",
-        cityMin: "La ville est obligatoire",
-        countryMin: "Le pays est obligatoire",
-        startRequired: "La date et l'heure de début sont obligatoires",
-        endRequired: "La date et l'heure de fin sont obligatoires",
-        urlInvalid: "Veuillez entrer une URL valide",
-        endAfterStart: "La fin doit être après le début.",
-        titleRequired: "Le titre est requis",
-        descriptionRequired: "La description est requise",
-        startInvalid: "Date/heure de début invalide",
-        endInvalid: "Date/heure de fin invalide",
-        endMustBeAfterStart: "La date/heure de fin doit être après la date/heure de début.",
-      },
-      alerts: {
-        prefilled: "Nous avons pré-rempli certains champs en fonction de votre brouillon. Veuillez vérifier et compléter les détails restants.",
-      },
-      buttons: {
-        submit: "Soumettre l'Événement",
-        submitting: "Soumission de l'événement...",
-        backToHome: "Retour à l'Accueil",
-        submitAnother: "Soumettre un autre événement",
-        publishEvent: "Publier l'Événement",
-        creatingEvent: "Création de l'événement...",
-        cancel: "Annuler",
-      },
-      success: {
-        title: "Merci d'avoir publié votre événement",
-        message: "Un email de confirmation a été envoyé",
-      },
-      errors: {
-        serverConfig: "Le serveur n'est pas correctement configuré. Veuillez contacter le support ou vérifier que toutes les variables d'environnement requises sont définies dans la section Vars.",
-        unexpected: "Une erreur inattendue s'est produite",
-        createFailed: "Échec de la création de l'événement",
-      },
-    },
-  },
-} as const
+"use client"
 
-export type Locale = keyof typeof translations
-export type TranslationNamespace = keyof typeof translations.en
+import { useState, useRef, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Plus } from "lucide-react"
+import { DraftEventCard } from "@/components/events/draft-event-card"
+import { DraftsList } from "@/components/events/drafts-list"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { speak, stopSpeaking } from "@/lib/tts"
+import { toast } from "@/hooks/use-toast"
+import { SmartInputBar } from "@/components/search/smart-input-bar"
+import ClientOnly from "@/components/ClientOnly"
+import { useI18n } from "@/lib/i18n/context"
+
+interface DraftEvent {
+  id: string
+  title: string
+  category: string
+  city: string
+  venue: string
+  date: string
+  time: string
+  description: string
+  sourceText?: string
+}
+
+export default function HomePage() {
+  const { t } = useI18n()
+  const router = useRouter()
+
+  // Correctly access the "home" translations
+  const tHome = t("home")
+  const tHomeHero = tHome.hero
+  const tHomeToast = tHome.toast
+  const tHomeDrafts = tHome.drafts
+  const tHomeSearch = tHome.search
+  const tHomeFooter = tHome.footer
+
+  console.log("[v0] Post Event translation:", t("event.postEvent"))
+
+  const locale = "en"
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searchParaphrase, setSearchParaphrase] = useState("")
+  const [showResults, setShowResults] = useState(false)
+
+  const [showDraftCard, setShowDraftCard] = useState(false)
+  const [currentDraft, setCurrentDraft] = useState<Partial<DraftEvent> | null>(null)
+  const [draftParaphrase, setDraftParaphrase] = useState("")
+  const [drafts, setDrafts] = useState<DraftEvent[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("eventa-drafts")
+      return saved ? JSON.parse(saved) : []
+    }
+    return []
+  })
+  const [showDraftsList, setShowDraftsList] = useState(false)
+  const [followUpQuestion, setFollowUpQuestion] = useState("")
+  const [isSpeakingSearch, setIsSpeakingSearch] = useState(false)
+  const searchBarRef = useRef<{ setQuery: (q: string) => void } | null>(null)
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("eventa-drafts", JSON.stringify(drafts))
+    }
+  }, [drafts])
+
+  const handleSearch = (results: any[], paraphrase: string) => {
+    setSearchResults(results)
+    setSearchParaphrase(paraphrase)
+    setShowResults(true)
+    setShowDraftCard(false)
+  }
+
+  const handleConfirmDraft = (draft: DraftEvent) => {
+    try {
+      const newDraft = {
+        ...draft,
+        id: `draft-${Date.now()}`,
+      }
+
+      setDrafts((prev) => [...prev, newDraft])
+      setShowDraftCard(false)
+      setCurrentDraft(null)
+      setFollowUpQuestion("")
+
+      const dateDisplay = new Date(draft.date).toLocaleDateString();
+toast({
+  title: "Draft Saved",
+  description: `"${draft.title}" saved for ${dateDisplay} at ${draft.time} in ${draft.venue || draft.city}`,
+});
+
+      toast({
+        title: "Draft Saved",
+        description: `"${draft.title}" saved for ${dateDisplay} at ${draft.time} in ${draft.venue || draft.city}`,
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save draft. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleCancelDraft = () => {
+    setShowDraftCard(false)
+    setCurrentDraft(null)
+    setFollowUpQuestion("")
+  }
+
+  const handleEditDraft = (draft: DraftEvent) => {
+    setCurrentDraft(draft)
+    setDraftParaphrase(`Edit: ${draft.title}`)
+    setShowDraftCard(true)
+    setShowDraftsList(false)
+  }
+
+  const handleDeleteDraft = (id: string) => {
+    setDrafts((prev) => prev.filter((d) => d.id !== id))
+    toast({
+      title: "Draft Deleted",
+      description: "Your draft has been removed.",
+    })
+  }
+
+  const handleError = (error: string) => {
+    setShowResults(false)
+    setSearchResults([])
+  }
+
+  const handleSpeakSearch = () => {
+    if (isSpeakingSearch) {
+      stopSpeaking()
+      setIsSpeakingSearch(false)
+    } else {
+      speak(searchParaphrase, locale)
+      setIsSpeakingSearch(true)
+
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        const checkSpeaking = setInterval(() => {
+          if (!window.speechSynthesis.speaking) {
+            setIsSpeakingSearch(false)
+            clearInterval(checkSpeaking)
+          }
+        }, 100)
+      }
+    }
+  }
+
+  const handleSmartSearch = async (query: string) => {
+    console.log("[v0] Landing page search, SmartInputBar will handle navigation")
+    // SmartInputBar already extracts intent and navigates to /discover with params
+    // No need to do anything here
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <main className="container mx-auto px-4 py-8">
+        <div className="mx-auto max-w-3xl py-16 text-center">
+          <SmartInputBar
+            onSearch={handleSmartSearch}
+            onError={(error) => {
+              toast({
+                title: tHomeToast.error, // Correctly accessing 'error' translation
+                description: error,
+                variant: "destructive",
+              })
+            }}
+          />
+
+          <div className="mt-8 flex flex-col items-center gap-4">
+            <p className="text-2xl font-bold text-foreground">To create an event, please use this button:</p>
+            <Button asChild size="lg" className="gap-2 min-w-[200px]">
+              <Link href="/add-event" className="flex items-center gap-2">
+                <Plus className="h-5 w-5" />
+                <span>Post Event</span>
+              </Link>
+            </Button>
+          </div>
+
+          {drafts.length > 0 && (
+            <Button
+              variant="outline"
+              className="mt-6 bg-transparent"
+              onClick={() => setShowDraftsList(!showDraftsList)}
+            >
+              {tHomeDrafts.viewDrafts.replace("{count}", drafts.length.toString())}
+            </Button>
+          )}
+        </div>
+
+        {showDraftCard && currentDraft && (
+          <div className="mx-auto max-w-2xl mt-12">
+            {followUpQuestion && (
+              <div className="mb-4 p-4 bg-muted rounded-lg text-center">
+                <p className="text-sm font-medium">{followUpQuestion}</p>
+              </div>
+            )}
+            <DraftEventCard
+              draft={currentDraft}
+              paraphrase={draftParaphrase}
+              onConfirm={handleConfirmDraft}
+              onCancel={handleCancelDraft}
+              onAskFollowUp={(field) => {
+                // Handle follow-up questions
+              }}
+            />
+          </div>
+        )}
+
+        {showDraftsList && (
+          <div className="mx-auto max-w-2xl mt-12">
+            <h3 className="text-2xl font-semibold mb-6">{tHomeDrafts.title}</h3>
+            <DraftsList drafts={drafts} onEdit={handleEditDraft} onDelete={handleDeleteDraft} />
+          </div>
+        )}
+      </main>
+    </div>
+  )
+}
+
