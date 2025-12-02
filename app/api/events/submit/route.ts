@@ -1,17 +1,19 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { neon } from "@neondatabase/serverless"
-import bcrypt from "bcryptjs"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
 /* ------------------------- VALIDATION ------------------------- */
 
+// This schema now **includes categories and languages**
+// and guarantees they are NEVER null.
 const EventSubmitSchema = z
   .object({
     title: z.string().min(2),
     description: z.string().default(""),
+
     start: z.coerce.date({
       required_error: "Start date/time is required",
     }),
@@ -29,10 +31,12 @@ const EventSubmitSchema = z
       message: "Creator email is required",
     }),
 
-    // matches your form: single optional URL
     imageUrl: z.string().url().optional().or(z.literal("")),
-
     externalUrl: z.string().url().optional().or(z.literal("")),
+
+    // NEW – match DB columns (text[] NOT NULL)
+    categories: z.array(z.string()).default([]),
+    languages: z.array(z.string()).default(["en"]),
   })
   .refine((d) => !d.end || d.end > d.start, {
     path: ["end"],
@@ -52,16 +56,14 @@ export async function POST(request: NextRequest) {
 
     const validated = EventSubmitSchema.parse(body)
 
-    // categories & languages ALWAYS arrays (db columns are NOT NULL text[])
-    const categories: string[] = Array.isArray(body.categories)
-      ? body.categories
-      : []
+    // These are now guaranteed to be arrays (never null)
+    const categories = validated.categories ?? []
+    const languages =
+      validated.languages && validated.languages.length > 0
+        ? validated.languages
+        : ["en"]
 
-    const languages: string[] = Array.isArray(body.languages)
-      ? body.languages
-      : []
-
-    // legacy imageUrls column (text[] NOT NULL) – always send an array
+    // Legacy imageUrls column (text[] NOT NULL) – always an array
     const imageUrls: string[] =
       validated.imageUrl && validated.imageUrl.trim() !== ""
         ? [validated.imageUrl]
@@ -174,9 +176,7 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] Event created:", eventId)
 
-    // (You can re-add the AI moderation + email token bits later;
-    // for now we just return success.)
-
+    // For now we keep it simple: just return success.
     return NextResponse.json({
       ok: true,
       eventId,
@@ -198,4 +198,5 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
 
