@@ -1,10 +1,16 @@
-import { redirect } from 'next/navigation'
+import { redirect } from "next/navigation"
 import { db } from "@/lib/db"
 import { EditEventForm } from "@/components/events/edit-event-form"
 import { validateEventEditToken } from "@/lib/eventEditToken"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle, Lock, Clock, Mail } from 'lucide-react'
+import { AlertCircle, Lock, Clock, Mail } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
@@ -12,14 +18,17 @@ export default async function EditEventPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ id: string }>
-  searchParams: Promise<{ token?: string; confirmed?: string }>
+  params: { id: string }
+  searchParams?: { token?: string; confirmed?: string }
 }) {
-  const { id } = await params
-  const { token, confirmed } = await searchParams
-
+  const id = params.id
+  const token = searchParams?.token
+  const confirmed = searchParams?.confirmed
   const isConfirmedAccess = confirmed === "true"
 
+  /* ---------------------------------------------
+      1. No token + not confirmed → show warning
+  --------------------------------------------- */
   if (!token && !isConfirmedAccess) {
     return (
       <div className="container mx-auto px-4 py-12">
@@ -31,12 +40,15 @@ export default async function EditEventPage({
                 <CardTitle>Edit Link Required</CardTitle>
               </div>
               <CardDescription>
-                You need a valid edit link to modify this event. Check your email for the edit link that was sent when
-                you created the event.
+                You need a valid edit link to modify this event. Check your email
+                for the edit link that was sent when you created the event.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Link href={`/events/${id}`} className="text-primary hover:underline">
+              <Link
+                href={`/events/${id}`}
+                className="text-primary hover:underline"
+              >
                 View event details →
               </Link>
             </CardContent>
@@ -46,6 +58,9 @@ export default async function EditEventPage({
     )
   }
 
+  /* ---------------------------------------------
+      2. Token provided → validate it
+  --------------------------------------------- */
   if (token && !isConfirmedAccess) {
     const validation = await validateEventEditToken(id, token)
 
@@ -62,7 +77,7 @@ export default async function EditEventPage({
                 <CardDescription className="space-y-2 text-base">
                   <p>This edit link has expired for security reasons.</p>
                   <p className="text-sm text-muted-foreground">
-                    Edit links are valid for 30 days from when they're created to protect your event information.
+                    Edit links are valid for 30 days from creation.
                   </p>
                 </CardDescription>
               </CardHeader>
@@ -73,9 +88,11 @@ export default async function EditEventPage({
                     What to do next:
                   </h4>
                   <ul className="ml-6 list-disc space-y-1 text-sm text-muted-foreground">
-                    <li>Your event still exists and is safe</li>
+                    <li>Your event still exists</li>
                     <li>Check your email for a newer edit link</li>
-                    <li>Or visit the event page below to request a new link</li>
+                    <li>
+                      Or visit the event page below to request a new edit link
+                    </li>
                   </ul>
                 </div>
                 <div className="flex gap-3">
@@ -106,7 +123,7 @@ export default async function EditEventPage({
                 <CardDescription className="space-y-2 text-base">
                   <p>This edit link is not valid.</p>
                   <p className="text-sm text-muted-foreground">
-                    The link may have been copied incorrectly or may not exist.
+                    It may have been copied incorrectly or may not exist.
                   </p>
                 </CardDescription>
               </CardHeader>
@@ -114,9 +131,9 @@ export default async function EditEventPage({
                 <div className="rounded-lg bg-muted p-4">
                   <h4 className="mb-2 font-medium">What to check:</h4>
                   <ul className="ml-6 list-disc space-y-1 text-sm text-muted-foreground">
-                    <li>Make sure you copied the entire link from your email</li>
-                    <li>Check that the link wasn't broken across multiple lines</li>
-                    <li>Try clicking the link directly from the email instead of copying</li>
+                    <li>Copy link fully from email</li>
+                    <li>Ensure link was not broken across two lines</li>
+                    <li>Click link directly from the email</li>
                   </ul>
                 </div>
                 <div className="flex gap-3">
@@ -135,6 +152,9 @@ export default async function EditEventPage({
     }
   }
 
+  /* ---------------------------------------------
+      3. Load event
+  --------------------------------------------- */
   const event = await db.event.findUnique({
     where: { id },
   })
@@ -143,6 +163,9 @@ export default async function EditEventPage({
     redirect("/")
   }
 
+  /* ---------------------------------------------
+      4. Render edit form
+  --------------------------------------------- */
   return (
     <div className="container mx-auto px-4 py-12">
       <div className="mx-auto max-w-2xl">
@@ -155,8 +178,8 @@ export default async function EditEventPage({
           <Alert className="mb-6 border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950">
             <AlertCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
             <AlertDescription className="text-green-900 dark:text-green-100">
-              <strong>Success!</strong> Your event has been confirmed and published. You can now edit any details or
-              share it with others.
+              <strong>Success!</strong> Your event has been confirmed and
+              published.
             </AlertDescription>
           </Alert>
         )}

@@ -1,202 +1,193 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { z } from "zod"
-import { neon } from "@neondatabase/serverless"
+/* -------------------------------------------------------------
+   EVENT SUBMISSION + AI MODERATION
+------------------------------------------------------------- */
 
-export const dynamic = "force-dynamic"
-export const runtime = "nodejs"
+import { type NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { neon } from "@neondatabase/serverless";
+import { createEventEditToken } from "@/lib/eventEditToken";
+import { sendEventEditLinkEmailAPI } from "@/lib/email";
+import { moderateEvent } from "@/lib/ai-moderation";
+import { notifyAdminsEventNeedsReview } from "@/lib/admin-notifications";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 /* ------------------------- VALIDATION ------------------------- */
 
-// This schema now **includes categories and languages**
-// and guarantees they are NEVER null.
-const EventSubmitSchema = z
-  .object({
-    title: z.string().min(2),
-    description: z.string().default(""),
+const EventSubmitSchema = z.object({
+  title: z.string().min(2),
+  description: z.string().default(""),
+  start: z.coerce.date(),
+  end: z.coerce.date().optional(),
+  timezone: z.string().optional(),
+  location: z.object({
+    name: z.string().optional(),
+    address: z.string().optional(),
+  }).optional(),
+  creatorEmail: z.string().email(),
+  imageUrl: z.string().optional().or(z.literal("")),
+  externalUrl: z.string().optional().or(z.literal("")),
+  categories: z.array(z.string()).default([]),
+  languages: z.array(z.string()).default(["en"])
+}).refine(d => !d.end || d.end > d.start, {
+  path: ["end"],
+  message: "End must be after start",
+});
 
-    start: z.coerce.date({
-      required_error: "Start date/time is required",
-    }),
-    end: z.coerce.date().optional(),
-    timezone: z.string().optional(),
 
-    location: z
-      .object({
-        name: z.string().optional(),
-        address: z.string().optional(),
-      })
-      .optional(),
-
-    creatorEmail: z.string().email({
-      message: "Creator email is required",
-    }),
-
-    imageUrl: z.string().url().optional().or(z.literal("")),
-    externalUrl: z.string().url().optional().or(z.literal("")),
-
-    // NEW – match DB columns (text[] NOT NULL)
-    categories: z.array(z.string()).default([]),
-    languages: z.array(z.string()).default(["en"]),
-  })
-  .refine((d) => !d.end || d.end > d.start, {
-    path: ["end"],
-    message: "End must be after start",
-  })
-
-function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).substring(2)
-}
-
-/* ------------------------- ROUTE ------------------------- */
+/* ------------------------- ROUTE HANDLER ------------------------- */
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    console.log("[v0] Incoming body:", body)
+    const body = await request.json();
+    console.log("[v0] Incoming body:", body);
 
-    const validated = EventSubmitSchema.parse(body)
+    const validated = EventSubmitSchema.parse(body);
 
-    // These are now guaranteed to be arrays (never null)
-    const categories = validated.categories ?? []
-    const languages =
-      validated.languages && validated.languages.length > 0
-        ? validated.languages
-        : ["en"]
+    const sql = neon(process.env.NEON_DATABASE_URL!);
 
-    // Legacy imageUrls column (text[] NOT NULL) – always an array
-    const imageUrls: string[] =
-      validated.imageUrl && validated.imageUrl.trim() !== ""
-        ? [validated.imageUrl]
-        : []
+    /* ------------------------- USER ENSURE ------------------------- */
 
-    const NEON_DATABASE_URL = process.env.NEON_DATABASE_URL
-    if (!NEON_DATABASE_URL) {
-      console.error("[v0] NEON_DATABASE_URL is missing")
-      return NextResponse.json(
-        { error: "Server configuration error. Please contact support." },
-        { status: 500 },
-      )
-    }
+    let userId: string;
+    const existingUser = await sql`
+      SELECT id FROM "User" WHERE email = ${validated.creatorEmail} LIMIT 1
+    `;
 
-    const sql = neon(NEON_DATABASE_URL)
-
-    /* --- ensure user exists --- */
-
-    let userId: string
-
-    const existing = await sql`
-      SELECT id FROM "User"
-      WHERE email = ${validated.creatorEmail}
-      LIMIT 1
-    `
-
-    if (existing.length > 0) {
-      userId = existing[0].id
+    if (existingUser.length > 0) {
+      userId = existingUser[0].id;
     } else {
-      userId = generateId()
+      userId = crypto.randomUUID();
       await sql`
         INSERT INTO "User" (id, email, name, "createdAt", "updatedAt")
-        VALUES (
-          ${userId},
-          ${validated.creatorEmail},
-          ${validated.creatorEmail.split("@")[0]},
-          NOW(),
-          NOW()
-        )
-      `
+        VALUES (${userId}, ${validated.creatorEmail}, ${validated.creatorEmail.split("@")[0]}, NOW(), NOW())
+      `;
     }
 
-    /* --- derive city / country from address --- */
+    /* ------------------------- ADDRESS PARSE ------------------------- */
 
-    const address = validated.location?.address ?? ""
-    const parts = address
-      ? address.split(",").map((p) => p.trim()).filter(Boolean)
-      : []
-    const city = parts[1] || parts[0] || "Unknown"
-    const country = parts[parts.length - 1] || "Australia"
+    const address = validated.location?.address ?? "";
+    const parts = address.split(",").map(p => p.trim()).filter(Boolean);
+    const city = parts[1] || parts[0] || "Unknown";
+    const country = parts[parts.length - 1] || "Unknown";
 
-    const eventId = generateId()
+    const eventId = crypto.randomUUID();
+    const imageUrls = validated.imageUrl ? [validated.imageUrl] : [];
+    const searchText = `${validated.title} ${validated.description} ${city} ${country}`.toLowerCase();
 
-    const searchText = `${validated.title} ${validated.description} ${city} ${country}`.toLowerCase()
-
-    /* ------------------------- INSERT ------------------------- */
+    /* ------------------------- INSERT EVENT (initial state) ------------------------- */
 
     await sql`
       INSERT INTO "Event" (
-        id,
-        title,
-        description,
-        "startAt",
-        "endAt",
-        timezone,
-        "venueName",
-        address,
-        city,
-        country,
-        "imageUrl",
-        "imageUrls",
-        "externalUrl",
-        categories,
-        languages,
-        "searchText",
+        id, title, description,
+        "startAt", "endAt", timezone,
+        "venueName", address, city, country,
+        "imageUrl", "imageUrls", "externalUrl",
+        categories, languages, "searchText",
         "createdById",
         status,
         "aiStatus",
-        "createdAt",
-        "updatedAt"
+        "createdAt", "updatedAt"
       )
       VALUES (
         ${eventId},
         ${validated.title},
         ${validated.description},
         ${validated.start.toISOString()},
-        ${
-          validated.end
-            ? validated.end.toISOString()
-            : validated.start.toISOString()
-        },
+        ${(validated.end ?? validated.start).toISOString()},
         ${validated.timezone || "UTC"},
         ${validated.location?.name || null},
         ${address || null},
-        ${city},
-        ${country},
+        ${city}, ${country},
         ${validated.imageUrl || null},
         ${imageUrls},
         ${validated.externalUrl || null},
-        ${categories},
-        ${languages},
+        ${validated.categories},
+        ${validated.languages},
         ${searchText},
         ${userId},
         'DRAFT',
         'PENDING',
-        NOW(),
-        NOW()
+        NOW(), NOW()
       )
-    `
+    `;
 
-    console.log("[v0] Event created:", eventId)
+    console.log("[v0] Event created:", eventId);
 
-    // For now we keep it simple: just return success.
+    /* ------------------------- AI MODERATION ------------------------- */
+
+    const moderation = await moderateEvent({
+      title: validated.title,
+      description: validated.description,
+      categories: validated.categories,
+      languages: validated.languages,
+      city,
+      country,
+    });
+
+    console.log("[AI] moderation result:", moderation);
+
+    if (moderation.approved === true) {
+      await sql`
+        UPDATE "Event"
+        SET status = 'PUBLISHED',
+            "aiStatus" = 'APPROVED',
+            "updatedAt" = NOW()
+        WHERE id = ${eventId}
+      `;
+      console.log("[AI] Event automatically approved");
+    }
+
+    else if (moderation.needsReview === true) {
+      await sql`
+        UPDATE "Event"
+        SET status = 'PENDING_REVIEW',
+            "aiStatus" = 'NEEDS_REVIEW',
+            "updatedAt" = NOW()
+        WHERE id = ${eventId}
+      `;
+
+      console.log("[AI] Event flagged for admin review");
+
+      await notifyAdminsEventNeedsReview({
+        eventId,
+        title: validated.title,
+        city,
+        country,
+        aiStatus: "NEEDS_REVIEW",
+        aiReason: moderation.reason,
+      });
+    }
+
+    else {
+      await sql`
+        UPDATE "Event"
+        SET status = 'REJECTED',
+            "aiStatus" = 'REJECTED',
+            "updatedAt" = NOW()
+        WHERE id = ${eventId}
+      `;
+      console.log("[AI] Event rejected:", moderation.reason);
+    }
+
+    /* ------------------------- CONFIRMATION EMAIL ------------------------- */
+
+    const token = await createEventEditToken(eventId, validated.end ?? validated.start);
+    await sendEventEditLinkEmailAPI(validated.creatorEmail, validated.title, eventId, token);
+
     return NextResponse.json({
       ok: true,
       eventId,
-      message: "Event submitted successfully",
-    })
+      status: "submitted",
+    });
+
   } catch (error) {
-    console.error("SUBMIT ERROR:", error)
+    console.error("[submit] ERROR:", error);
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: "Validation failed", issues: error.issues },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: "Validation failed", issues: error.issues }, { status: 400 });
     }
 
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }
-
-

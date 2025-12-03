@@ -1,215 +1,126 @@
-import "server-only"
-import nodemailer from "nodemailer"
+"use server";
+import "server-only";
+import { Resend } from "resend";
 
-export type EmailResult = 
-  | { success: true; messageId: string }
-  | { success: false; error: string }
-
-function getResendClient() {
-  const host = process.env.EMAIL_SERVER_HOST
-  const port = process.env.EMAIL_SERVER_PORT
-  const user = process.env.EMAIL_SERVER_USER
-  const pass = process.env.EMAIL_SERVER_PASSWORD
-
-  if (!host || !port || !user || !pass) {
-    console.error("[v0] SMTP credentials not configured")
-    throw new Error(
-      "Email service is not configured. Please set EMAIL_SERVER_HOST, EMAIL_SERVER_PORT, EMAIL_SERVER_USER, and EMAIL_SERVER_PASSWORD environment variables.",
-    )
-  }
-
-  return nodemailer.createTransport({
-    host,
-    port: Number.parseInt(port),
-    auth: {
-      user,
-      pass,
-    },
-  })
+// ---------------------------------------------------------------------------
+//  RESEND CLIENT
+// ---------------------------------------------------------------------------
+if (!process.env.RESEND_API_KEY) {
+  console.error("[email] Missing RESEND_API_KEY — emails will fail.");
 }
 
-async function sendEmailWithRetry(
-  transporter: nodemailer.Transporter,
-  mailOptions: nodemailer.SendMailOptions,
-  retries = 3
-): Promise<nodemailer.SentMessageInfo> {
-  for (let i = 0; i < retries; i++) {
-    try {
-      const info = await transporter.sendMail(mailOptions)
-      return info
-    } catch (error) {
-      console.error(`[v0] Email send attempt ${i + 1} failed:`, error)
-      
-      // If this was the last retry, throw the error
-      if (i === retries - 1) {
-        throw error
-      }
-      
-      // Exponential backoff: wait 1s, 2s, 4s before retrying
-      const waitTime = 1000 * Math.pow(2, i)
-      console.log(`[v0] Retrying email send in ${waitTime}ms...`)
-      await new Promise(resolve => setTimeout(resolve, waitTime))
-    }
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// ---------------------------------------------------------------------------
+//  GENERIC EMAIL SENDER
+// ---------------------------------------------------------------------------
+export async function sendEmailAPI({
+  to,
+  subject,
+  html,
+}: {
+  to: string;
+  subject: string;
+  html: string;
+}) {
+  try {
+    const result = await resend.emails.send({
+      from: process.env.EMAIL_FROM || "no-reply@ithakigrouptour.com",
+      to,
+      subject,
+      html,
+    });
+
+    console.log("[email] sent OK:", result);
+    return { success: true, result };
+  } catch (error: any) {
+    console.error("[email] send failed:", error);
+    return {
+      success: false,
+      error: error?.message || "Unknown email error",
+    };
   }
-  
-  throw new Error("Email send failed after all retries")
 }
 
+// ---------------------------------------------------------------------------
+//  SAFE EMAIL SENDER (NEVER THROWS) — used by admin notifications + AI
+// ---------------------------------------------------------------------------
 export async function sendSafeEmail({
   to,
   subject,
   html,
-  emailType = "generic",
+  emailType,
   eventId,
 }: {
-  to: string
-  subject: string
-  html: string
-  emailType?: "event_edit_link" | "verification" | "appeal_notification" | "generic"
-  eventId?: string
-}): Promise<EmailResult> {
+  to: string;
+  subject: string;
+  html: string;
+  emailType: string;
+  eventId?: string;
+}) {
   try {
-    const transporter = getResendClient()
-    const from = process.env.EMAIL_FROM || "noreply@example.com"
+    const result = await sendEmailAPI({ to, subject, html });
 
-    const info = await sendEmailWithRetry(transporter, {
-      from,
-      to,
-      subject,
-      html,
-    })
-
-    console.log(`[v0] Email sent successfully - Type: ${emailType}, To: ${to}, ID: ${info.messageId}`)
-    
-    // Create audit log for email success if eventId provided
-    if (eventId) {
-      try {
-        const { createAuditLog } = await import("@/lib/audit-log")
-        await createAuditLog({
-          eventId,
-          actor: "user",
-          action: "EMAIL_SENT",
-          notes: `Email sent successfully - Type: ${emailType}, To: ${to}`,
-        })
-      } catch (auditError) {
-        console.error("[v0] Failed to create email success audit log:", auditError)
-      }
+    if (!result.success) {
+      console.error("[email] safeSend failed:", result.error);
+      return {
+        success: false,
+        error: result.error,
+      };
     }
 
-    return { success: true, messageId: info.messageId }
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    const errorName = error instanceof Error ? error.name : "Unknown"
-    
-    console.error(`[v0] Email send failed - Type: ${emailType}, To: ${to}`, {
-      errorType: errorName,
-      errorMessage,
-    })
-
-    // Create audit log for email failure if eventId provided
-    if (eventId) {
-      try {
-        const { createAuditLog } = await import("@/lib/audit-log")
-        await createAuditLog({
-          eventId,
-          actor: "user",
-          action: "EMAIL_SEND_FAILED",
-          notes: `Email send failed - Type: ${emailType}, To: ${to}, Error: ${errorName}`,
-          reason: errorMessage,
-        })
-        console.log("[v0] Email failure audit log created successfully")
-      } catch (auditError) {
-        console.error("[v0] Failed to create email failure audit log:", auditError)
-      }
-    }
-
-    return { success: false, error: errorMessage }
+    return {
+      success: true,
+      messageId: result.result?.data?.id || null,
+    };
+  } catch (error: any) {
+    console.error("[email] safeSend fatal error:", error);
+    return {
+      success: false,
+      error: error?.message || "Unknown safeSend error",
+    };
   }
 }
 
-export async function sendVerificationEmail(email: string, code: string): Promise<EmailResult> {
-  try {
-    const transporter = getResendClient()
-    const from = process.env.EMAIL_FROM || "noreply@example.com"
-
-    const info = await sendEmailWithRetry(transporter, {
-      from,
-      to: email,
-      subject: "Verify your email",
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2>Email Verification</h2>
-          <p>Your verification code is:</p>
-          <div style="background-color: #f4f4f4; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 5px;">
-            ${code}
-          </div>
-          <p>This code will expire in 10 minutes.</p>
-        </div>
-      `,
-    })
-
-    console.log("[v0] Verification email sent successfully to:", email, "ID:", info.messageId)
-    return { success: true, messageId: info.messageId }
-  } catch (error) {
-    console.error("[v0] Error sending verification email:", error)
-    return { success: false, error: error instanceof Error ? error.message : "Failed to send verification email" }
-  }
-}
-
-export async function sendEventEditLinkEmail(
+// ---------------------------------------------------------------------------
+//  EVENT EDIT LINK EMAIL — sent after event submission
+// ---------------------------------------------------------------------------
+export async function sendEventEditLinkEmailAPI(
   to: string,
   eventTitle: string,
   eventId: string,
   token: string
-): Promise<EmailResult> {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-  const editLink = `${appUrl}/edit/${eventId}?token=${token}`
+) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const editLink = `${appUrl}/edit/${eventId}?token=${token}`;
 
-  return sendSafeEmail({
-    to,
-    subject: `Event Submitted: ${eventTitle}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Thank You for Your Submission!</h2>
-        <p>Your event "<strong>${eventTitle}</strong>" has been submitted successfully and is awaiting approval.</p>
-        
-        <div style="margin: 30px 0; text-align: center;">
-          <a href="${editLink}" 
-             style="background-color: #000; color: #fff; padding: 12px 30px; 
-                    text-decoration: none; border-radius: 6px; display: inline-block; 
-                    font-weight: bold;">
-            Edit Your Event
-          </a>
-        </div>
-        
-        <p style="color: #666; font-size: 14px; text-align: center;">
-          You can use this link to edit your event details at any time.<br>
-          This link expires in 30 days.
-        </p>
-        
-        <p style="color: #666; margin-top: 30px;">
-          Our team will review your submission shortly. You'll receive another email once your event is approved.
-        </p>
-      </div>
-    `,
-    emailType: "event_edit_link",
-    eventId,
-  })
-}
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
+      <h2 style="color:#333;">Your Event Was Submitted</h2>
+      <p style="font-size: 15px; color: #444;">
+        Thanks for submitting <strong>${eventTitle}</strong>.
+      </p>
+      <p style="font-size: 15px; color: #444;">
+        You can edit or update your event anytime using the secure link below:
+      </p>
 
-export async function sendEmail({
-  to,
-  subject,
-  html,
-}: {
-  to: string
-  subject: string
-  html: string
-}): Promise<EmailResult> {
-  return sendSafeEmail({
+      <p style="margin:20px 0;">
+        <a href="${editLink}"
+           style="background:#000; color:#fff; padding:12px 20px; text-decoration:none; border-radius:6px; font-weight:bold;">
+          Edit Your Event
+        </a>
+      </p>
+
+      <p style="font-size: 13px; color: #777;">
+        Or use this link:<br>
+        <a href="${editLink}" style="color:#0066ff;">${editLink}</a>
+      </p>
+    </div>
+  `;
+
+  return sendEmailAPI({
     to,
-    subject,
+    subject: `Your Event: "${eventTitle}" — Edit Link`,
     html,
-    emailType: "generic",
-  })
+  });
 }
