@@ -1,84 +1,20 @@
+// --------------------------------------------------
+// PRISMA CLIENT + DATABASE
+// --------------------------------------------------
 generator client {
   provider = "prisma-client-js"
   previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("NEON_DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("NEON_DATABASE_URL")
   extensions = [pgvector(map: "vector", schema: "public")]
 }
 
-model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String?
-  isVerified    Boolean   @default(false)
-  emailVerified DateTime?
-  image         String?
-  isAdmin       Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  
-  events              Event[]
-  emailVerifications  EmailVerification[]
-  accounts            Account[]
-  sessions            Session[]
-  favorites           Favorite[]
-  moderatedEvents     Event[]           @relation("ModeratedEvents")
-  appeals             EventAppeal[]
-}
-
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
-}
-
-model EmailVerification {
-  id          String    @id @default(cuid())
-  userId      String
-  email       String
-  code        String
-  expiresAt   DateTime
-  consumedAt  DateTime?
-  createdAt   DateTime  @default(now())
-  
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@index([userId])
-  @@index([email])
-}
-
+// --------------------------------------------------
+// ENUMS
+// --------------------------------------------------
 enum EventStatus {
   DRAFT
   PUBLISHED
@@ -118,81 +54,166 @@ enum AIStatus {
   REJECTED
 }
 
+// --------------------------------------------------
+// USER + ACCOUNTS
+// --------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  isVerified    Boolean   @default(false)
+  emailVerified DateTime?
+  image         String?
+  isAdmin       Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  events          Event[]
+  favorites       Favorite[]
+  emailVerifications EmailVerification[]
+  accounts        Account[]
+  sessions        Session[]
+  moderatedEvents Event[] @relation("ModeratedEvents")
+  appeals         EventAppeal[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model EmailVerification {
+  id         String    @id @default(cuid())
+  userId     String
+  email      String
+  code       String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([email])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// --------------------------------------------------
+// EVENT MODEL
+// --------------------------------------------------
+
 model Event {
   id              String      @id @default(cuid())
   title           String
   description     String      @db.Text
   startAt         DateTime
-  endAt           DateTime
+  endAt          DateTime
   locationAddress String?
   city            String
   country         String
   imageUrl        String?
   externalUrl     String?
+
   status          EventStatus @default(DRAFT)
-  
-  sourceText          String?           @db.Text  // Original user input
-  category            EventCategory?              // Single category (AI assigned if null)
-  tags                String[]          @default([])  // AI-generated tags (max 5)
-  extractionConfidence Json?                      // Confidence scores from AI extraction
-  organizerName       String?                     // Extracted organizer
-  organizerContact    String?                     // Extracted contact info
-  
-  // Additional fields from existing schema
-  categories      String[]
-  timezone        String      @default("UTC")
+
+  sourceText          String?      @db.Text
+  category            EventCategory?
+  tags                String[] @default([])
+  extractionConfidence Json?
+  organizerName       String?
+  organizerContact    String?
+
+  categories      String[] @default([])
+  timezone        String   @default("UTC")
   venueName       String?
   address         String?
   lat             Float?
   lng             Float?
-  priceFree       Boolean     @default(false)
+  priceFree       Boolean  @default(false)
   priceAmount     Int?
   websiteUrl      String?
-  languages       String[]
-  imageUrls       String[]
-  
-  postcode        String?     @db.Text
-  
-  createdById     String
-  createdBy       User        @relation(fields: [createdById], references: [id], onDelete: Cascade)
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  
-  // AI moderation fields
-  aiStatus            AIStatus?         @default(PENDING)
-  aiReason            String?           @db.Text
-  aiAnalyzedAt        DateTime?
-  
-  // Edit tracking fields
-  editCount           Int               @default(0)
-  lastEditedAt        DateTime?
-  
-  // Published timestamp for approved events
-  publishedAt         DateTime?
-  
-  // Existing moderation fields (kept for backward compatibility)
-  moderationStatus    ModerationStatus  @default(PENDING)
-  moderationReason    String?           @db.Text
-  moderationSeverity  ModerationSeverity?
-  moderationCategory  String?
-  moderatedAt         DateTime?
-  moderatedBy         String?
-  moderatedByAdmin    User?             @relation("ModeratedEvents", fields: [moderatedBy], references: [id])
-  
-  // Admin review notes
-  adminNotes          String?           @db.Text
-  reviewedBy          String?
-  reviewedAt          DateTime?
-  
-  searchText        String      @db.Text
-  searchTextFolded  String?     @db.Text
+  languages       String[] @default(["en"])
+  imageUrls       String[] @default([])
+
+  postcode        String? @db.Text
+
+  createdById String
+  createdBy   User @relation(fields: [createdById], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+
+  // AI moderation
+  aiStatus     AIStatus? @default(PENDING)
+  aiReason     String? @db.Text
+  aiAnalyzedAt DateTime?
+
+
+  // Edits
+  editCount    Int @default(0)
+  lastEditedAt DateTime?
+  publishedAt  DateTime?
+
+
+  // Legacy moderation
+  moderationStatus   ModerationStatus @default(PENDING)
+  moderationReason   String? @db.Text
+  moderationSeverity ModerationSeverity?
+  moderationCategory String?
+  moderatedAt        DateTime?
+  moderatedBy        String?
+  moderatedByAdmin   User? @relation("ModeratedEvents", fields: [moderatedBy], references: [id])
+
+
+  adminNotes String? @db.Text
+  reviewedBy String?
+  reviewedAt DateTime?
+
+
+  searchText        String @db.Text
+  searchTextFolded  String? @db.Text
   embedding         Unsupported("vector(1536)")?
 
-  editTokens      EventEditToken[]
-  favorites       Favorite[]
-  auditLogs       EventAuditLog[]
-  appeals         EventAppeal[]
+  // Relations
+  editTokens EventEditToken[]
+  favorites  Favorite[]
+  auditLogs  EventAuditLog[]
+  appeals    EventAppeal[]
 
+  // INDEXES
   @@index([city, country, startAt])
   @@index([startAt])
   @@index([categories])
@@ -202,9 +223,12 @@ model Event {
   @@index([aiStatus])
   @@index([createdById])
   @@index([updatedAt])
-  @@index([status, aiStatus])
   @@index([createdAt])
 }
+
+// --------------------------------------------------
+// EVENT SUB-MODELS
+// --------------------------------------------------
 
 model EventEditToken {
   id        String   @id @default(cuid())
@@ -213,21 +237,19 @@ model EventEditToken {
   expires   DateTime
   usedAt    DateTime?
 
-  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
   createdAt DateTime @default(now())
-  
-  @@index([eventId])
-  @@index([tokenHash])
 }
 
 model Favorite {
-  id        String   @id @default(cuid())
+  id        String @id @default(cuid())
   userId    String
   eventId   String
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@unique([userId, eventId])
   @@index([userId])
@@ -235,22 +257,21 @@ model Favorite {
 }
 
 model EventAuditLog {
-  id          String   @id @default(cuid())
-  eventId     String
-  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  
-  actor       String   // "user" | "ai" | "admin"
-  actorId     String?  // User ID if admin/user
-  action      String   // "created" | "edited" | "approved" | "rejected" | "flagged" | "appealed"
-  
-  oldStatus   String?
-  newStatus   String?
-  
-  notes       String?  @db.Text
-  reason      String?  @db.Text
-  
-  createdAt   DateTime @default(now())
-  
+  id        String   @id @default(cuid())
+  eventId   String
+  actor     String
+  actorId   String?
+  action    String
+  oldStatus String?
+  newStatus String?
+
+  notes     String? @db.Text
+  reason    String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
   @@index([eventId])
   @@index([createdAt])
   @@index([actorId])
@@ -259,20 +280,18 @@ model EventAuditLog {
 model EventAppeal {
   id          String   @id @default(cuid())
   eventId     String
-  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  reason      String   @db.Text
-  status      String   @default("pending") // "pending" | "approved" | "rejected"
-  
+  reason      String @db.Text
+  status      String @default("pending")
   reviewedBy  String?
   reviewedAt  DateTime?
-  reviewNotes String?  @db.Text
-  
+  reviewNotes String? @db.Text
   createdAt   DateTime @default(now())
-  
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([eventId])
   @@index([status])
 }
+
