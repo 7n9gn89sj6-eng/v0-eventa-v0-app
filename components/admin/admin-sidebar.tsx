@@ -1,67 +1,58 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Shield } from 'lucide-react'
-import { cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
 
-interface AdminSidebarProps {
-  needsReviewCount?: number
-}
+export function AdminSidebar() {
+  const pathname = usePathname();
 
-export function AdminSidebar({ needsReviewCount = 0 }: AdminSidebarProps) {
-  const pathname = usePathname()
-
-  const navigation = [
+  const links = [
     {
-      name: "Dashboard",
-      href: "/admin",
-      icon: LayoutDashboard,
+      href: "/admin/events?tab=needs-review",
+      label: "Needs Review",
+      match: "/admin/events",
     },
     {
-      name: "Moderation",
-      href: "/admin/events",
-      icon: Shield,
-      badge: needsReviewCount,
+      href: "/admin/events?tab=ai-rejected",
+      label: "AI Rejected",
+      match: "/admin/events",
     },
-  ]
+    {
+      href: "/admin/events?tab=auto-approved",
+      label: "AI Approved",
+      match: "/admin/events",
+    },
+    {
+      href: "/admin/events?tab=all",
+      label: "All Events",
+      match: "/admin/events",
+    },
+    {
+      href: "/admin/events/bulk",
+      label: "Bulk Review",
+      match: "/admin/events/bulk",
+    },
+  ];
 
   return (
-    <aside className="w-60 border-r border-border bg-sidebar">
-      <div className="flex h-full flex-col">
-        <div className="border-b border-sidebar-border px-6 py-4">
-          <h2 className="text-lg font-semibold text-sidebar-foreground">Admin Panel</h2>
-        </div>
-
-        <nav className="flex-1 space-y-1 px-3 py-4">
-          {navigation.map((item) => {
-            const isActive = pathname === item.href || 
-              (item.href !== "/admin" && pathname?.startsWith(item.href))
-            
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                )}
-              >
-                <item.icon className="h-5 w-5" />
-                <span className="flex-1">{item.name}</span>
-                {item.badge !== undefined && item.badge > 0 && (
-                  <Badge variant="secondary" className="ml-auto">
-                    {item.badge}
-                  </Badge>
-                )}
-              </Link>
-            )
-          })}
-        </nav>
-      </div>
+    <aside className="w-60 border-r bg-muted/20 py-6 px-4">
+      <nav className="space-y-2">
+        {links.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className={cn(
+              "block rounded px-3 py-2 text-sm font-medium transition-colors",
+              pathname.startsWith(link.match)
+                ? "bg-primary text-primary-foreground"
+                : "hover:bg-muted"
+            )}
+          >
+            {link.label}
+          </Link>
+        ))}
+      </nav>
     </aside>
-  )
+  );
 }

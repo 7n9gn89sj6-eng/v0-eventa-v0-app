@@ -1,193 +1,226 @@
-/* -------------------------------------------------------------
-   EVENT SUBMISSION + AI MODERATION
-------------------------------------------------------------- */
-
-import { type NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { neon } from "@neondatabase/serverless";
+import { db } from "@/lib/db";
 import { createEventEditToken } from "@/lib/eventEditToken";
 import { sendEventEditLinkEmailAPI } from "@/lib/email";
 import { moderateEvent } from "@/lib/ai-moderation";
 import { notifyAdminsEventNeedsReview } from "@/lib/admin-notifications";
 
-export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 /* ------------------------- VALIDATION ------------------------- */
 
-const EventSubmitSchema = z.object({
-  title: z.string().min(2),
-  description: z.string().default(""),
-  start: z.coerce.date(),
-  end: z.coerce.date().optional(),
-  timezone: z.string().optional(),
-  location: z.object({
-    name: z.string().optional(),
-    address: z.string().optional(),
-  }).optional(),
-  creatorEmail: z.string().email(),
-  imageUrl: z.string().optional().or(z.literal("")),
-  externalUrl: z.string().optional().or(z.literal("")),
-  categories: z.array(z.string()).default([]),
-  languages: z.array(z.string()).default(["en"])
-}).refine(d => !d.end || d.end > d.start, {
-  path: ["end"],
-  message: "End must be after start",
-});
+const EventSubmitSchema = z
+  .object({
+    title: z.string().min(2),
+    description: z.string().default(""),
 
+    start: z.coerce.date(),
+    end: z.coerce.date().optional(),
+    timezone: z.string().optional(),
+
+    location: z
+      .object({
+        name: z.string().optional(),
+        address: z.string().optional(),
+      })
+      .optional(),
+
+    creatorEmail: z.string().email(),
+
+    imageUrl: z.string().url().optional().or(z.literal("")),
+    externalUrl: z.string().url().optional().or(z.literal("")),
+
+    categories: z.array(z.string()).default([]),
+    languages: z.array(z.string()).default(["en"]),
+  })
+  .refine((d) => !d.end || d.end > d.start, {
+    path: ["end"],
+    message: "End must be after start",
+  });
 
 /* ------------------------- ROUTE HANDLER ------------------------- */
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    console.log("[v0] Incoming body:", body);
+    console.log("[submit] Incoming body:", body);
 
     const validated = EventSubmitSchema.parse(body);
 
-    const sql = neon(process.env.NEON_DATABASE_URL!);
+    const categories = validated.categories ?? [];
+    const languages =
+      validated.languages?.length > 0 ? validated.languages : ["en"];
 
-    /* ------------------------- USER ENSURE ------------------------- */
+    const imageUrls =
+      validated.imageUrl?.trim() ? [validated.imageUrl] : [];
 
-    let userId: string;
-    const existingUser = await sql`
-      SELECT id FROM "User" WHERE email = ${validated.creatorEmail} LIMIT 1
-    `;
+    /* ------------------------- USER HANDLING ------------------------- */
 
-    if (existingUser.length > 0) {
-      userId = existingUser[0].id;
-    } else {
-      userId = crypto.randomUUID();
-      await sql`
-        INSERT INTO "User" (id, email, name, "createdAt", "updatedAt")
-        VALUES (${userId}, ${validated.creatorEmail}, ${validated.creatorEmail.split("@")[0]}, NOW(), NOW())
-      `;
-    }
-
-    /* ------------------------- ADDRESS PARSE ------------------------- */
-
-    const address = validated.location?.address ?? "";
-    const parts = address.split(",").map(p => p.trim()).filter(Boolean);
-    const city = parts[1] || parts[0] || "Unknown";
-    const country = parts[parts.length - 1] || "Unknown";
-
-    const eventId = crypto.randomUUID();
-    const imageUrls = validated.imageUrl ? [validated.imageUrl] : [];
-    const searchText = `${validated.title} ${validated.description} ${city} ${country}`.toLowerCase();
-
-    /* ------------------------- INSERT EVENT (initial state) ------------------------- */
-
-    await sql`
-      INSERT INTO "Event" (
-        id, title, description,
-        "startAt", "endAt", timezone,
-        "venueName", address, city, country,
-        "imageUrl", "imageUrls", "externalUrl",
-        categories, languages, "searchText",
-        "createdById",
-        status,
-        "aiStatus",
-        "createdAt", "updatedAt"
-      )
-      VALUES (
-        ${eventId},
-        ${validated.title},
-        ${validated.description},
-        ${validated.start.toISOString()},
-        ${(validated.end ?? validated.start).toISOString()},
-        ${validated.timezone || "UTC"},
-        ${validated.location?.name || null},
-        ${address || null},
-        ${city}, ${country},
-        ${validated.imageUrl || null},
-        ${imageUrls},
-        ${validated.externalUrl || null},
-        ${validated.categories},
-        ${validated.languages},
-        ${searchText},
-        ${userId},
-        'DRAFT',
-        'PENDING',
-        NOW(), NOW()
-      )
-    `;
-
-    console.log("[v0] Event created:", eventId);
-
-    /* ------------------------- AI MODERATION ------------------------- */
-
-    const moderation = await moderateEvent({
-      title: validated.title,
-      description: validated.description,
-      categories: validated.categories,
-      languages: validated.languages,
-      city,
-      country,
+    let user = await db.user.findUnique({
+      where: { email: validated.creatorEmail },
+      select: { id: true },
     });
 
-    console.log("[AI] moderation result:", moderation);
-
-    if (moderation.approved === true) {
-      await sql`
-        UPDATE "Event"
-        SET status = 'PUBLISHED',
-            "aiStatus" = 'APPROVED',
-            "updatedAt" = NOW()
-        WHERE id = ${eventId}
-      `;
-      console.log("[AI] Event automatically approved");
-    }
-
-    else if (moderation.needsReview === true) {
-      await sql`
-        UPDATE "Event"
-        SET status = 'PENDING_REVIEW',
-            "aiStatus" = 'NEEDS_REVIEW',
-            "updatedAt" = NOW()
-        WHERE id = ${eventId}
-      `;
-
-      console.log("[AI] Event flagged for admin review");
-
-      await notifyAdminsEventNeedsReview({
-        eventId,
-        title: validated.title,
-        city,
-        country,
-        aiStatus: "NEEDS_REVIEW",
-        aiReason: moderation.reason,
+    if (!user) {
+      user = await db.user.create({
+        data: {
+          email: validated.creatorEmail,
+          name: validated.creatorEmail.split("@")[0],
+        },
+        select: { id: true },
       });
     }
 
-    else {
-      await sql`
-        UPDATE "Event"
-        SET status = 'REJECTED',
-            "aiStatus" = 'REJECTED',
-            "updatedAt" = NOW()
-        WHERE id = ${eventId}
-      `;
-      console.log("[AI] Event rejected:", moderation.reason);
+    /* ------------------------- LOCATION PARSING ------------------------- */
+
+    const address = validated.location?.address ?? "";
+    const parts = address
+      ? address.split(",").map((p) => p.trim()).filter(Boolean)
+      : [];
+
+    const city = parts[1] || parts[0] || "Unknown";
+    const country = parts[parts.length - 1] || "Australia";
+
+    /* ------------------------- CREATE EVENT ------------------------- */
+
+    const event = await db.event.create({
+      data: {
+        title: validated.title,
+        description: validated.description,
+        startAt: validated.start,
+        endAt: validated.end ?? validated.start,
+        timezone: validated.timezone || "UTC",
+
+        venueName: validated.location?.name || null,
+        address,
+        city,
+        country,
+
+        imageUrl: validated.imageUrl || null,
+        imageUrls,
+        externalUrl: validated.externalUrl || null,
+
+        categories,
+        languages,
+
+        searchText: `${validated.title} ${validated.description} ${city} ${country}`.toLowerCase(),
+
+        createdById: user.id,
+
+        // Initial status before AI
+        status: "DRAFT",
+        aiStatus: "PENDING",
+      },
+    });
+
+    console.log("[submit] Event created:", event.id);
+
+    /* ------------------------- AI MODERATION ------------------------- */
+
+    try {
+      const moderation = await moderateEvent({
+        title: validated.title,
+        description: validated.description,
+        categories,
+        languages,
+        city,
+        country,
+      });
+
+      console.log("[AI] moderation:", moderation);
+
+      /* CASE 1 — APPROVED */
+      if (moderation.approved) {
+        await db.event.update({
+          where: { id: event.id },
+          data: {
+            status: "PUBLISHED",
+            aiStatus: "SAFE",
+            aiReason: moderation.reason,
+            aiAnalyzedAt: new Date(),
+          },
+        });
+      }
+
+      /* CASE 2 — NEEDS REVIEW */
+      else if (moderation.needsReview) {
+        await db.event.update({
+          where: { id: event.id },
+          data: {
+            status: "PENDING",
+            aiStatus: "NEEDS_REVIEW",
+            aiReason: moderation.reason,
+            aiAnalyzedAt: new Date(),
+          },
+        });
+
+        await notifyAdminsEventNeedsReview({
+          eventId: event.id,
+          title: validated.title,
+          city,
+          country,
+          aiStatus: "NEEDS_REVIEW",
+          aiReason: moderation.reason,
+        });
+      }
+
+      /* CASE 3 — REJECTED */
+      else {
+        await db.event.update({
+          where: { id: event.id },
+          data: {
+            status: "DRAFT",
+            aiStatus: "REJECTED",
+            aiReason: moderation.reason,
+            aiAnalyzedAt: new Date(),
+          },
+        });
+      }
+    } catch (err) {
+      console.error("[AI] moderation error:", err);
     }
 
-    /* ------------------------- CONFIRMATION EMAIL ------------------------- */
+    /* ------------------------- SEND EDIT LINK EMAIL ------------------------- */
 
-    const token = await createEventEditToken(eventId, validated.end ?? validated.start);
-    await sendEventEditLinkEmailAPI(validated.creatorEmail, validated.title, eventId, token);
+    try {
+      const token = await createEventEditToken(
+        event.id,
+        validated.end ?? validated.start
+      );
+
+      await sendEventEditLinkEmailAPI(
+        validated.creatorEmail,
+        validated.title,
+        event.id,
+        token
+      );
+    } catch (err) {
+      console.error("[submit] Email error:", err);
+    }
+
+    /* ------------------------- RESPONSE ------------------------- */
 
     return NextResponse.json({
       ok: true,
-      eventId,
-      status: "submitted",
+      eventId: event.id,
+      message: "Event submitted successfully",
     });
 
   } catch (error) {
     console.error("[submit] ERROR:", error);
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Validation failed", issues: error.issues }, { status: 400 });
+      return NextResponse.json(
+        { error: "Validation failed", issues: error.issues },
+        { status: 400 }
+      );
     }
 
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
   }
 }

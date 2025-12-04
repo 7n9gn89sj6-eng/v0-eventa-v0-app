@@ -1,44 +1,14 @@
-import { redirect } from 'next/navigation'
-import { getSession } from "@/lib/jwt"
-import { db } from "@/lib/db"
-import { AdminSidebar } from "@/components/admin/admin-sidebar"
+import { AdminSidebar } from "@/components/admin/admin-sidebar";
 
-export const dynamic = "force-dynamic"
-
-export default async function AdminLayout({
+export default function AdminLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
-  const session = await getSession()
-
-  if (!session) {
-    redirect("/verify")
-  }
-
-  const user = await db.user.findUnique({
-    where: { id: session.userId },
-    select: { isAdmin: true },
-  })
-
-  if (!user?.isAdmin) {
-    redirect("/")
-  }
-
-  const needsReviewCount = await db.event.count({
-    where: {
-      status: "DRAFT",
-      aiStatus: "NEEDS_REVIEW",
-    },
-  })
-
   return (
     <div className="flex min-h-screen">
-      <AdminSidebar needsReviewCount={needsReviewCount} />
-      
-      <main className="flex-1">
-        {children}
-      </main>
+      <AdminSidebar />
+      <main className="flex-1 p-6">{children}</main>
     </div>
-  )
+  );
 }

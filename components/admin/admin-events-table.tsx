@@ -22,7 +22,7 @@ import {
   Loader2,
 } from "lucide-react"
 import ClientOnly from "@/components/ClientOnly"
-import { BulkActionBar } from "@/components/admin/bulk-action-bar"
+import BulkActionBar from "@/components/admin/bulk-action-bar";
 import { getAdminDisplayStatus } from "@/lib/events"
 import type { EventStatus, EventAIStatus } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
