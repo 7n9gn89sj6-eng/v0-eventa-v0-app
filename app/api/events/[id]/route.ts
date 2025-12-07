@@ -1,66 +1,63 @@
-export const runtime = "nodejs"
+// app/api/events/[id]/route.ts
+export const runtime = "nodejs";
 
-import type { NextRequest } from "next/server"
-import { db } from "@/lib/db"
-import { getSession } from "@/lib/jwt"
-import { validateEventEditToken } from "@/lib/eventEditToken"
-import { ok, fail } from "@/lib/http"
-import { createAuditLog } from "@/lib/audit-log"
-import { moderateEventContent } from "@/lib/ai-moderation"
-import { sendEmail } from "@/lib/email"
+import type { NextRequest } from "next/server";
+import { db } from "@/lib/db";
+import { getSession } from "@/lib/jwt";
+import { validateEventEditToken } from "@/lib/eventEditToken";
+import { ok, fail } from "@/lib/http";
+import { createAuditLog } from "@/lib/audit-log";
+import { moderateEventContent } from "@/lib/ai-moderation";
+import { sendEmailAPI } from "@/lib/email";
+import { notifyAdminsEventNeedsReview } from "@/lib/admin-notifications";
 
+/* ----------------------------------------------------------
+   GET — fetch event (public)
+---------------------------------------------------------- */
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { id } = params
+    const { id } = params;
 
     const event = await db.event.findUnique({
       where: { id },
       include: {
         createdBy: {
-          select: {
-            name: true,
-            email: true,
-          },
+          select: { name: true, email: true },
         },
       },
-    })
+    });
 
     if (!event) {
-      return fail("Event not found", 404)
+      return fail("Event not found", 404);
     }
 
-    return ok({ event })
+    return ok({ event });
   } catch (error) {
-    console.error("Error fetching event:", error)
-    return fail("Failed to fetch event", 500)
+    console.error("Error fetching event:", error);
+    return fail("Failed to fetch event", 500);
   }
 }
 
+/* ----------------------------------------------------------
+   PATCH — owner updates fields (but NOT trigger re-moderation)
+---------------------------------------------------------- */
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const session = await getSession()
-    if (!session) {
-      return fail("Unauthorized", 401)
-    }
+    const session = await getSession();
+    if (!session) return fail("Unauthorized", 401);
 
-    const { id } = params
-    const body = await request.json()
+    const { id } = params;
+    const body = await request.json();
 
     // Verify ownership
     const event = await db.event.findUnique({
       where: { id },
       select: { createdById: true },
-    })
+    });
 
-    if (!event) {
-      return fail("Event not found", 404)
-    }
+    if (!event) return fail("Event not found", 404);
+    if (event.createdById !== session.userId) return fail("Forbidden", 403);
 
-    if (event.createdById !== session.userId) {
-      return fail("Forbidden", 403)
-    }
-
-    // Update event with allowed fields
     const updatedEvent = await db.event.update({
       where: { id },
       data: {
@@ -74,28 +71,32 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         imageUrl: body.imageUrl,
         externalUrl: body.externalUrl,
       },
-    })
+    });
 
-    return ok({ event: updatedEvent })
+    return ok({ event: updatedEvent });
   } catch (error) {
-    console.error("[v0] Error updating event:", error)
-    return fail("Failed to update event", 500)
+    console.error("[v0] Error updating event:", error);
+    return fail("Failed to update event", 500);
   }
 }
 
+/* ----------------------------------------------------------
+   PUT — FULL EDIT (owner OR edit-token) + AI Moderation
+---------------------------------------------------------- */
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { id } = params
-    const body = await request.json()
+    const { id } = params;
+    const body = await request.json();
 
-    const authHeader = request.headers.get("authorization")
-    const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null
-    const queryToken = request.nextUrl.searchParams.get("token")
-    const editToken = bearerToken || queryToken
+    /* ------------------ AUTH ------------------ */
+    const authHeader = request.headers.get("authorization");
+    const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null;
+    const queryToken = request.nextUrl.searchParams.get("token");
+    const editToken = bearerToken || queryToken;
 
-    let isAuthorized = false
-    let isOwner = false
-    let userId: string | undefined
+    let isAuthorized = false;
+    let isOwner = false;
+    let userId: string | undefined;
 
     const event = await db.event.findUnique({
       where: { id },
@@ -105,57 +106,52 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         startAt: true,
         moderationStatus: true,
         title: true,
-        createdBy: {
-          select: {
-            email: true,
-            name: true,
-          },
-        },
+        createdBy: { select: { email: true, name: true } },
       },
-    })
+    });
 
-    if (!event) {
-      return fail("Event not found", 404)
-    }
+    if (!event) return fail("Event not found", 404);
 
-    const now = new Date()
+    // Check if event expired
+    const now = new Date();
     if (event.endAt && now > event.endAt) {
-      return fail("Cannot edit event after it has ended", 403)
+      return fail("Cannot edit event after it has ended", 403);
     }
 
-    const session = await getSession()
-    if (session && event.createdById === session.userId) {
-      isAuthorized = true
-      isOwner = true
-      userId = session.userId
+    // Auth via session → owner?
+    const session = await getSession();
+    if (session && session.userId === event.createdById) {
+      isAuthorized = true;
+      isOwner = true;
+      userId = session.userId;
     }
 
+    // Auth via token
     if (!isAuthorized && editToken) {
-      const tokenValidation = await validateEventEditToken(id, editToken)
-
+      const tokenValidation = await validateEventEditToken(id, editToken);
       if (tokenValidation === "ok") {
-        isAuthorized = true
-        userId = event.createdById
+        isAuthorized = true;
+        userId = event.createdById;
       } else if (tokenValidation === "expired") {
-        return fail("token_expired", 401)
+        return fail("token_expired", 401);
       } else {
-        return fail("Invalid edit token", 401)
+        return fail("Invalid edit token", 401);
       }
     }
 
-    if (!isAuthorized) {
-      return fail("Unauthorized", 401)
-    }
+    if (!isAuthorized) return fail("Unauthorized", 401);
 
-    const startAt = body.startAt ? new Date(body.startAt) : event.startAt
-    const endAt = body.endAt ? new Date(body.endAt) : event.endAt
+    /* ------------------ VALIDATION ------------------ */
+    const startAt = body.startAt ? new Date(body.startAt) : event.startAt;
+    const endAt = body.endAt ? new Date(body.endAt) : event.endAt;
 
     if (startAt && endAt && endAt <= startAt) {
-      return fail("End time must be after start time", 400)
+      return fail("End time must be after start time", 400);
     }
 
-    const oldStatus = event.moderationStatus
+    const oldStatus = event.moderationStatus;
 
+    /* ------------------ UPDATE EVENT (pending moderation) ------------------ */
     const updatedEvent = await db.event.update({
       where: { id },
       data: {
@@ -166,13 +162,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         address: body.address,
         city: body.city,
         country: body.country,
-        startAt: body.startAt ? new Date(body.startAt) : undefined,
-        endAt: body.endAt ? new Date(body.endAt) : undefined,
+        startAt,
+        endAt,
         imageUrl: body.imageUrl,
         externalUrl: body.externalUrl,
         contactEmail: body.contactEmail,
         categories: body.categories,
         languages: body.languages,
+
         moderationStatus: "PENDING",
         moderationReason: null,
         moderationSeverity: null,
@@ -180,8 +177,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         moderatedAt: null,
         moderatedBy: null,
       },
-    })
+    });
 
+    /* ------------------ AUDIT LOG ------------------ */
     await createAuditLog({
       eventId: id,
       actor: "user",
@@ -189,183 +187,163 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       action: "edited",
       oldStatus,
       newStatus: "PENDING",
-      notes: "Event edited and resubmitted for moderation",
-    })
+      notes: "Event edited and re-submitted for AI moderation",
+    });
 
+    /* --------------------------------------------------
+       AI MODERATION (ASYNC, NOT BLOCKING)
+    -------------------------------------------------- */
     moderateEventContent({
       title: body.title,
       description: body.description,
       city: body.city,
       country: body.country,
-      externalUrl: body.externalUrl,
+      categories: body.categories,
+      languages: body.languages,
     })
-      .then(async (moderationResult) => {
-        const newStatus = moderationResult.status.toUpperCase()
+      .then(async (result) => {
+        const aiStatus = result.status.toUpperCase() as "APPROVED" | "FLAGGED" | "REJECTED";
 
+        // Update event with AI decision
         await db.event.update({
           where: { id },
           data: {
-            moderationStatus: newStatus as any,
-            moderationReason: moderationResult.reason,
-            moderationSeverity: moderationResult.severity_level.toUpperCase() as any,
-            moderationCategory: moderationResult.policy_category,
+            moderationStatus: aiStatus,
+            moderationReason: result.reason,
+            moderationSeverity: result.severity_level.toUpperCase(),
+            moderationCategory: result.policy_category,
             moderatedAt: new Date(),
           },
-        })
+        });
 
+        // Log the AI action
         await createAuditLog({
           eventId: id,
           actor: "ai",
           action:
-            moderationResult.status === "approved"
+            result.status === "approved"
               ? "approved"
-              : moderationResult.status === "rejected"
+              : result.status === "rejected"
                 ? "rejected"
                 : "flagged",
           oldStatus: "PENDING",
-          newStatus,
-          reason: moderationResult.reason,
-          notes: `AI re-moderation after edit: ${moderationResult.policy_category}`,
-        })
+          newStatus: aiStatus,
+          reason: result.reason,
+          notes: `AI moderation: ${result.policy_category}`,
+        });
 
-        if (moderationResult.status === "flagged") {
+        /* ------------------ If flagged → notify admins ------------------ */
+        if (result.status === "flagged") {
           try {
-            const { notifyAdminsEventNeedsReview } = await import("@/lib/admin-notifications")
             await notifyAdminsEventNeedsReview({
               eventId: id,
               title: body.title,
               city: body.city,
               country: body.country,
               aiStatus: "NEEDS_REVIEW",
-              aiReason: moderationResult.reason,
-            })
-          } catch (notifyError) {
-            console.error("[v0] Failed to send admin notification after re-moderation:", notifyError)
+              aiReason: result.reason,
+            });
+          } catch (err) {
+            console.error("[v0] Failed to notify admins:", err);
           }
         }
 
-        if (moderationResult.status === "rejected") {
+        /* ------------------ If rejected → email user ------------------ */
+        if (result.status === "rejected") {
           try {
-            await sendEmail({
+            await sendEmailAPI({
               to: event.createdBy.email,
               subject: `Event Rejected: ${body.title}`,
               html: `
                 <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
                   <h2 style="color: #dc2626;">Event Rejected After Edit</h2>
-                  
                   <p>Hello ${event.createdBy.name || "there"},</p>
-                  
-                  <p>Your edited event submission has been rejected by our moderation system.</p>
-                  
-                  <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 16px; margin: 16px 0;">
-                    <p style="margin: 0; font-weight: bold;">Event: ${body.title}</p>
-                    <p style="margin: 8px 0 0 0;">Reason: ${moderationResult.reason}</p>
+                  <p>Your event has been rejected by the moderation system.</p>
+                  <div style="background:#fef2f2; border-left:4px solid #dc2626; padding:16px;">
+                    <p style="margin:0;"><strong>Reason:</strong> ${result.reason}</p>
                   </div>
-                  
-                  <p>You can edit your event again and resubmit it for review.</p>
+                  <p>You may edit and resubmit your event at any time.</p>
                 </div>
               `,
-            })
-          } catch (emailError) {
-            console.error("[v0] Failed to send rejection email:", emailError)
+            });
+          } catch (err) {
+            console.error("[v0] Failed to send rejection email:", err);
           }
         }
       })
       .catch(async (error) => {
-        console.error("[v0] Re-moderation failed after edit:", error)
-        
-        const errorMessage = error instanceof Error ? error.message : String(error)
-        const errorName = error instanceof Error ? error.name : "Unknown"
-        const isTimeout = errorMessage.includes("abort") || errorMessage.includes("timeout")
-        
-        console.error("[v0] AI re-moderation failure details:", {
-          errorType: errorName,
-          isTimeout,
-          eventId: id,
-          message: errorMessage,
-        })
-        
-        try {
-          const failureReason = isTimeout 
-            ? "AI re-moderation timeout - requires manual review"
-            : `AI re-moderation system error: ${errorName} - requires manual review`
-          
-          await db.event.update({
-            where: { id },
-            data: {
-              moderationStatus: "NEEDS_REVIEW",
-              moderationReason: failureReason,
-              moderatedAt: new Date(),
-            },
-          })
-          
-          await createAuditLog({
-            eventId: id,
-            actor: "ai",
-            action: "AI_MODERATION_FAILED",
-            oldStatus: "PENDING",
-            newStatus: "NEEDS_REVIEW",
-            reason: errorMessage,
-            notes: `AI re-moderation failed after edit: ${errorName}. ${isTimeout ? "Timeout after 10 seconds." : "System error."} Event flagged for manual review.`,
-          })
-          
-          console.log("[v0] Event flagged for manual review after AI re-moderation failure")
-          
-          try {
-            const { notifyAdminsEventNeedsReview } = await import("@/lib/admin-notifications")
-            await notifyAdminsEventNeedsReview({
-              eventId: id,
-              title: body.title,
-              city: body.city,
-              country: body.country,
-              aiStatus: "NEEDS_REVIEW",
-              aiReason: failureReason,
-            })
-          } catch (notifyError) {
-            console.error("[v0] Failed to send admin notification after re-moderation failure:", notifyError)
-          }
-        } catch (updateError) {
-          console.error("[v0] Failed to update event after AI re-moderation failure:", updateError)
-        }
-      })
+        console.error("[v0] AI moderation failed:", error);
 
-    return ok({ event: updatedEvent })
+        const reason =
+          error instanceof Error
+            ? `AI moderation error: ${error.message}`
+            : "Unknown AI error";
+
+        // Fail-safe: Flag event for human review
+        await db.event.update({
+          where: { id },
+          data: {
+            moderationStatus: "FLAGGED",
+            moderationReason: reason,
+            moderatedAt: new Date(),
+          },
+        });
+
+        await createAuditLog({
+          eventId: id,
+          actor: "ai",
+          action: "AI_MODERATION_FAILED",
+          oldStatus: "PENDING",
+          newStatus: "FLAGGED",
+          reason,
+          notes: "AI moderation failed — event flagged for manual review",
+        });
+
+        // Notify admins
+        try {
+          await notifyAdminsEventNeedsReview({
+            eventId: id,
+            title: body.title,
+            city: body.city,
+            country: body.country,
+            aiStatus: "NEEDS_REVIEW",
+            aiReason: reason,
+          });
+        } catch (err) {
+          console.error("[v0] Failed to send admin notification:", err);
+        }
+      });
+
+    return ok({ event: updatedEvent });
   } catch (error) {
-    console.error("[v0] Error updating event:", error)
-    return fail("Failed to update event", 500)
+    console.error("[v0] Error updating event:", error);
+    return fail("Failed to update event", 500);
   }
 }
 
+/* ----------------------------------------------------------
+   DELETE — owner only
+---------------------------------------------------------- */
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const session = await getSession()
-    if (!session) {
-      return fail("Unauthorized", 401)
-    }
+    const session = await getSession();
+    if (!session) return fail("Unauthorized", 401);
 
-    const { id } = params
+    const { id } = params;
 
-    // Verify ownership
     const event = await db.event.findUnique({
       where: { id },
       select: { createdById: true },
-    })
+    });
 
-    if (!event) {
-      return fail("Event not found", 404)
-    }
+    if (!event) return fail("Event not found", 404);
+    if (event.createdById !== session.userId) return fail("Forbidden", 403);
 
-    if (event.createdById !== session.userId) {
-      return fail("Forbidden", 403)
-    }
+    await db.event.delete({ where: { id } });
 
-    await db.event.delete({
-      where: { id },
-    })
-
-    return ok({ ok: true })
+    return ok({ ok: true });
   } catch (error) {
-    console.error("[v0] Error deleting event:", error)
-    return fail("Failed to delete event", 500)
+    console.error("[v0] Error deleting event:", error);
+    return fail("Failed to delete event", 500);
   }
 }

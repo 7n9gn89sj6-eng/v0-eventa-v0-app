@@ -1,66 +1,83 @@
-"use client"
+"use client";
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import { translations, type Locale, type TranslationNamespace } from "./translations"
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  type ReactNode,
+} from "react";
+
+import { translations, type Locale, type TranslationNamespace } from "./translations";
 
 interface I18nContextType {
-  locale: Locale
-  setLocale: (locale: Locale) => void
-  t: (namespace: TranslationNamespace) => (key: string) => string
+  locale: Locale;
+  setLocale: (locale: Locale) => void;
+  t: (namespace: TranslationNamespace) => (key: string, vars?: Record<string, string | number>) => string;
 }
 
-const I18nContext = createContext<I18nContextType | undefined>(undefined)
+const I18nContext = createContext<I18nContextType | undefined>(undefined);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>("en")
+  const [locale, setLocaleState] = useState<Locale>("en");
 
   useEffect(() => {
-    const cookies = document.cookie.split("; ")
-    const localeCookie = cookies.find((c) => c.startsWith("NEXT_LOCALE="))
+    const cookies = document.cookie.split("; ");
+    const localeCookie = cookies.find((c) => c.startsWith("NEXT_LOCALE="));
+
     if (localeCookie) {
-      const savedLocale = localeCookie.split("=")[1] as Locale
-      if (savedLocale in translations) {
-        setLocaleState(savedLocale)
-      }
+      const saved = localeCookie.split("=")[1] as Locale;
+      if (saved in translations) setLocaleState(saved);
     } else {
-      // Set default locale cookie if not present (replaces middleware logic)
-      document.cookie = `NEXT_LOCALE=en; max-age=31536000; path=/; samesite=lax`
+      document.cookie =
+        "NEXT_LOCALE=en; max-age=31536000; path=/; samesite=lax";
     }
-  }, [])
+  }, []);
 
   const setLocale = (newLocale: Locale) => {
-    setLocaleState(newLocale)
-    document.cookie = `NEXT_LOCALE=${newLocale}; max-age=31536000; path=/; samesite=lax`
-  }
+    setLocaleState(newLocale);
+    document.cookie = `NEXT_LOCALE=${newLocale}; max-age=31536000; path=/; samesite=lax`;
+  };
 
-  const t = (namespace: TranslationNamespace) => (key: string) => {
-    const keys = key.split(".")
-    let value: any = translations[locale][namespace]
+  const t =
+    (namespace: TranslationNamespace) =>
+    (key: string, vars: Record<string, string | number> = {}) => {
+      const ns = translations[locale][namespace];
+      if (!ns) return key;
 
-    for (const k of keys) {
-      value = value?.[k]
-    }
+      const parts = key.split(".");
+      let value: any = ns;
 
-    return typeof value === "string" ? value : key
-  }
+      for (const p of parts) {
+        value = value?.[p];
+      }
 
-  return <I18nContext.Provider value={{ locale, setLocale, t }}>{children}</I18nContext.Provider>
+      if (!value) return key;
+      if (typeof value !== "string") return key;
+
+      // Replace variables {var}
+      return value.replace(/\{(\w+)\}/g, (_, v) => String(vars[v] ?? ""));
+    };
+
+  return (
+    <I18nContext.Provider value={{ locale, setLocale, t }}>
+      {children}
+    </I18nContext.Provider>
+  );
 }
 
 export function useI18n() {
-  const context = useContext(I18nContext)
-  if (!context) {
-    throw new Error("useI18n must be used within I18nProvider")
-  }
-  return context
+  const ctx = useContext(I18nContext);
+  if (!ctx) throw new Error("useI18n must be used within I18nProvider");
+  return ctx;
 }
 
 export function useTranslations(namespace: TranslationNamespace) {
-  const { t } = useI18n()
-  return t(namespace)
+  const { t } = useI18n();
+  return t(namespace);
 }
 
 export function useLocale() {
-  const { locale } = useI18n()
-  return locale
+  const { locale } = useI18n();
+  return locale;
 }

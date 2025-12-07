@@ -1,3 +1,4 @@
+// lib/ai-moderation.ts
 "use server";
 
 import OpenAI from "openai";
@@ -7,13 +8,12 @@ const client = new OpenAI({
 });
 
 /* -------------------------------------------------------------
-   Utility: Remove ```json code fences & extract valid JSON
+   Utility: Remove ```json fences & parse JSON safely
 ------------------------------------------------------------- */
 function extractJson(text: string) {
   if (!text) throw new Error("Empty AI response");
 
-  // Remove fences like ```json ... ```
-  let cleaned = text
+  const cleaned = text
     .replace(/```json/gi, "")
     .replace(/```/g, "")
     .trim();
@@ -27,16 +27,25 @@ function extractJson(text: string) {
 }
 
 /* -------------------------------------------------------------
-   MODERATION ENGINE
+   Base moderation: simple, boolean-oriented
 ------------------------------------------------------------- */
-export async function moderateEvent(input: {
+
+export type ModerateEventInput = {
   title: string;
   description: string;
   categories?: string[];
   languages?: string[];
   city?: string | null;
   country?: string | null;
-}) {
+};
+
+export type ModerateEventResult = {
+  approved: boolean;
+  needsReview: boolean;
+  reason: string;
+};
+
+export async function moderateEvent(input: ModerateEventInput): Promise<ModerateEventResult> {
   console.log("[AI] moderateEvent called with:", input);
 
   const prompt = `
@@ -95,4 +104,88 @@ Return ONLY JSON. NO extra text. Format:
       reason: "AI moderation failed – requires manual review",
     };
   }
+}
+
+/* -------------------------------------------------------------
+   Wrapper used by existing API routes:
+   - /api/events/[id]
+------------------------------------------------------------- */
+
+export type ModerateEventContentResult = {
+  status: "approved" | "rejected" | "flagged";
+  reason: string;
+  severity_level: "low" | "medium" | "high";
+  policy_category: string;
+};
+
+export async function moderateEventContent(
+  input: ModerateEventInput
+): Promise<ModerateEventContentResult> {
+  const base = await moderateEvent(input);
+
+  let status: "approved" | "rejected" | "flagged";
+  if (base.approved) {
+    status = "approved";
+  } else if (base.needsReview) {
+    status = "flagged";
+  } else {
+    status = "rejected";
+  }
+
+  const severity_level: "low" | "medium" | "high" =
+    status === "approved" ? "low" : status === "flagged" ? "medium" : "high";
+
+  const policy_category =
+    status === "approved"
+      ? "none"
+      : "content_policy";
+
+  return {
+    status,
+    reason: base.reason,
+    severity_level,
+    policy_category,
+  };
+}
+
+/* -------------------------------------------------------------
+   analyzeEventContent — for admin “Analyze” button
+------------------------------------------------------------- */
+
+export async function analyzeEventContent(
+  input: ModerateEventInput
+): Promise<ModerateEventContentResult & { explanation: string }> {
+  const result = await moderateEventContent(input);
+
+  const explanation = `Status: ${result.status.toUpperCase()} — ${result.reason}`;
+
+  return {
+    ...result,
+    explanation,
+  };
+}
+
+/* -------------------------------------------------------------
+   generateModerationSummary — for /api/admin/summary
+   Simple local summary (no extra AI call)
+------------------------------------------------------------- */
+
+type SummaryEvent = {
+  title: string;
+  status: string;
+};
+
+export async function generateModerationSummary(events: SummaryEvent[]): Promise<string> {
+  const total = events.length;
+  const byStatus: Record<string, number> = {};
+
+  for (const e of events) {
+    byStatus[e.status] = (byStatus[e.status] || 0) + 1;
+  }
+
+  const parts = Object.entries(byStatus).map(
+    ([status, count]) => `${status}: ${count}`
+  );
+
+  return `Last ${total} events — ${parts.join(", ") || "no events"}.`;
 }

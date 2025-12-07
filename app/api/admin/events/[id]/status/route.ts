@@ -1,6 +1,8 @@
+// app/api/admin/events/[id]/status/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/jwt";
 import { db } from "@/lib/db";
+import { createAuditLog } from "@/lib/audit-log";
 import { notifyAdminsEventUpdated } from "@/lib/admin-notifications";
 
 export async function PATCH(
@@ -9,37 +11,59 @@ export async function PATCH(
 ) {
   try {
     const session = await getSession();
-    if (!session)
+    if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    const user = await db.user.findUnique({
+    const admin = await db.user.findUnique({
       where: { id: session.userId },
-      select: { isAdmin: true, id: true, email: true },
+      select: { id: true, email: true, isAdmin: true },
     });
 
-    if (!user?.isAdmin)
+    if (!admin?.isAdmin) {
       return NextResponse.json(
         { error: "Forbidden - Admin access required" },
         { status: 403 }
       );
+    }
 
     const { action, reason } = await request.json();
+
     const validActions = [
       "approve",
       "reject",
       "needs_review",
       "publish",
       "unpublish",
-    ];
+    ] as const;
 
     if (!validActions.includes(action)) {
       return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
 
-    let updated;
+    const event = await db.event.findUnique({
+      where: { id: params.id },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        moderationStatus: true,
+        publishedAt: true,
+      },
+    });
+
+    if (!event) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
+    }
+
+    const oldModerationStatus = event.moderationStatus;
+    const oldStatus = event.status;
+    const now = new Date();
+
+    let updated = event;
 
     /* ---------------------------------------------------------
-       APPROVE → PUBLISHED + SAFE
+       APPROVE → PUBLISHED + SAFE + APPROVED
     --------------------------------------------------------- */
     if (action === "approve") {
       updated = await db.event.update({
@@ -48,26 +72,31 @@ export async function PATCH(
           status: "PUBLISHED",
           aiStatus: "SAFE",
           aiReason: reason ?? "Approved by admin",
-          reviewedBy: user.id,
-          reviewedAt: new Date(),
-          publishedAt: new Date(),
+          moderationStatus: "APPROVED",
+          moderatedAt: now,
+          moderatedBy: admin.id,
+          reviewedBy: admin.id,
+          reviewedAt: now,
+          publishedAt: event.publishedAt ?? now,
         },
       });
 
-      await db.eventAuditLog.create({
-        data: {
-          eventId: params.id,
-          userId: user.id,
-          action: "ADMIN_APPROVED",
-          reason: reason ?? "Approved by admin",
-        },
+      await createAuditLog({
+        eventId: params.id,
+        actor: "admin",
+        actorId: admin.id,
+        action: "ADMIN_APPROVED",
+        oldStatus: oldModerationStatus,
+        newStatus: "APPROVED",
+        reason: reason ?? "Approved by admin",
+        notes: "Admin approved event and published",
       });
 
       await notifyAdminsEventUpdated({
         eventId: params.id,
         title: updated.title,
         action: "ADMIN_APPROVED",
-        adminEmail: user.email,
+        adminEmail: admin.email,
         reason,
       });
     }
@@ -82,25 +111,30 @@ export async function PATCH(
           status: "DRAFT",
           aiStatus: "REJECTED",
           aiReason: reason ?? "Rejected by admin",
-          reviewedBy: user.id,
-          reviewedAt: new Date(),
+          moderationStatus: "REJECTED",
+          moderatedAt: now,
+          moderatedBy: admin.id,
+          reviewedBy: admin.id,
+          reviewedAt: now,
         },
       });
 
-      await db.eventAuditLog.create({
-        data: {
-          eventId: params.id,
-          userId: user.id,
-          action: "ADMIN_REJECTED",
-          reason: reason ?? "Rejected by admin",
-        },
+      await createAuditLog({
+        eventId: params.id,
+        actor: "admin",
+        actorId: admin.id,
+        action: "ADMIN_REJECTED",
+        oldStatus: oldModerationStatus,
+        newStatus: "REJECTED",
+        reason: reason ?? "Rejected by admin",
+        notes: "Admin rejected event",
       });
 
       await notifyAdminsEventUpdated({
         eventId: params.id,
         title: updated.title,
         action: "ADMIN_REJECTED",
-        adminEmail: user.email,
+        adminEmail: admin.email,
         reason,
       });
     }
@@ -115,61 +149,68 @@ export async function PATCH(
           status: "PENDING",
           aiStatus: "NEEDS_REVIEW",
           aiReason: reason ?? "Marked for manual review",
-          reviewedBy: user.id,
-          reviewedAt: new Date(),
+          moderationStatus: "FLAGGED",
+          moderatedAt: now,
+          moderatedBy: admin.id,
+          reviewedBy: admin.id,
+          reviewedAt: now,
         },
       });
 
-      await db.eventAuditLog.create({
-        data: {
-          eventId: params.id,
-          userId: user.id,
-          action: "ADMIN_MARKED_NEEDS_REVIEW",
-          reason: reason ?? "Marked for manual review",
-        },
+      await createAuditLog({
+        eventId: params.id,
+        actor: "admin",
+        actorId: admin.id,
+        action: "ADMIN_MARKED_NEEDS_REVIEW",
+        oldStatus: oldModerationStatus,
+        newStatus: "FLAGGED",
+        reason: reason ?? "Marked for manual review",
+        notes: "Admin flagged event for manual review",
       });
 
       await notifyAdminsEventUpdated({
         eventId: params.id,
         title: updated.title,
         action: "ADMIN_MARKED_NEEDS_REVIEW",
-        adminEmail: user.email,
+        adminEmail: admin.email,
         reason,
       });
     }
 
     /* ---------------------------------------------------------
-       PUBLISH (Override)
+       PUBLISH (override) → just change status/publishedAt
     --------------------------------------------------------- */
     else if (action === "publish") {
       updated = await db.event.update({
         where: { id: params.id },
         data: {
           status: "PUBLISHED",
-          publishedAt: new Date(),
+          publishedAt: event.publishedAt ?? now,
         },
       });
 
-      await db.eventAuditLog.create({
-        data: {
-          eventId: params.id,
-          userId: user.id,
-          action: "ADMIN_PUBLISHED",
-          reason: reason ?? "Published by admin override",
-        },
+      await createAuditLog({
+        eventId: params.id,
+        actor: "admin",
+        actorId: admin.id,
+        action: "ADMIN_PUBLISHED",
+        oldStatus,
+        newStatus: "PUBLISHED",
+        reason: reason ?? "Published by admin override",
+        notes: "Admin forced publish",
       });
 
       await notifyAdminsEventUpdated({
         eventId: params.id,
         title: updated.title,
         action: "ADMIN_PUBLISHED",
-        adminEmail: user.email,
+        adminEmail: admin.email,
         reason,
       });
     }
 
     /* ---------------------------------------------------------
-       UNPUBLISH → DRAFT (aiStatus unchanged)
+       UNPUBLISH → DRAFT (keep AI + moderation state)
     --------------------------------------------------------- */
     else if (action === "unpublish") {
       updated = await db.event.update({
@@ -179,20 +220,22 @@ export async function PATCH(
         },
       });
 
-      await db.eventAuditLog.create({
-        data: {
-          eventId: params.id,
-          userId: user.id,
-          action: "ADMIN_UNPUBLISHED",
-          reason: reason ?? "Unpublished by admin",
-        },
+      await createAuditLog({
+        eventId: params.id,
+        actor: "admin",
+        actorId: admin.id,
+        action: "ADMIN_UNPUBLISHED",
+        oldStatus,
+        newStatus: "DRAFT",
+        reason: reason ?? "Unpublished by admin",
+        notes: "Admin unpublished event",
       });
 
       await notifyAdminsEventUpdated({
         eventId: params.id,
         title: updated.title,
         action: "ADMIN_UNPUBLISHED",
-        adminEmail: user.email,
+        adminEmail: admin.email,
         reason,
       });
     }

@@ -1,109 +1,138 @@
-// lib/admin-notifications.ts
+// lib/admin-notifications.tsx
+"use server";
+import "server-only";
 
-import { db } from "@/lib/db";
-import { resend } from "@/lib/email/resend"; // Your existing Resend client
-import { getBaseUrl } from "@/lib/utils";
+import { sendSafeEmail } from "@/lib/email";
 
-const DEFAULT_ADMIN_EMAIL = process.env.ADMIN_NOTIFICATION_EMAIL;
+const DEFAULT_ADMIN_EMAIL =
+  process.env.ADMIN_NOTIFICATION_EMAIL || process.env.EMAIL_FROM || "";
 
-/* ============================================================
-   NOTIFY ADMINS: Event requires human review (AI flagged)
-   (This already existed — cleanly preserved)
-============================================================ */
+if (!DEFAULT_ADMIN_EMAIL) {
+  console.warn(
+    "[admin-notifications] No ADMIN_NOTIFICATION_EMAIL or EMAIL_FROM set – admin emails will be skipped."
+  );
+}
 
-export async function notifyAdminsEventNeedsReview({
-  eventId,
-  title,
-  city,
-  country,
-  aiStatus,
-  aiReason,
-}: {
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+type NeedsReviewArgs = {
   eventId: string;
   title: string;
   city?: string | null;
   country?: string | null;
-  aiStatus: string;
+  aiStatus?: string | null;
   aiReason?: string | null;
-}) {
-  const admins = await db.user.findMany({
-    where: { isAdmin: true },
-    select: { email: true },
-  });
+};
 
-  const recipients =
-    admins.length > 0
-      ? admins.map((a) => a.email)
-      : DEFAULT_ADMIN_EMAIL
-      ? [DEFAULT_ADMIN_EMAIL]
-      : [];
+export async function notifyAdminsEventNeedsReview(args: NeedsReviewArgs) {
+  if (!DEFAULT_ADMIN_EMAIL) {
+    return { success: false, error: "No admin email configured" };
+  }
 
-  if (recipients.length === 0) return;
+  const { eventId, title, city, country, aiStatus, aiReason } = args;
 
-  const url = `${getBaseUrl()}/admin/events/${eventId}`;
+  const link = `${APP_URL}/admin?event=${encodeURIComponent(eventId)}`;
 
-  await resend.emails.send({
-    from: "Eventa <no-reply@eventa.app>",
-    to: recipients,
-    subject: `Event requires review: ${title}`,
-    html: `
-      <p><strong>${title}</strong></p>
-      <p>AI Status: ${aiStatus}</p>
-      <p>${aiReason ?? ""}</p>
-      <p>Location: ${city ?? ""}, ${country ?? ""}</p>
-      <p><a href="${url}">Review this event</a></p>
-    `,
+  const html = `
+    <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="margin-bottom: 4px;">Event requires manual review</h2>
+      <p style="margin: 0 0 16px 0; color: #4b5563;">Eventa – AI moderation flag</p>
+
+      <div style="padding: 12px 16px; background: #fef3c7; border-left: 4px solid #f59e0b; margin-bottom: 16px;">
+        <p style="margin: 0; font-weight: 600;">${title}</p>
+        <p style="margin: 4px 0 0 0; font-size: 14px; color: #4b5563;">
+          ${[city, country].filter(Boolean).join(", ") || "Location unknown"}
+        </p>
+      </div>
+
+      <p style="font-size: 14px; color: #374151; margin-bottom: 12px;">
+        AI status: <strong>${aiStatus || "NEEDS_REVIEW"}</strong>
+      </p>
+
+      ${
+        aiReason
+          ? `<p style="font-size: 14px; color: #374151; margin-bottom: 16px;">
+               Reason: ${aiReason}
+             </p>`
+          : ""
+      }
+
+      <p style="margin: 20px 0;">
+        <a href="${link}" style="display:inline-block; background:#111827; color:#ffffff; text-decoration:none; padding:10px 18px; border-radius:8px; font-size:14px; font-weight:600;">
+          Open Admin Panel
+        </a>
+      </p>
+
+      <p style="font-size: 12px; color:#6b7280; margin-top:24px;">
+        Event ID: ${eventId}
+      </p>
+    </div>
+  `;
+
+  return sendSafeEmail({
+    to: DEFAULT_ADMIN_EMAIL,
+    subject: `Event needs review: ${title}`,
+    html,
+    emailType: "admin_event_needs_review",
+    eventId,
   });
 }
 
-/* ============================================================
-   NEW — NOTIFY ADMINS: Admin took moderation action
-============================================================ */
-
-export async function notifyAdminsEventUpdated({
-  eventId,
-  title,
-  action,
-  adminEmail,
-  reason,
-}: {
+type UpdatedArgs = {
   eventId: string;
   title: string;
   action: string;
-  adminEmail: string | null;
+  adminEmail?: string | null;
   reason?: string | null;
-}) {
-  const admins = await db.user.findMany({
-    where: { isAdmin: true },
-    select: { email: true },
-  });
+};
 
-  const recipients =
-    admins.length > 0
-      ? admins.map((a) => a.email)
-      : DEFAULT_ADMIN_EMAIL
-      ? [DEFAULT_ADMIN_EMAIL]
-      : [];
+export async function notifyAdminsEventUpdated(args: UpdatedArgs) {
+  if (!DEFAULT_ADMIN_EMAIL) {
+    return { success: false, error: "No admin email configured" };
+  }
 
-  if (!recipients.length) return;
+  const { eventId, title, action, adminEmail, reason } = args;
+  const link = `${APP_URL}/admin?event=${encodeURIComponent(eventId)}`;
 
-  const url = `${getBaseUrl()}/admin/events/${eventId}`;
+  const html = `
+    <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="margin-bottom: 4px;">Admin moderation action</h2>
+      <p style="margin: 0 0 16px 0; color: #4b5563;">Eventa – Moderation update</p>
 
-  await resend.emails.send({
-    from: "Eventa <no-reply@eventa.app>",
-    to: recipients,
-    subject: `Admin updated event: ${title}`,
-    html: `
-      <p><strong>${title}</strong></p>
-      <p><strong>Action:</strong> ${action}</p>
-      <p><strong>Updated by:</strong> ${adminEmail ?? "Unknown admin"}</p>
+      <div style="padding: 12px 16px; background: #eef2ff; border-left: 4px solid #4f46e5; margin-bottom: 16px;">
+        <p style="margin: 0; font-weight: 600;">${title}</p>
+        <p style="margin: 4px 0 0 0; font-size: 13px; color: #4b5563;">
+          Action: <strong>${action}</strong>${
+            adminEmail ? ` by <strong>${adminEmail}</strong>` : ""
+          }
+        </p>
+      </div>
+
       ${
         reason
-          ? `<p><strong>Reason:</strong> ${reason}</p>`
+          ? `<p style="font-size: 14px; color: #374151; margin-bottom: 16px;">
+               Reason: ${reason}
+             </p>`
           : ""
       }
-      <p><a href="${url}">View event in dashboard</a></p>
-    `,
+
+      <p style="margin: 20px 0;">
+        <a href="${link}" style="display:inline-block; background:#111827; color:#ffffff; text-decoration:none; padding:10px 18px; border-radius:8px; font-size:14px; font-weight:600;">
+          Open Admin Panel
+        </a>
+      </p>
+
+      <p style="font-size: 12px; color:#6b7280; margin-top:24px;">
+        Event ID: ${eventId}
+      </p>
+    </div>
+  `;
+
+  return sendSafeEmail({
+    to: DEFAULT_ADMIN_EMAIL,
+    subject: `Admin action on event: ${title}`,
+    html,
+    emailType: "admin_event_updated",
+    eventId,
   });
 }
-
