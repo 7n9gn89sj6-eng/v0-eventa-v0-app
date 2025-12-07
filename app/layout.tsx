@@ -1,30 +1,27 @@
-import type React from "react"
-import "./globals.css"
-import AppProviders from "./providers"
-import { VersionDisplay } from "@/components/version-display"
-import { SiteHeader } from "@/components/layout/site-header"
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <body>
-        <AppProviders>
-          <SiteHeader />
-          {children}
-        </AppProviders>
-        <VersionDisplay />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `window.__NEXT_PUBLIC_AUTH_ENABLED__=${JSON.stringify(
-              process.env.NEXT_PUBLIC_AUTH_ENABLED === "true",
-            )};`,
-          }}
-        />
-      </body>
-    </html>
-  )
-}
+import type { ReactNode } from "react";
+import { AdminTopBar } from "@/components/admin/admin-topbar";
+import { AdminSidebar } from "@/components/admin/admin-sidebar";
+import { getAdminInfo } from "@/lib/get-admin-info";
+import "./admin.css";
 
 export const metadata = {
-  generator: "v0.app",
+  title: "Eventa Admin",
+};
+
+export default async function AdminLayout({ children }: { children: ReactNode }) {
+  const admin = await getAdminInfo(); // read from JWT cookie
+
+  return (
+    <div className="admin-root">
+      <AdminSidebar />
+
+      <div className="admin-main">
+        <AdminTopBar admin={admin} />
+
+        <div className="admin-content">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
 }

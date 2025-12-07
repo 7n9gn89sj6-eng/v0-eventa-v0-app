@@ -1,20 +1,219 @@
-// --------------------------------------------------
-// PRISMA CLIENT + DATABASE
-// --------------------------------------------------
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider   = "postgresql"
-  url        = env("NEON_DATABASE_URL")
-  extensions = [pgvector(map: "vector", schema: "public")]
+  provider     = "postgresql"
+  url          = env("NEON_DATABASE_URL")
+
+  // Working with existing DB — disable shadow DB
+  relationMode = "prisma"
+
+  extensions   = [vector(schema: "public")]
 }
 
-// --------------------------------------------------
-// ENUMS
-// --------------------------------------------------
+model User {
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  name               String?
+  isVerified         Boolean             @default(false)
+  emailVerified      DateTime?
+  image              String?
+
+  // Admin login
+  adminPassword      String?
+  isAdmin            Boolean             @default(false)
+
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  accounts           Account[]
+  emailVerifications EmailVerification[]
+  events             Event[]
+  moderatedEvents    Event[]             @relation("ModeratedEvents")
+  appeals            EventAppeal[]
+  favorites          Favorite[]
+  sessions           Session[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model EmailVerification {
+  id         String    @id @default(cuid())
+  userId     String
+  email      String
+  code       String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([email])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Event {
+  id                   String                 @id @default(cuid())
+  title                String
+  description          String
+  startAt              DateTime
+  endAt                DateTime
+  locationAddress      String?
+  city                 String
+  country              String
+  imageUrl             String?
+  externalUrl          String?
+  categories           String[]               @default([])
+  timezone             String                 @default("UTC")
+  venueName            String?
+  address              String?
+  lat                  Float?
+  lng                  Float?
+  priceFree            Boolean                @default(false)
+  priceAmount          Int?
+  websiteUrl           String?
+  languages            String[]               @default(["en"])
+  imageUrls            String[]               @default([])
+  createdById          String
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  searchText           String
+  searchTextFolded     String?
+  embedding            Unsupported("vector")?
+  postcode             String?
+  status               EventStatus            @default(DRAFT)
+  adminNotes           String?
+  aiAnalyzedAt         DateTime?
+  aiReason             String?
+  aiStatus             AIStatus?              @default(PENDING)
+  category             EventCategory?
+  editCount            Int                    @default(0)
+  extractionConfidence Json?
+  lastEditedAt         DateTime?
+  moderatedAt          DateTime?
+  moderatedBy          String?
+  moderationCategory   String?
+  moderationReason     String?
+  moderationSeverity   ModerationSeverity?
+  moderationStatus     ModerationStatus       @default(PENDING)
+  organizerContact     String?
+  organizerName        String?
+  publishedAt          DateTime?
+  reviewedAt           DateTime?
+  reviewedBy           String?
+  sourceText           String?
+  tags                 String[]               @default([])
+
+  createdBy            User                   @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  moderatedByAdmin     User?                  @relation("ModeratedEvents", fields: [moderatedBy], references: [id])
+  appeals              EventAppeal[]
+  auditLogs            EventAuditLog[]
+  editTokens           EventEditToken[]
+  favorites            Favorite[]
+
+  @@index([city, country, startAt])
+  @@index([startAt])
+  @@index([categories])
+  @@index([category])
+  @@index([lat, lng])
+  @@index([status])
+  @@index([aiStatus])
+  @@index([createdById])
+  @@index([updatedAt])
+  @@index([createdAt])
+}
+
+model EventEditToken {
+  id        String    @id @default(cuid())
+  eventId   String
+  tokenHash String    @unique
+  expires   DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  event     Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  eventId   String
+  createdAt DateTime @default(now())
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+  @@index([userId])
+  @@index([eventId])
+}
+
+model EventAuditLog {
+  id        String   @id @default(cuid())
+  eventId   String
+  actor     String
+  actorId   String?
+  action    String
+  oldStatus String?
+  newStatus String?
+  notes     String?
+  reason    String?
+  createdAt DateTime @default(now())
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([createdAt])
+  @@index([actorId])
+}
+
+model EventAppeal {
+  id          String    @id @default(cuid())
+  eventId     String
+  userId      String
+  reason      String
+  status      String    @default("pending")
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  reviewNotes String?
+  createdAt   DateTime  @default(now())
+  event       Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([status])
+}
+
 enum EventStatus {
   DRAFT
   PUBLISHED
@@ -53,245 +252,3 @@ enum AIStatus {
   NEEDS_REVIEW
   REJECTED
 }
-
-// --------------------------------------------------
-// USER + ACCOUNTS
-// --------------------------------------------------
-
-model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String?
-  isVerified    Boolean   @default(false)
-  emailVerified DateTime?
-  image         String?
-  isAdmin       Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  events          Event[]
-  favorites       Favorite[]
-  emailVerifications EmailVerification[]
-  accounts        Account[]
-  sessions        Session[]
-  moderatedEvents Event[] @relation("ModeratedEvents")
-  appeals         EventAppeal[]
-}
-
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model EmailVerification {
-  id         String    @id @default(cuid())
-  userId     String
-  email      String
-  code       String
-  expiresAt  DateTime
-  consumedAt DateTime?
-  createdAt  DateTime  @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([email])
-}
-
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
-}
-
-// --------------------------------------------------
-// EVENT MODEL
-// --------------------------------------------------
-
-model Event {
-  id              String      @id @default(cuid())
-  title           String
-  description     String      @db.Text
-  startAt         DateTime
-  endAt          DateTime
-  locationAddress String?
-  city            String
-  country         String
-  imageUrl        String?
-  externalUrl     String?
-
-  status          EventStatus @default(DRAFT)
-
-  sourceText          String?      @db.Text
-  category            EventCategory?
-  tags                String[] @default([])
-  extractionConfidence Json?
-  organizerName       String?
-  organizerContact    String?
-
-  categories      String[] @default([])
-  timezone        String   @default("UTC")
-  venueName       String?
-  address         String?
-  lat             Float?
-  lng             Float?
-  priceFree       Boolean  @default(false)
-  priceAmount     Int?
-  websiteUrl      String?
-  languages       String[] @default(["en"])
-  imageUrls       String[] @default([])
-
-  postcode        String? @db.Text
-
-  createdById String
-  createdBy   User @relation(fields: [createdById], references: [id], onDelete: Cascade)
-
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-
-  // AI moderation
-  aiStatus     AIStatus? @default(PENDING)
-  aiReason     String? @db.Text
-  aiAnalyzedAt DateTime?
-
-
-  // Edits
-  editCount    Int @default(0)
-  lastEditedAt DateTime?
-  publishedAt  DateTime?
-
-
-  // Legacy moderation
-  moderationStatus   ModerationStatus @default(PENDING)
-  moderationReason   String? @db.Text
-  moderationSeverity ModerationSeverity?
-  moderationCategory String?
-  moderatedAt        DateTime?
-  moderatedBy        String?
-  moderatedByAdmin   User? @relation("ModeratedEvents", fields: [moderatedBy], references: [id])
-
-
-  adminNotes String? @db.Text
-  reviewedBy String?
-  reviewedAt DateTime?
-
-
-  searchText        String @db.Text
-  searchTextFolded  String? @db.Text
-  embedding         Unsupported("vector(1536)")?
-
-  // Relations
-  editTokens EventEditToken[]
-  favorites  Favorite[]
-  auditLogs  EventAuditLog[]
-  appeals    EventAppeal[]
-
-  // INDEXES
-  @@index([city, country, startAt])
-  @@index([startAt])
-  @@index([categories])
-  @@index([category])
-  @@index([lat, lng])
-  @@index([status])
-  @@index([aiStatus])
-  @@index([createdById])
-  @@index([updatedAt])
-  @@index([createdAt])
-}
-
-// --------------------------------------------------
-// EVENT SUB-MODELS
-// --------------------------------------------------
-
-model EventEditToken {
-  id        String   @id @default(cuid())
-  eventId   String
-  tokenHash String   @unique
-  expires   DateTime
-  usedAt    DateTime?
-
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-}
-
-model Favorite {
-  id        String @id @default(cuid())
-  userId    String
-  eventId   String
-  createdAt DateTime @default(now())
-
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, eventId])
-  @@index([userId])
-  @@index([eventId])
-}
-
-model EventAuditLog {
-  id        String   @id @default(cuid())
-  eventId   String
-  actor     String
-  actorId   String?
-  action    String
-  oldStatus String?
-  newStatus String?
-
-  notes     String? @db.Text
-  reason    String? @db.Text
-
-  createdAt DateTime @default(now())
-
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  @@index([eventId])
-  @@index([createdAt])
-  @@index([actorId])
-}
-
-model EventAppeal {
-  id          String   @id @default(cuid())
-  eventId     String
-  userId      String
-  reason      String @db.Text
-  status      String @default("pending")
-  reviewedBy  String?
-  reviewedAt  DateTime?
-  reviewNotes String? @db.Text
-  createdAt   DateTime @default(now())
-
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([eventId])
-  @@index([status])
-}
-
