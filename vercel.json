@@ -1,9 +1,10 @@
 {
   "framework": null,
-  "buildCommand": "npm run build",
-  "installCommand": "npm install",
+  "buildCommand": "npm install --force && npm run build",
+  "installCommand": "npm install --force",
   "env": {
     "NEXT_PRIVATE_SKIP_DETECTION": "true",
-    "VERCEL_SKIP_FRAMEWORK_DETECTION": "1"
+    "VERCEL_SKIP_FRAMEWORK_DETECTION": "1",
+    "NEXT_TELEMETRY_DISABLED": "1"
   }
 }
