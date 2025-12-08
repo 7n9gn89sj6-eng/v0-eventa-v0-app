@@ -2,6 +2,7 @@
   "name": "eventa-v0",
   "version": "0.8.0",
   "private": true,
+
   "scripts": {
     "build": "next build",
     "postbuild": "echo \"[v0] Skipping database setup in postbuild (production-safe)\"",
@@ -30,6 +31,7 @@
     "vercel:logs": "vercel logs --prod --since=1h",
     "vercel:promote": "node ./scripts/promote-prev.mjs"
   },
+
   "dependencies": {
     "@ai-sdk/openai": "latest",
     "@auth/core": "0.41.0",
@@ -66,40 +68,43 @@
     "@radix-ui/react-toggle": "latest",
     "@radix-ui/react-toggle-group": "latest",
     "@radix-ui/react-tooltip": "latest",
+
     "@types/debug": "latest",
     "@upstash/ratelimit": "latest",
     "@upstash/redis": "latest",
     "@vercel/analytics": "latest",
     "@vercel/speed-insights": "latest",
+
     "@vitest/browser-playwright": "latest",
     "@vitest/browser-preview": "latest",
     "@vitest/browser-webdriverio": "latest",
     "@vitest/ui": "latest",
+
     "ai": "latest",
     "bcryptjs": "latest",
-    "child_process": "latest",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "latest",
-    "crypto": "latest",
     "date-fns": "latest",
     "date-fns-tz": "latest",
     "dotenv": "^17.2.3",
     "embla-carousel-react": "latest",
     "happy-dom": "latest",
-    "http": "latest",
     "input-otp": "latest",
     "isomorphic-dompurify": "latest",
     "jsdom": "latest",
     "jsonwebtoken": "latest",
     "lucide-react": "^0.454.0",
     "luxon": "latest",
+
     "next": "16.1.0-canary.15",
     "next-auth": "latest",
     "next-themes": "latest",
+
     "nodemailer": "latest",
     "openai": "^6.9.1",
     "path": "latest",
+
     "react": "^18.3.1",
     "react-day-picker": "latest",
     "react-dom": "^18.3.1",
@@ -118,6 +123,7 @@
     "vue-router": "latest",
     "zod": "3.25.76"
   },
+
   "devDependencies": {
     "@playwright/test": "1.49.1",
     "@tailwindcss/postcss": "^4.1.9",
@@ -138,10 +144,20 @@
     "typescript": "^5",
     "wait-on": "8.0.1"
   },
+
   "engines": {
     "node": ">=20.19.5"
   },
+
   "trustedDependencies": [
     "pg-native"
-  ]
+  ],
+
+  "overrides": {
+    "next": "16.1.0-canary.15"
+  },
+
+  "resolutions": {
+    "next": "16.1.0-canary.15"
+  }
 }
