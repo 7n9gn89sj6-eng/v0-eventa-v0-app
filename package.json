@@ -161,6 +161,3 @@
     "next": "16.1.0-canary.15"
   }
 }
-"vercel": {
-  "framework": null
-}
