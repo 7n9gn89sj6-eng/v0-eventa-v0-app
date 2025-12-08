@@ -1,8 +1,7 @@
-{
-  "framework": "nextjs",
-  "installCommand": "npm install --force",
+{{
+  "framework": null,
   "buildCommand": "npm run build",
-  "nodeVersion": "20.x",
+  "installCommand": "npm install --force",
   "env": {
     "NEXT_PRIVATE_SKIP_DETECTION": "true",
     "VERCEL_SKIP_FRAMEWORK_DETECTION": "1"
