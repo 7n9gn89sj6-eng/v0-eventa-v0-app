@@ -8,26 +8,36 @@
     "postbuild": "echo \"[v0] Skipping database setup in postbuild (production-safe)\"",
     "build:ci": "npm run check:env && next build && npm run typecheck && npm run lint",
     "build:local": "next build",
+
     "check:env": "tsx scripts/check-env-strict.ts",
+
     "db:bootstrap": "tsx scripts/run-database-setup.ts",
     "db:check": "tsx scripts/db-check.ts",
     "db:dev-setup": "tsx scripts/run-all-setup.ts",
     "db:fix-event-schema": "tsx scripts/fix-event-schema.ts",
     "db:setup": "tsx scripts/run-all-setup.ts",
+
     "dev": "next dev",
+
     "postinstall": "prisma generate",
     "lint": "next lint",
+
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
+
     "smoke": "node tests/smoke.mjs",
     "smoke:prod": "node ./scripts/smoke-prod.mjs",
-    "start": "next start",
+
+    "start": "next start -p $PORT",
+
     "test": "playwright test",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
+
     "typecheck": "tsc --noEmit",
+
     "vercel:logs": "vercel logs --prod --since=1h",
     "vercel:promote": "node ./scripts/promote-prev.mjs"
   },
@@ -38,9 +48,12 @@
     "@auth/prisma-adapter": "latest",
     "@edge-runtime/vm": "latest",
     "@hookform/resolvers": "latest",
+
     "@neondatabase/serverless": "^1.0.2",
     "@opentelemetry/api": "latest",
+
     "@prisma/client": "^6.2.1",
+
     "@radix-ui/react-accordion": "latest",
     "@radix-ui/react-alert-dialog": "latest",
     "@radix-ui/react-aspect-ratio": "latest",
@@ -70,8 +83,10 @@
     "@radix-ui/react-tooltip": "latest",
 
     "@types/debug": "latest",
+
     "@upstash/ratelimit": "latest",
     "@upstash/redis": "latest",
+
     "@vercel/analytics": "latest",
     "@vercel/speed-insights": "latest",
 
@@ -85,16 +100,22 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "latest",
+
     "date-fns": "latest",
     "date-fns-tz": "latest",
+
     "dotenv": "^17.2.3",
+
     "embla-carousel-react": "latest",
     "happy-dom": "latest",
     "input-otp": "latest",
     "isomorphic-dompurify": "latest",
+
     "jsdom": "latest",
     "jsonwebtoken": "latest",
+
     "lucide-react": "^0.454.0",
+
     "luxon": "latest",
 
     "next": "16.1.0-canary.15",
@@ -102,7 +123,9 @@
     "next-themes": "latest",
 
     "nodemailer": "latest",
+
     "openai": "^6.9.1",
+
     "path": "latest",
 
     "react": "^18.3.1",
@@ -110,17 +133,28 @@
     "react-dom": "^18.3.1",
     "react-hook-form": "latest",
     "react-resizable-panels": "latest",
+
     "recharts": "latest",
+
     "resend": "^4.0.1",
+
     "server-only": "latest",
+
     "sonner": "latest",
+
     "swr": "latest",
+
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
+
     "util": "latest",
+
     "vaul": "latest",
+
     "vitest": "latest",
+
     "vue-router": "latest",
+
     "zod": "3.25.76"
   },
 
@@ -134,14 +168,20 @@
     "@types/nodemailer": "6.4.17",
     "@types/react": "19.0.0",
     "@types/react-dom": "19.0.0",
+
     "axe-playwright": "latest",
     "playwright": "1.49.1",
+
     "postcss": "^8.5",
     "prisma": "^6.2.1",
+
     "tailwindcss": "^4.1.9",
+
     "ts-node": "10.9.2",
     "tsx": "4.19.2",
+
     "typescript": "^5",
+
     "wait-on": "8.0.1"
   },
 
@@ -159,5 +199,9 @@
 
   "resolutions": {
     "next": "16.1.0-canary.15"
+  },
+
+  "vercel": {
+    "framework": null
   }
 }
