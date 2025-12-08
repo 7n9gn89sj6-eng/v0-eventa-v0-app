@@ -94,7 +94,7 @@
     "jsonwebtoken": "latest",
     "lucide-react": "^0.454.0",
     "luxon": "latest",
-    "next": "^16.1.0-canary.15",
+    "next": "16.1.0-canary.15",
     "next-auth": "latest",
     "next-themes": "latest",
     "nodemailer": "latest",
