@@ -10,21 +10,30 @@
 # production
 /build
 
-# debug
+# debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files
-.env*
+# REAL ENV FILES (ignored for safety)
+.env
+.env.local
+.env.production
+.env.development
+.env.test
+
+# ALLOW SAFE EXAMPLE FILES (committed to Git)
+!.env.example
+!.env.local.example
 
 # vercel
 .vercel
 
-# typescript
+# typescript build info
 *.tsbuildinfo
 next-env.d.ts
 
+# pnpm
 pnpm-lock.yaml
 .pnpm-store/
