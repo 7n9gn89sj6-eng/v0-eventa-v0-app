@@ -1,8 +1,10 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/events-maintenance",
-      "schedule": "0 0 * * *"
-    }
-  ]
+  "framework": "nextjs",
+  "installCommand": "npm install --force",
+  "buildCommand": "npm run build",
+  "nodeVersion": "20.x",
+  "env": {
+    "NEXT_PRIVATE_SKIP_DETECTION": "true",
+    "VERCEL_SKIP_FRAMEWORK_DETECTION": "1"
+  }
 }
