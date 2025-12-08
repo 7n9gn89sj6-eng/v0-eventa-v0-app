@@ -9,10 +9,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <body>
         <AppProviders>
-          {/* TOP NAVIGATION BAR */}
+          {/* Top navigation bar */}
           <SiteHeader />
 
-          {/* MAIN PAGE CONTENT */}
+          {/* Main page content */}
           <main>{children}</main>
         </AppProviders>
       </body>
