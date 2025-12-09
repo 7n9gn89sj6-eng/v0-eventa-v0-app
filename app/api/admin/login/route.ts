@@ -1,3 +1,6 @@
+// Ensure the route runs dynamically and is not cached or tree-shaken
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import bcrypt from "bcryptjs";
@@ -26,12 +29,17 @@ export async function POST(request: Request) {
       where: { email },
     });
 
+    console.log("FOUND ADMIN:", admin ? admin.email : "NO USER FOUND");
+
     if (!admin || !admin.isAdmin) {
+      console.log("ADMIN CHECK FAILED");
       return NextResponse.json({ error: "Not an admin" }, { status: 401 });
     }
 
-    // Compare bcrypt hash correctly
+    // Compare password
     const isMatch = await bcrypt.compare(password, admin.adminPassword);
+    console.log("PASSWORD MATCH RESULT:", isMatch);
+
     if (!isMatch) {
       return NextResponse.json({ error: "Invalid password" }, { status: 401 });
     }
@@ -39,6 +47,8 @@ export async function POST(request: Request) {
     // Create token + cookie
     const token = createAdminJwt(admin.id);
     setAdminCookie(token);
+
+    console.log("ADMIN LOGIN SUCCESS");
 
     return NextResponse.json({ success: true });
 
