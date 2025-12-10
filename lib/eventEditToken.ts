@@ -1,4 +1,4 @@
-import { db } from "@/lib/db"
+import db from "@/lib/db"
 import { randomUUID } from "crypto"
 import bcrypt from "bcryptjs"
 import { createAuditLog } from "@/lib/audit-log"
