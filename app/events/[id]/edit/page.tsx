@@ -4,11 +4,7 @@ import { EditEventForm } from "@/components/events/edit-event-form"
 import { validateEventEditToken } from "@/lib/eventEditToken"
 
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
+  Card, CardHeader, CardTitle, CardDescription, CardContent
 } from "@/components/ui/card"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -27,10 +23,20 @@ export default async function EditEventPage({
   const token = searchParams?.token
   const confirmed = searchParams?.confirmed === "true"
 
+  // ---------------- DEBUG LOGS ----------------
+  console.log("[EDIT DEBUG] Incoming request:", {
+    eventId,
+    token,
+    confirmed,
+    urlSearchParams: searchParams
+  })
+  // --------------------------------------------
+
   /* ------------------------------------------------------
      CASE 1 — No token and not confirmed: block access
   ------------------------------------------------------- */
   if (!token && !confirmed) {
+    console.log("[EDIT DEBUG] No token + not confirmed → blocking access")
     return (
       <div className="container mx-auto px-4 py-12">
         <div className="mx-auto max-w-2xl">
@@ -42,7 +48,6 @@ export default async function EditEventPage({
               </div>
               <CardDescription>
                 You need a valid edit link to modify this event.
-                Check your email for the edit link that was sent when you created it.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -60,9 +65,14 @@ export default async function EditEventPage({
      CASE 2 — Token provided → Validate it
   ------------------------------------------------------- */
   if (token && !confirmed) {
+    console.log("[EDIT DEBUG] Validating token:", token)
+
     const result = await validateEventEditToken(eventId, token)
 
+    console.log("[EDIT DEBUG] Token validation result:", result)
+
     if (result === "expired") {
+      console.log("[EDIT DEBUG] Token expired")
       return (
         <div className="container mx-auto px-4 py-12">
           <div className="mx-auto max-w-2xl">
@@ -73,24 +83,9 @@ export default async function EditEventPage({
                   <CardTitle>Edit Link Expired</CardTitle>
                 </div>
                 <CardDescription>
-                  This edit link has expired. Edit links are valid for 30 days.
+                  This edit link has expired.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="bg-muted p-4 rounded-lg">
-                  <p className="flex items-center gap-2 mb-2">
-                    <Mail className="h-4 w-4" /> What to do next:
-                  </p>
-                  <ul className="list-disc ml-6 text-sm text-muted-foreground space-y-1">
-                    <li>The event still exists</li>
-                    <li>Check your email for a newer edit link</li>
-                    <li>You can request a new link on the event page</li>
-                  </ul>
-                </div>
-                <Button asChild>
-                  <Link href={`/events/${eventId}`}>View Event</Link>
-                </Button>
-              </CardContent>
             </Card>
           </div>
         </div>
@@ -98,6 +93,7 @@ export default async function EditEventPage({
     }
 
     if (result === "invalid") {
+      console.log("[EDIT DEBUG] Token INVALID → likely DB mismatch")
       return (
         <div className="container mx-auto px-4 py-12">
           <div className="mx-auto max-w-2xl">
@@ -111,11 +107,6 @@ export default async function EditEventPage({
                   This edit link is invalid or incomplete.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <Button asChild variant="outline">
-                  <Link href={`/events/${eventId}`}>View Event</Link>
-                </Button>
-              </CardContent>
             </Card>
           </div>
         </div>
@@ -126,38 +117,32 @@ export default async function EditEventPage({
   /* ------------------------------------------------------
      CASE 3 — Token valid or confirmed → Load event
   ------------------------------------------------------- */
-  const event = await db.event.findUnique({
-    where: { id: eventId },
-  })
+  console.log("[EDIT DEBUG] Loading event:", eventId)
+
+  const event = await db.event.findUnique({ where: { id: eventId } })
+
+  console.log("[EDIT DEBUG] Loaded event:", event ? "FOUND" : "NOT FOUND")
 
   if (!event) {
+    console.log("[EDIT DEBUG] Event not found → redirect")
     redirect("/")
   }
 
   /* ------------------------------------------------------
      RENDER EDIT FORM
   ------------------------------------------------------- */
+  console.log("[EDIT DEBUG] Rendering edit form")
+
   return (
     <div className="container mx-auto px-4 py-12">
       <div className="mx-auto max-w-2xl">
         <h1 className="text-3xl font-bold mb-3">Edit Event</h1>
-        <p className="text-muted-foreground mb-8">
-          Update your event details.
-        </p>
-
-        {confirmed && (
-          <Alert className="mb-6 border-green-300 bg-green-50">
-            <AlertDescription>
-              <strong>Success!</strong> Your event has been confirmed and published.
-            </AlertDescription>
-          </Alert>
-        )}
 
         {token && !confirmed && (
           <Alert className="mb-6 border-blue-300 bg-blue-50">
             <Lock className="h-4 w-4 text-blue-600" />
             <AlertDescription>
-              You're editing via a secure link. No sign-in required.
+              You're editing via a secure link.
             </AlertDescription>
           </Alert>
         )}
