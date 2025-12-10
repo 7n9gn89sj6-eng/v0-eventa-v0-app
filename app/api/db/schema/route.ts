@@ -1,10 +1,10 @@
-import { prisma } from "@/lib/db"
+import db from "@/lib/db"
 import { NextResponse } from "next/server"
 
 export async function GET() {
   try {
     // Query the information_schema to get actual database columns
-    const columns = await prisma.$queryRaw<
+    const columns = await db.$queryRaw<
       Array<{
         column_name: string
         data_type: string

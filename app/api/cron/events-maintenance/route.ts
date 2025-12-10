@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/db"
+import db from "@/lib/db"
 
 /**
  * Cron endpoint for automatic event maintenance
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
 
     // Task 1: Archive published events that have ended
-    const archiveResult = await prisma.event.updateMany({
+    const archiveResult = await db.event.updateMany({
       where: {
         status: "PUBLISHED",
         endAt: {
@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
     console.log(`[Cron] Archived ${archiveResult.count} events`)
 
     // Task 2: Delete archived events older than 30 days
-    const deleteResult = await prisma.event.deleteMany({
+    const deleteResult = await db.event.deleteMany({
       where: {
         status: "ARCHIVED",
         endAt: {
