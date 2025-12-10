@@ -1,139 +1,172 @@
-import { redirect } from 'next/navigation'
+import { redirect, notFound } from "next/navigation"
 import { getSession } from "@/lib/jwt"
 import { db } from "@/lib/db"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Calendar, MapPin, Globe, DollarSign, UserIcon, Edit } from "lucide-react"
+import { DateTime } from "luxon"
 import Link from "next/link"
 import { EventActions } from "@/components/events/event-actions"
 import { RegenerateEditLinkButton } from "@/components/events/regenerate-edit-link-button"
-import { LoadingSpinner } from "@/components/ui/loading-spinner"
-import { Suspense } from "react"
 import ClientOnly from "@/components/ClientOnly"
 
 export const dynamic = "force-dynamic"
 
-export default async function MyEventsPage() {
+export default async function MyEventDetailPage({ params }: { params: { id: string } }) {
   const session = await getSession()
 
   if (!session) {
     redirect("/verify")
   }
 
-  const user = await db.user.findUnique({
-    where: { id: session.userId },
-    select: {
-      id: true,
-      isAdmin: true,
-      events: {
-        include: {
-          createdBy: {
-            select: {
-              name: true,
-              email: true,
-            },
-          },
+  const { id } = params
+
+  // use db instead of prisma
+  const event = await db.event.findUnique({
+    where: { id },
+    include: {
+      createdBy: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          isAdmin: true,
         },
-        orderBy: { createdAt: "desc" },
       },
     },
   })
 
-  if (!user) {
-    redirect("/verify")
+  if (!event) {
+    notFound()
   }
 
+  // use db instead of prisma
+  const user = await db.user.findUnique({
+    where: { id: session.userId },
+    select: { isAdmin: true },
+  })
+
+  const isOwner = event.createdById === session.userId
+  const isAdmin = user?.isAdmin || false
+
+  if (!isOwner && !isAdmin) {
+    redirect(`/events/${id}`)
+  }
+
+  const startDate = DateTime.fromJSDate(new Date(event.startAt)).setZone(event.timezone)
+  const endDate = DateTime.fromJSDate(new Date(event.endAt)).setZone(event.timezone)
+
   return (
-    <div className="container mx-auto px-4 py-12">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">My Events</h1>
-          <p className="text-muted-foreground">Manage your submitted events</p>
-        </div>
-        <Button asChild>
-          <Link href="/add-event">Add New Event</Link>
+    <div className="container mx-auto max-w-4xl px-4 py-8">
+      <div className="mb-6 flex items-center justify-between">
+        <Button variant="ghost" asChild>
+          <Link href="/my/events">← Back to my events</Link>
         </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link href={`/events/${event.id}`}>View Public Page</Link>
+          </Button>
+          <Button asChild>
+            <Link href={`/my/events/${event.id}/edit`}>
+              <Edit className="mr-2 h-4 w-4" />
+              Edit Event
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      <Suspense fallback={<LoadingSpinner size="lg" className="py-12" />}>
-        {user.events.length === 0 ? (
-          <div className="flex items-center justify-center py-16">
-            <Card className="max-w-md text-center">
-              <CardHeader>
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-8 w-8 text-muted-foreground"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                    />
-                  </svg>
-                </div>
-                <CardTitle>{"You haven't posted any events yet"}</CardTitle>
-                <CardDescription>
-                  When you create events, they'll appear here so you can edit and track them.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button asChild size="lg" className="w-full">
-                  <Link href="/add-event">Post Your First Event</Link>
-                </Button>
-              </CardContent>
-            </Card>
+      <Card>
+        <CardHeader>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-3xl">{event.title}</CardTitle>
+              <Badge
+                variant={event.status === "PUBLISHED" ? "default" : event.status === "DRAFT" ? "secondary" : "outline"}
+              >
+                {event.status}
+              </Badge>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {event.categories.map((category) => (
+                <Badge key={category} variant="secondary">
+                  {category}
+                </Badge>
+              ))}
+            </div>
           </div>
-        ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {user.events.map((event) => (
-              <Card key={event.id}>
-                <CardHeader>
-                  <div className="mb-2 flex items-center justify-between">
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-medium ${
-                        event.status === "PUBLISHED" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
-                      }`}
-                    >
-                      {event.status}
-                    </span>
-                  </div>
-                  <CardTitle className="line-clamp-2">
-                    <Link href={`/my/events/${event.id}`} className="hover:underline">
-                      {event.title}
-                    </Link>
-                  </CardTitle>
-                  <CardDescription className="line-clamp-2">{event.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span className="font-medium">Owner:</span>
-                      <span className="truncate">{event.createdBy.name || event.createdBy.email.split("@")[0]}</span>
-                    </div>
-                    <p>
-                      <span className="font-medium">Location:</span> {event.city}, {event.country}
-                    </p>
-                    <p>
-                      <span className="font-medium">Start:</span>{" "}
-                      <ClientOnly>{new Date(event.startAt).toLocaleDateString()}</ClientOnly>
-                    </p>
-                    <EventActions eventId={event.id} status={event.status} />
-                    {user.isAdmin && (
-                      <div className="mt-3 pt-3 border-t">
-                        <RegenerateEditLinkButton eventId={event.id} />
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+        </CardHeader>
+
+        <CardContent className="space-y-6">
+          <div className="rounded-lg border bg-muted/50 p-4">
+            <div className="flex items-center gap-3">
+              <UserIcon className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Owner</p>
+                <p className="font-medium">{event.createdBy.name || event.createdBy.email}</p>
+                {event.createdBy.name && <p className="text-sm text-muted-foreground">{event.createdBy.email}</p>}
+              </div>
+            </div>
           </div>
-        )}
-      </Suspense>
+
+          {/* Date & Time */}
+          <div className="flex items-start gap-3">
+            <Calendar className="mt-0.5 h-5 w-5 text-muted-foreground" />
+            <div>
+              <ClientOnly>
+                <p className="font-medium">{startDate.toLocaleString(DateTime.DATETIME_FULL)}</p>
+                <p className="text-sm text-muted-foreground">to {endDate.toLocaleString(DateTime.DATETIME_FULL)}</p>
+              </ClientOnly>
+            </div>
+          </div>
+
+          {/* Location */}
+          {(event.venueName || event.address) && (
+            <div className="flex items-start gap-3">
+              <MapPin className="mt-0.5 h-5 w-5 text-muted-foreground" />
+              <div>
+                {event.venueName && <p className="font-medium">{event.venueName}</p>}
+                {event.address && <p className="text-sm text-muted-foreground">{event.address}</p>}
+              </div>
+            </div>
+          )}
+
+          {/* Price */}
+          <div className="flex items-start gap-3">
+            <DollarSign className="mt-0.5 h-5 w-5 text-muted-foreground" />
+            <div>
+              <p className="font-medium">
+                {event.priceFree ? "Free" : `$${((event.priceAmount || 0) / 100).toFixed(2)}`}
+              </p>
+            </div>
+          </div>
+
+          {/* Languages */}
+          <div className="flex items-start gap-3">
+            <Globe className="mt-0.5 h-5 w-5 text-muted-foreground" />
+            <div>
+              <p className="text-sm text-muted-foreground">Languages: {event.languages.join(", ").toUpperCase()}</p>
+            </div>
+          </div>
+
+          {/* Description */}
+          <div className="border-t pt-6">
+            <h2 className="mb-3 text-xl font-semibold">About this event</h2>
+            <p className="whitespace-pre-wrap text-muted-foreground leading-relaxed">{event.description}</p>
+          </div>
+
+          {/* Actions */}
+          <div className="border-t pt-6 space-y-3">
+            <EventActions eventId={event.id} status={event.status} />
+            {isAdmin && (
+              <div className="pt-3 border-t">
+                <RegenerateEditLinkButton eventId={event.id} />
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
