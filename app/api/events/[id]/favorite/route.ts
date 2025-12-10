@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { db } from "@/lib/db"
+import db from "@/lib/db"                         // <-- FIXED IMPORT
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {

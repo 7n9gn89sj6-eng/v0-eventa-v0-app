@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import db from "@/lib/db"                         // <-- FIXED HERE
 import { getSession } from "@/lib/jwt"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         {
           error: "Cannot publish: missing required fields (title, description, startAt, city, country)",
         },
-        { status: 400 },
+        { status: 400 }
       )
     }
 

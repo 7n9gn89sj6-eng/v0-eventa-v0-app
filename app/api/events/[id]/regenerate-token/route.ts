@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/jwt"
-import { db } from "@/lib/db"
+import db from "@/lib/db"                     // <-- FIXED IMPORT
 import { createEventEditToken } from "@/lib/eventEditToken"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {

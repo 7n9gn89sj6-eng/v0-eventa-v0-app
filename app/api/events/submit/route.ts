@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { db } from "@/lib/db";
+import db from "@/lib/db";                       // <-- FIXED HERE
 import { createEventEditToken } from "@/lib/eventEditToken";
 import { sendEventEditLinkEmailAPI } from "@/lib/email";
 import { moderateEvent } from "@/lib/ai-moderation";

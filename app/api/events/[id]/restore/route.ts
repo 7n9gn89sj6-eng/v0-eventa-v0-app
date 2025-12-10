@@ -1,15 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/db"
+import db from "@/lib/db"                           // <-- FIXED IMPORT
 import { getSession } from "@/lib/jwt"
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { id: string } }           // <-- FIXED TYPE
+) {
   try {
     const session = await getSession()
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = await params
+    const { id } = params
 
     // Verify the event belongs to the user
     const event = await db.event.findUnique({
@@ -20,11 +23,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Event not found" }, { status: 404 })
     }
 
-    if (event.userId !== session.userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
+    // FIX: correct ownership check
+    if (event.createdById !== session.userId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    // Restore the event to PUBLISHED status
+    // Restore the event to PUBLISHED
     const restoredEvent = await db.event.update({
       where: { id },
       data: { status: "PUBLISHED" },
