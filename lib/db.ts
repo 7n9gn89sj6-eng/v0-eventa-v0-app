@@ -1,25 +1,20 @@
 import { PrismaClient } from "@prisma/client"
 
-// Use only one environment variable for DB
+// Make sure we have a single, clear database URL
 const databaseUrl = process.env.DATABASE_URL
 
 if (!databaseUrl) {
-  throw new Error("❌ DATABASE_URL is not set in environment variables.")
+  throw new Error("❌ DATABASE_URL is not set. Please configure it in your environment.")
 }
 
-// Prevent multiple instances during hot reload in dev
+// Reuse PrismaClient in development to avoid exhausting connections
 const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
+  prisma?: PrismaClient
 }
 
-export const prisma =
+export const db =
   globalForPrisma.prisma ??
   new PrismaClient({
-    datasources: {
-      db: {
-        url: databaseUrl,
-      },
-    },
     log:
       process.env.NODE_ENV === "development"
         ? ["query", "error", "warn"]
@@ -27,9 +22,7 @@ export const prisma =
   })
 
 if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma
+  globalForPrisma.prisma = db
 }
 
-export const db = prisma
-export default prisma
-
+export default db
