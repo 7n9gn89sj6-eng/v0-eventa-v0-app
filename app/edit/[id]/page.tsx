@@ -26,16 +26,25 @@ interface EditEventPageProps {
 export default async function EditEventPage({ params, searchParams }: EditEventPageProps) {
   const eventId = params.id
 
-  // Normalise search params
-  const tokenParam = searchParams?.token
-  const confirmedParam = searchParams?.confirmed
+  // ---------------------------
+  // Normalize search params
+  // ---------------------------
+  const tokenRaw = searchParams?.token
+  const confirmedRaw = searchParams?.confirmed
 
-  const token = Array.isArray(tokenParam) ? tokenParam[0] : tokenParam
-  const confirmedStr = Array.isArray(confirmedParam) ? confirmedParam[0] : confirmedParam
-  const confirmed = confirmedStr === "true"
+  const token = Array.isArray(tokenRaw) ? tokenRaw[0] : tokenRaw
+  const confirmed = Array.isArray(confirmedRaw)
+    ? confirmedRaw[0] === "true"
+    : confirmedRaw === "true"
+
+  // OPTIONAL DEBUG (uncomment if needed)
+  // console.log("[edit] params:", params)
+  // console.log("[edit] searchParams:", searchParams)
+  // console.log("[edit] token:", token)
+  // console.log("[edit] confirmed:", confirmed)
 
   /* ------------------------------------------------------
-     CASE 1 — No token and not confirmed: block access
+     CASE 1 — No token and not confirmed → Block access
   ------------------------------------------------------- */
   if (!token && !confirmed) {
     return (
@@ -49,12 +58,13 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
               </div>
               <CardDescription>
                 You need a valid edit link to modify this event.
-                Check your email for the edit link that was sent when you created it.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {/* FIXED ROUTE: /event/, not /events/ */}
-              <Link href={`/event/${eventId}`} className="text-primary hover:underline">
+              <Link
+                href={`/events/${eventId}`}
+                className="text-primary hover:underline"
+              >
                 View event details →
               </Link>
             </CardContent>
@@ -91,13 +101,12 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
                   </p>
                   <ul className="list-disc ml-6 text-sm text-muted-foreground space-y-1">
                     <li>The event still exists</li>
-                    <li>Check your email for a newer edit link</li>
+                    <li>Check your email for the newest edit link</li>
                     <li>You can request a new link on the event page</li>
                   </ul>
                 </div>
-                {/* FIXED ROUTE */}
                 <Button asChild>
-                  <Link href={`/event/${eventId}`}>View Event</Link>
+                  <Link href={`/events/${eventId}`}>View Event</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -121,9 +130,8 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {/* FIXED ROUTE */}
                 <Button asChild variant="outline">
-                  <Link href={`/event/${eventId}`}>View Event</Link>
+                  <Link href={`/events/${eventId}`}>View Event</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -131,34 +139,32 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
         </div>
       )
     }
+
+    // Only "valid" continues
   }
 
   /* ------------------------------------------------------
-     CASE 3 — Token valid or confirmed → Load event
+     CASE 3 — Token valid OR confirmed → Load event
   ------------------------------------------------------- */
   const event = await db.event.findUnique({
     where: { id: eventId },
   })
 
-  if (!event) {
-    redirect("/")
-  }
+  if (!event) redirect("/")
 
   /* ------------------------------------------------------
-     RENDER EDIT FORM
+     Render edit form
   ------------------------------------------------------- */
   return (
     <div className="container mx-auto px-4 py-12">
       <div className="mx-auto max-w-2xl">
         <h1 className="text-3xl font-bold mb-3">Edit Event</h1>
-        <p className="text-muted-foreground mb-8">
-          Update your event details.
-        </p>
+        <p className="text-muted-foreground mb-8">Update your event details.</p>
 
         {confirmed && (
           <Alert className="mb-6 border-green-300 bg-green-50">
             <AlertDescription>
-              <strong>Success!</strong> Your event has been confirmed and published.
+              <strong>Success!</strong> Your event is confirmed and published.
             </AlertDescription>
           </Alert>
         )}
