@@ -1,4 +1,5 @@
-import db from "@/lib/db"
+// lib/eventEditToken.ts
+import { db } from "@/lib/db"
 import { randomUUID } from "crypto"
 import bcrypt from "bcryptjs"
 import { createAuditLog } from "@/lib/audit-log"
@@ -47,12 +48,19 @@ export async function validateEventEditToken(
   eventId: string,
   token: string
 ): Promise<"ok" | "expired" | "invalid"> {
+  console.log("[edit-token] VALIDATE called", { eventId, tokenPrefix: token.slice(0, 8) })
+
   const tokenRecords = await db.eventEditToken.findMany({
     where: { eventId },
     select: {
       tokenHash: true,
       expires: true,
     },
+  })
+
+  console.log("[edit-token] Found token records", {
+    eventId,
+    count: tokenRecords.length,
   })
 
   if (tokenRecords.length === 0) {
@@ -70,12 +78,18 @@ export async function validateEventEditToken(
     return "invalid"
   }
 
+  const now = new Date()
+
   for (const record of tokenRecords) {
     const isMatch = await bcrypt.compare(token, record.tokenHash)
 
-    if (isMatch) {
-      const now = new Date()
+    console.log("[edit-token] Comparing token to record", {
+      eventId,
+      expires: record.expires.toISOString(),
+      isMatch,
+    })
 
+    if (isMatch) {
       if (record.expires <= now) {
         console.warn("[edit-token] Token expired for event", eventId)
 
@@ -112,4 +126,3 @@ export async function validateEventEditToken(
 
   return "invalid"
 }
-
