@@ -62,7 +62,7 @@ export async function sendSafeEmail({
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Event Edit Link Email                                                     */
+/*  Event Edit Link Email (FIXED ROUTE)                                       */
 /* -------------------------------------------------------------------------- */
 export async function sendEventEditLinkEmailAPI(
   to: string,
@@ -70,7 +70,8 @@ export async function sendEventEditLinkEmailAPI(
   eventId: string,
   token: string
 ) {
-  const editUrl = `${APP_URL}/events/${eventId}/edit?token=${token}`;
+  // ✅ Correct route
+  const editUrl = `${APP_URL}/edit/${eventId}?token=${token}`;
 
   const html = `
     <div style="font-family:Arial;max-width:560px;margin:0 auto;">
