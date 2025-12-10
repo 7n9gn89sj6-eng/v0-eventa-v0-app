@@ -1,6 +1,6 @@
 import { redirect, notFound } from "next/navigation"
 import { getSession } from "@/lib/jwt"
-import { prisma } from "@/lib/db"
+import { db } from "@/lib/db"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -22,7 +22,8 @@ export default async function MyEventDetailPage({ params }: { params: { id: stri
 
   const { id } = params
 
-  const event = await prisma.event.findUnique({
+  // FIXED: use db instead of prisma
+  const event = await db.event.findUnique({
     where: { id },
     include: {
       createdBy: {
@@ -40,8 +41,8 @@ export default async function MyEventDetailPage({ params }: { params: { id: stri
     notFound()
   }
 
-  // Check if user is owner or admin
-  const user = await prisma.user.findUnique({
+  // FIXED: use db instead of prisma
+  const user = await db.user.findUnique({
     where: { id: session.userId },
     select: { isAdmin: true },
   })

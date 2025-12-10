@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db"
+import { db } from "@/lib/db"
 import type { SearchResult, SearchFilters } from "@/lib/types"
 import { DateTime } from "luxon"
 import { foldAccents } from "@/lib/search/accent-fold"
