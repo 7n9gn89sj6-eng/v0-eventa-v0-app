@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { db } from "@/lib/db"
+import db from "@/lib/db"                         // << FIXED HERE
 import { EditEventForm } from "@/components/events/edit-event-form"
 import { validateEventEditToken } from "@/lib/eventEditToken"
 import {
@@ -190,11 +190,3 @@ export default async function EditEventPage({
             <AlertDescription className="text-blue-900 dark:text-blue-100">
               You're editing via a secure link. No sign-in required.
             </AlertDescription>
-          </Alert>
-        )}
-
-        <EditEventForm event={event} token={token || ""} />
-      </div>
-    </div>
-  )
-}
