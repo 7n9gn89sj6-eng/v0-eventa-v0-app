@@ -1,4 +1,5 @@
 // app/edit/[id]/page.tsx
+
 import { redirect } from "next/navigation"
 import db from "@/lib/db"
 import { EditEventForm } from "@/components/events/edit-event-form"
@@ -16,7 +17,12 @@ import { AlertCircle, Lock, Clock, Mail } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
-export const dynamic = "force-dynamic"
+// ***************
+// CACHE BUSTERS
+// ***************
+export const revalidate = 0;
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 interface EditEventPageProps {
   params: { id: string }
@@ -29,22 +35,15 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
   // ---------------------------
   // Normalize search params
   // ---------------------------
-  const tokenRaw = searchParams?.token
-  const confirmedRaw = searchParams?.confirmed
+  const rawToken = searchParams?.token
+  const rawConfirmed = searchParams?.confirmed
 
-  const token = Array.isArray(tokenRaw) ? tokenRaw[0] : tokenRaw
-  const confirmed = Array.isArray(confirmedRaw)
-    ? confirmedRaw[0] === "true"
-    : confirmedRaw === "true"
-
-  // OPTIONAL DEBUG (uncomment if needed)
-  // console.log("[edit] params:", params)
-  // console.log("[edit] searchParams:", searchParams)
-  // console.log("[edit] token:", token)
-  // console.log("[edit] confirmed:", confirmed)
+  const token = Array.isArray(rawToken) ? rawToken[0] : rawToken
+  const confirmed =
+    Array.isArray(rawConfirmed) ? rawConfirmed[0] === "true" : rawConfirmed === "true"
 
   /* ------------------------------------------------------
-     CASE 1 — No token and not confirmed → Block access
+     CASE 1 — No token AND not confirmed → Block access
   ------------------------------------------------------- */
   if (!token && !confirmed) {
     return (
@@ -61,10 +60,7 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Link
-                href={`/events/${eventId}`}
-                className="text-primary hover:underline"
-              >
+              <Link href={`/events/${eventId}`} className="text-primary hover:underline">
                 View event details →
               </Link>
             </CardContent>
@@ -75,7 +71,7 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
   }
 
   /* ------------------------------------------------------
-     CASE 2 — Token provided → Validate it
+     CASE 2 — Token provided → Validate
   ------------------------------------------------------- */
   if (token && !confirmed) {
     const result = await validateEventEditToken(eventId, token)
@@ -94,6 +90,7 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
                   This edit link has expired. Edit links are valid for 30 days.
                 </CardDescription>
               </CardHeader>
+
               <CardContent className="space-y-4">
                 <div className="bg-muted p-4 rounded-lg">
                   <p className="flex items-center gap-2 mb-2">
@@ -105,6 +102,7 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
                     <li>You can request a new link on the event page</li>
                   </ul>
                 </div>
+
                 <Button asChild>
                   <Link href={`/events/${eventId}`}>View Event</Link>
                 </Button>
@@ -129,6 +127,7 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
                   This edit link is invalid or incomplete.
                 </CardDescription>
               </CardHeader>
+
               <CardContent>
                 <Button asChild variant="outline">
                   <Link href={`/events/${eventId}`}>View Event</Link>
@@ -139,12 +138,10 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
         </div>
       )
     }
-
-    // Only "valid" continues
   }
 
   /* ------------------------------------------------------
-     CASE 3 — Token valid OR confirmed → Load event
+     CASE 3 — Valid token OR confirmed → Load event
   ------------------------------------------------------- */
   const event = await db.event.findUnique({
     where: { id: eventId },
@@ -159,7 +156,10 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
     <div className="container mx-auto px-4 py-12">
       <div className="mx-auto max-w-2xl">
         <h1 className="text-3xl font-bold mb-3">Edit Event</h1>
-        <p className="text-muted-foreground mb-8">Update your event details.</p>
+
+        <p className="text-muted-foreground mb-8">
+          Update your event details.
+        </p>
 
         {confirmed && (
           <Alert className="mb-6 border-green-300 bg-green-50">
