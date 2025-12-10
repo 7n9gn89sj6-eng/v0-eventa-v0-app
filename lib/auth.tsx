@@ -1,88 +1,53 @@
-import "server-only"
-import NextAuth, { type NextAuthOptions } from "next-auth"
-import EmailProvider from "next-auth/providers/email"
-import { adapter, adapterReady } from "@/lib/adapter"
-import { sendSafeEmail } from "@/lib/email"   // ✅ updated import
+import "server-only";
+import NextAuth, { type NextAuthOptions } from "next-auth";
+import EmailProvider from "next-auth/providers/email";
+
+import { adapter, adapterReady } from "@/lib/adapter";
+import { sendEmailAPI } from "@/lib/email";  // ✅ Correct import
 
 export const authOptions: NextAuthOptions = {
   adapter,
+
   providers: [
     EmailProvider({
-      server: {
-        host: process.env.EMAIL_SERVER_HOST,
-        port: Number(process.env.EMAIL_SERVER_PORT),
-        auth: {
-          user: process.env.EMAIL_SERVER_USER,
-          pass: process.env.EMAIL_SERVER_PASSWORD,
-        },
-      },
       from: process.env.EMAIL_FROM,
 
-      // -------------------------------------------------------------------
-      //  CUSTOM MAGIC LINK EMAIL SENDER (using sendSafeEmail)
-      // -------------------------------------------------------------------
       sendVerificationRequest: async ({ identifier: email, url }) => {
-        console.log("[v0] NextAuth sending magic link to:", email)
-        console.log("[v0] Magic link URL:", url)
+        console.log("[auth] Sending magic link to:", email);
 
         const html = `
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>Sign in to Eventa</title>
-            </head>
-            <body style="font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-              <div style="background: linear-gradient(135deg,#667eea 0%,#764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
-                <h1 style="color: white; margin: 0; font-size: 28px;">Eventa</h1>
-                <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0;">Sign in to your account</p>
-              </div>
+          <div style="font-family:Arial;max-width:600px;margin:auto;">
+            <h2>Sign in to Eventa</h2>
+            <p>Click the button below to sign in:</p>
 
-              <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
-                <p style="font-size: 16px;">Click the button below to sign in:</p>
+            <p style="margin:24px 0;">
+              <a href="${url}" 
+                style="background:#6366F1;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;">
+                Sign in
+              </a>
+            </p>
 
-                <div style="text-align: center; margin: 30px 0;">
-                  <a href="${url}"
-                     style="display: inline-block; background: linear-gradient(135deg,#667eea 0%,#764ba2 100%); color: white;
-                     padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
-                    Sign in to Eventa
-                  </a>
-                </div>
+            <p>If the button doesn’t work, copy this link:</p>
+            <p style="word-break:break-all;">${url}</p>
 
-                <div style="background: #f9fafb; border-radius: 8px; padding: 15px; margin: 25px 0;">
-                  <p style="margin: 0 0 8px 0; font-size: 14px; color: #6b7280;">If the button doesn't work, copy this URL:</p>
-                  <p style="margin: 0; font-size: 13px; word-break: break-all; color: #667eea;">${url}</p>
-                </div>
+            <p style="font-size:12px;color:#666;margin-top:32px;">
+              This link expires in 24 hours.
+            </p>
+          </div>
+        `;
 
-                <p style="font-size: 14px; color: #6b7280; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
-                  This link will expire in 24 hours. If you didn’t request it, you can ignore this email.
-                </p>
-              </div>
-
-              <div style="text-align: center; margin-top: 20px; color: #9ca3af; font-size: 12px;">
-                <p>© ${new Date().getFullYear()} Eventa. All rights reserved.</p>
-              </div>
-            </body>
-          </html>
-        `
-
-        // ---------------------------------------------------------------
-        //  NEW: SAFE EMAIL SENDING (never throws, plays nice with auth)
-        // ---------------------------------------------------------------
-        const result = await sendSafeEmail({
+        const result = await sendEmailAPI({
           to: email,
           subject: "Sign in to Eventa",
           html,
-          emailType: "magic-link",
-        })
+        });
 
         if (!result.success) {
-          console.error("[v0] ✗ Failed to send magic link email:", result.error)
-          throw new Error(`Email failed: ${result.error}`)
+          console.error("[auth] Email failed:", result.error);
+          throw new Error(`Failed to send verification email: ${result.error}`);
         }
 
-        console.log("[v0] ✓ Magic link email sent successfully to:", email)
+        console.log("[auth] Magic link sent successfully");
       },
     }),
   ],
@@ -98,13 +63,13 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async session({ session, token }) {
       if (session.user && token.sub) {
-        session.user.id = token.sub
+        session.user.id = token.sub;
       }
-      return session
+      return session;
     },
   },
-}
+};
 
-const handler = NextAuth(authOptions)
-export { handler as auth, adapterReady }
-export default handler
+const handler = NextAuth(authOptions);
+export { handler as auth, adapterReady };
+export default handler;
