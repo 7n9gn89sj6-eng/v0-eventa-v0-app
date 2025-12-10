@@ -9,14 +9,14 @@ export default async function EditEventPage({ params, searchParams }) {
 
   // If no token, block access
   if (!token) {
-    redirect(`/events/${eventId}`)
+    redirect(`/event/${eventId}`)  // <-- FIXED
   }
 
   // Validate token
   const status = await validateEventEditToken(eventId, token)
 
   if (status !== "valid") {
-    redirect(`/events/${eventId}`)
+    redirect(`/event/${eventId}`) // <-- FIXED
   }
 
   // Load event
