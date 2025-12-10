@@ -2,7 +2,7 @@
 export const runtime = "nodejs";
 
 import type { NextRequest } from "next/server";
-import { db } from "@/lib/db";
+import db from "@/lib/db";                  // << FIXED HERE
 import { getSession } from "@/lib/jwt";
 import { validateEventEditToken } from "@/lib/eventEditToken";
 import { ok, fail } from "@/lib/http";
@@ -151,7 +151,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
     const oldStatus = event.moderationStatus;
 
-    /* ------------------ UPDATE EVENT (pending moderation) ------------------ */
+    /* ------------------ UPDATE EVENT ------------------ */
     const updatedEvent = await db.event.update({
       where: { id },
       data: {
@@ -190,9 +190,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       notes: "Event edited and re-submitted for AI moderation",
     });
 
-    /* --------------------------------------------------
-       AI MODERATION (ASYNC, NOT BLOCKING)
-    -------------------------------------------------- */
+    /* ------------------ AI MODERATION (ASYNC) ------------------ */
     moderateEventContent({
       title: body.title,
       description: body.description,
@@ -204,7 +202,6 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       .then(async (result) => {
         const aiStatus = result.status.toUpperCase() as "APPROVED" | "FLAGGED" | "REJECTED";
 
-        // Update event with AI decision
         await db.event.update({
           where: { id },
           data: {
@@ -216,7 +213,6 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
           },
         });
 
-        // Log the AI action
         await createAuditLog({
           eventId: id,
           actor: "ai",
@@ -224,15 +220,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
             result.status === "approved"
               ? "approved"
               : result.status === "rejected"
-                ? "rejected"
-                : "flagged",
+              ? "rejected"
+              : "flagged",
           oldStatus: "PENDING",
           newStatus: aiStatus,
           reason: result.reason,
           notes: `AI moderation: ${result.policy_category}`,
         });
 
-        /* ------------------ If flagged → notify admins ------------------ */
         if (result.status === "flagged") {
           try {
             await notifyAdminsEventNeedsReview({
@@ -248,7 +243,6 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
           }
         }
 
-        /* ------------------ If rejected → email user ------------------ */
         if (result.status === "rejected") {
           try {
             await sendEmailAPI({
@@ -279,7 +273,6 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
             ? `AI moderation error: ${error.message}`
             : "Unknown AI error";
 
-        // Fail-safe: Flag event for human review
         await db.event.update({
           where: { id },
           data: {
@@ -299,7 +292,6 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
           notes: "AI moderation failed — event flagged for manual review",
         });
 
-        // Notify admins
         try {
           await notifyAdminsEventNeedsReview({
             eventId: id,
