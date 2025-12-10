@@ -22,7 +22,7 @@ export default async function MyEventDetailPage({ params }: { params: { id: stri
 
   const { id } = params
 
-  // use db instead of prisma
+  // Use db instead of prisma
   const event = await db.event.findUnique({
     where: { id },
     include: {
@@ -41,7 +41,7 @@ export default async function MyEventDetailPage({ params }: { params: { id: stri
     notFound()
   }
 
-  // use db instead of prisma
+  // Use db instead of prisma
   const user = await db.user.findUnique({
     where: { id: session.userId },
     select: { isAdmin: true },
@@ -82,7 +82,13 @@ export default async function MyEventDetailPage({ params }: { params: { id: stri
             <div className="flex items-center justify-between">
               <CardTitle className="text-3xl">{event.title}</CardTitle>
               <Badge
-                variant={event.status === "PUBLISHED" ? "default" : event.status === "DRAFT" ? "secondary" : "outline"}
+                variant={
+                  event.status === "PUBLISHED"
+                    ? "default"
+                    : event.status === "DRAFT"
+                    ? "secondary"
+                    : "outline"
+                }
               >
                 {event.status}
               </Badge>
@@ -104,8 +110,12 @@ export default async function MyEventDetailPage({ params }: { params: { id: stri
               <UserIcon className="h-5 w-5 text-muted-foreground" />
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Owner</p>
-                <p className="font-medium">{event.createdBy.name || event.createdBy.email}</p>
-                {event.createdBy.name && <p className="text-sm text-muted-foreground">{event.createdBy.email}</p>}
+                <p className="font-medium">
+                  {event.createdBy.name || event.createdBy.email}
+                </p>
+                {event.createdBy.name && (
+                  <p className="text-sm text-muted-foreground">{event.createdBy.email}</p>
+                )}
               </div>
             </div>
           </div>
@@ -115,8 +125,12 @@ export default async function MyEventDetailPage({ params }: { params: { id: stri
             <Calendar className="mt-0.5 h-5 w-5 text-muted-foreground" />
             <div>
               <ClientOnly>
-                <p className="font-medium">{startDate.toLocaleString(DateTime.DATETIME_FULL)}</p>
-                <p className="text-sm text-muted-foreground">to {endDate.toLocaleString(DateTime.DATETIME_FULL)}</p>
+                <p className="font-medium">
+                  {startDate.toLocaleString(DateTime.DATETIME_FULL)}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  to {endDate.toLocaleString(DateTime.DATETIME_FULL)}
+                </p>
               </ClientOnly>
             </div>
           </div>
@@ -126,8 +140,12 @@ export default async function MyEventDetailPage({ params }: { params: { id: stri
             <div className="flex items-start gap-3">
               <MapPin className="mt-0.5 h-5 w-5 text-muted-foreground" />
               <div>
-                {event.venueName && <p className="font-medium">{event.venueName}</p>}
-                {event.address && <p className="text-sm text-muted-foreground">{event.address}</p>}
+                {event.venueName && (
+                  <p className="font-medium">{event.venueName}</p>
+                )}
+                {event.address && (
+                  <p className="text-sm text-muted-foreground">{event.address}</p>
+                )}
               </div>
             </div>
           )}
@@ -137,7 +155,9 @@ export default async function MyEventDetailPage({ params }: { params: { id: stri
             <DollarSign className="mt-0.5 h-5 w-5 text-muted-foreground" />
             <div>
               <p className="font-medium">
-                {event.priceFree ? "Free" : `$${((event.priceAmount || 0) / 100).toFixed(2)}`}
+                {event.priceFree
+                  ? "Free"
+                  : `$${((event.priceAmount || 0) / 100).toFixed(2)}`}
               </p>
             </div>
           </div>
@@ -146,14 +166,18 @@ export default async function MyEventDetailPage({ params }: { params: { id: stri
           <div className="flex items-start gap-3">
             <Globe className="mt-0.5 h-5 w-5 text-muted-foreground" />
             <div>
-              <p className="text-sm text-muted-foreground">Languages: {event.languages.join(", ").toUpperCase()}</p>
+              <p className="text-sm text-muted-foreground">
+                Languages: {event.languages.join(", ").toUpperCase()}
+              </p>
             </div>
           </div>
 
           {/* Description */}
           <div className="border-t pt-6">
             <h2 className="mb-3 text-xl font-semibold">About this event</h2>
-            <p className="whitespace-pre-wrap text-muted-foreground leading-relaxed">{event.description}</p>
+            <p className="whitespace-pre-wrap text-muted-foreground leading-relaxed">
+              {event.description}
+            </p>
           </div>
 
           {/* Actions */}

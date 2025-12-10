@@ -1,12 +1,13 @@
 import { notFound } from "next/navigation"
-import { prisma } from "@/lib/db"
+import { db } from "@/lib/db"
 import { EventDetail } from "@/components/events/event-detail"
 import type { Metadata } from "next"
 import { getSession } from "@/lib/jwt"
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const { id } = await params
-  const event = await prisma.event.findUnique({
+  const { id } = params
+
+  const event = await db.event.findUnique({
     where: { id },
   })
 
@@ -29,12 +30,12 @@ export default async function EventPage({
   params: { id: string }
   searchParams: { created?: string; edited?: string }
 }) {
-  const { id } = await params
-  const { created, edited } = await searchParams
+  const { id } = params
+  const { created, edited } = searchParams
 
   const session = await getSession()
 
-  const event = await prisma.event.findUnique({
+  const event = await db.event.findUnique({
     where: { id },
     include: {
       createdBy: {
@@ -50,9 +51,8 @@ export default async function EventPage({
     notFound()
   }
 
-  // Only show events that are APPROVED or PENDING (for creator preview)
+  // Moderation logic
   if (event.moderationStatus === "FLAGGED" || event.moderationStatus === "REJECTED") {
-    // Allow event creator to view their own flagged/rejected events
     const isCreator = session && session.userId === event.createdById
     if (!isCreator) {
       notFound()
@@ -60,8 +60,9 @@ export default async function EventPage({
   }
 
   let isFavorited = false
+
   if (session) {
-    const favorite = await prisma.favorite.findUnique({
+    const favorite = await db.favorite.findUnique({
       where: {
         userId_eventId: {
           userId: session.userId,

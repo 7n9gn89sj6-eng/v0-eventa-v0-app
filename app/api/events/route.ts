@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { prisma } from "@/lib/db"
+import { db } from "@/lib/db"
 import { requireAuth } from "@/lib/auth-helpers"
 import { geocodeAddress } from "@/lib/geocoding"
 import { createSearchTextFolded } from "@/lib/search/accent-fold"
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams
     const category = searchParams.get("category")
     const free = searchParams.get("free")
-    const status = searchParams.get("status") // Added status filter
+    const status = searchParams.get("status")
     const limit = Number.parseInt(searchParams.get("limit") || "50")
 
     const where: any = {}
@@ -39,25 +39,20 @@ export async function GET(request: NextRequest) {
     if (status) {
       where.status = status
     } else {
-      // Default to only showing publicly visible events
       Object.assign(where, PUBLIC_EVENT_WHERE)
     }
 
-    // Note: Keeping legacy moderationStatus check for backward compatibility
-    // This can be removed in future once fully migrated to aiStatus
     where.moderationStatus = "APPROVED"
 
     if (category) {
-      where.categories = {
-        has: category,
-      }
+      where.categories = { has: category }
     }
 
     if (free === "true") {
       where.priceFree = true
     }
 
-    const events = await prisma.event.findMany({
+    const events = await db.event.findMany({
       where,
       include: {
         createdBy: {
@@ -67,9 +62,7 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      orderBy: {
-        startAt: "asc",
-      },
+      orderBy: { startAt: "asc" },
       take: limit,
     })
 
@@ -89,8 +82,8 @@ export async function POST(request: NextRequest) {
 
     const { title, description, categories, startAt, endAt } = data
 
-    let lat: number | undefined = data.lat
-    let lng: number | undefined = data.lng
+    let lat = data.lat
+    let lng = data.lng
     let geocodedAddress: string | undefined
     let venueName: string | undefined
     let address: string | undefined
@@ -105,11 +98,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const searchParts = [title, description, venueName, address, ...(categories || []), ...(body.languages || [])]
+    const searchParts = [
+      title,
+      description,
+      venueName,
+      address,
+      ...(categories || []),
+      ...(body.languages || []),
+    ]
+
     const searchText = searchParts.filter(Boolean).join(" ")
     const searchTextFolded = createSearchTextFolded(searchParts)
 
-    const event = await prisma.event.create({
+    const event = await db.event.create({
       data: {
         title,
         description: description || "",
@@ -143,8 +144,8 @@ export async function POST(request: NextRequest) {
     let emailedEditLink = false
     try {
       const token = await createEventEditToken(event.id, event.endAt)
-      console.log("[v0] Email disabled - Edit link token created but not emailed for event:", event.id)
-      emailedEditLink = false // Email functionality disabled
+      console.log("[v0] Edit link token created but email sending disabled")
+      emailedEditLink = false
     } catch (error) {
       console.error("[v0] Failed to create edit link token:", error)
     }
