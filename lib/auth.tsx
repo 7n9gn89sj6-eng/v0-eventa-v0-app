@@ -3,7 +3,7 @@ import NextAuth, { type NextAuthOptions } from "next-auth";
 import EmailProvider from "next-auth/providers/email";
 
 import { adapter, adapterReady } from "@/lib/adapter";
-import { sendEmailAPI } from "@/lib/email";  // ✅ Correct import
+import { sendEmailAPI } from "@/lib/email";  // ✅ USE THIS
 
 export const authOptions: NextAuthOptions = {
   adapter,
@@ -13,7 +13,7 @@ export const authOptions: NextAuthOptions = {
       from: process.env.EMAIL_FROM,
 
       sendVerificationRequest: async ({ identifier: email, url }) => {
-        console.log("[auth] Sending magic link to:", email);
+        console.log("[auth] Sending magic link to:", email)
 
         const html = `
           <div style="font-family:Arial;max-width:600px;margin:auto;">
@@ -21,13 +21,13 @@ export const authOptions: NextAuthOptions = {
             <p>Click the button below to sign in:</p>
 
             <p style="margin:24px 0;">
-              <a href="${url}" 
+              <a href="${url}"
                 style="background:#6366F1;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;">
-                Sign in
+                Sign In
               </a>
             </p>
 
-            <p>If the button doesn’t work, copy this link:</p>
+            <p>If the button doesn’t work, copy this URL:</p>
             <p style="word-break:break-all;">${url}</p>
 
             <p style="font-size:12px;color:#666;margin-top:32px;">
@@ -44,7 +44,7 @@ export const authOptions: NextAuthOptions = {
 
         if (!result.success) {
           console.error("[auth] Email failed:", result.error);
-          throw new Error(`Failed to send verification email: ${result.error}`);
+          throw new Error(`Failed to send magic link email: ${result.error}`);
         }
 
         console.log("[auth] Magic link sent successfully");
