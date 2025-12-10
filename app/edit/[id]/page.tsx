@@ -26,7 +26,7 @@ interface EditEventPageProps {
 export default async function EditEventPage({ params, searchParams }: EditEventPageProps) {
   const eventId = params.id
 
-  // Normalise search params (because Next can give string | string[])
+  // Normalise search params
   const tokenParam = searchParams?.token
   const confirmedParam = searchParams?.confirmed
 
@@ -53,7 +53,8 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Link href={`/events/${eventId}`} className="text-primary hover:underline">
+              {/* FIXED ROUTE: /event/, not /events/ */}
+              <Link href={`/event/${eventId}`} className="text-primary hover:underline">
                 View event details →
               </Link>
             </CardContent>
@@ -94,8 +95,9 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
                     <li>You can request a new link on the event page</li>
                   </ul>
                 </div>
+                {/* FIXED ROUTE */}
                 <Button asChild>
-                  <Link href={`/events/${eventId}`}>View Event</Link>
+                  <Link href={`/event/${eventId}`}>View Event</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -119,8 +121,9 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                {/* FIXED ROUTE */}
                 <Button asChild variant="outline">
-                  <Link href={`/events/${eventId}`}>View Event</Link>
+                  <Link href={`/event/${eventId}`}>View Event</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -128,8 +131,6 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
         </div>
       )
     }
-
-    // Only "ok" falls through
   }
 
   /* ------------------------------------------------------
