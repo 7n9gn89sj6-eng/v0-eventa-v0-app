@@ -17,12 +17,13 @@ import { AlertCircle, Lock, Clock, Mail } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
-// ***************
-// CACHE BUSTERS
-// ***************
-export const revalidate = 0;
-export const dynamic = "force-dynamic";
-export const fetchCache = "force-no-store";
+// ************************************************************
+//  ABSOLUTE CACHE DISABLING — REQUIRED ON RENDER
+// ************************************************************
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+export const fetchCache = "force-no-store"
+export const runtime = "nodejs"   // important on Render for server components
 
 interface EditEventPageProps {
   params: { id: string }
@@ -32,15 +33,17 @@ interface EditEventPageProps {
 export default async function EditEventPage({ params, searchParams }: EditEventPageProps) {
   const eventId = params.id
 
-  // ---------------------------
-  // Normalize search params
-  // ---------------------------
+  // ----------------------------------------------------------
+  // Normalize search params (Next.js may pass string | string[])
+  // ----------------------------------------------------------
   const rawToken = searchParams?.token
   const rawConfirmed = searchParams?.confirmed
 
   const token = Array.isArray(rawToken) ? rawToken[0] : rawToken
   const confirmed =
-    Array.isArray(rawConfirmed) ? rawConfirmed[0] === "true" : rawConfirmed === "true"
+    Array.isArray(rawConfirmed)
+      ? rawConfirmed[0] === "true"
+      : rawConfirmed === "true"
 
   /* ------------------------------------------------------
      CASE 1 — No token AND not confirmed → Block access
@@ -60,7 +63,10 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Link href={`/events/${eventId}`} className="text-primary hover:underline">
+              <Link
+                href={`/events/${eventId}`}
+                className="text-primary hover:underline"
+              >
                 View event details →
               </Link>
             </CardContent>
@@ -71,11 +77,12 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
   }
 
   /* ------------------------------------------------------
-     CASE 2 — Token provided → Validate
+     CASE 2 — Token provided → Validate it
   ------------------------------------------------------- */
   if (token && !confirmed) {
     const result = await validateEventEditToken(eventId, token)
 
+    // ---------- EXPIRED ----------
     if (result === "expired") {
       return (
         <div className="container mx-auto px-4 py-12">
@@ -113,6 +120,7 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
       )
     }
 
+    // ---------- INVALID ----------
     if (result === "invalid") {
       return (
         <div className="container mx-auto px-4 py-12">
@@ -138,6 +146,8 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
         </div>
       )
     }
+
+    // Only "ok" continues past this point
   }
 
   /* ------------------------------------------------------
@@ -150,7 +160,7 @@ export default async function EditEventPage({ params, searchParams }: EditEventP
   if (!event) redirect("/")
 
   /* ------------------------------------------------------
-     Render edit form
+     RENDER PAGE
   ------------------------------------------------------- */
   return (
     <div className="container mx-auto px-4 py-12">
