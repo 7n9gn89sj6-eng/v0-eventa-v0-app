@@ -1,6 +1,6 @@
 import db from "@/lib/db";
 import { validateEventEditToken } from "@/lib/eventEditToken";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 
 export const dynamic = "force-dynamic";
@@ -8,48 +8,100 @@ export const revalidate = 0;
 
 interface EditPageProps {
   params: { id: string };
-  searchParams?: Record<string, string | string[]>;
 }
 
 export default async function EditEventPage({ params }: EditPageProps) {
   const eventId = params.id;
 
-  // Read full URL from headers — reliable on Render
-  const headerList = headers();
-  const rawUrl =
-    headerList.get("x-forwarded-url") ||
-    headerList.get("referer") ||
-    "";
+  // ----------------------------
+  // 1. Extract token properly on Render
+  // ----------------------------
+  const h = headers();
+  const orig = h.get("x-original-url");
+  const referer = h.get("referer");
 
-  // Reconstruct URL (dummy base required)
+  const rawUrl =
+    orig ||
+    referer ||
+    ""; // final fallback
+
+  // Local fake base because URL requires absolute URL
   const url = new URL(rawUrl, "https://example.com");
 
-  // Extract token from actual query string
   const token =
     url.searchParams.get("token") ||
     url.searchParams.get("Token") ||
     url.searchParams.get("TOKEN");
 
+  console.log("[edit] EVENT ID:", eventId);
+  console.log("[edit] RAW URL:", rawUrl);
+  console.log("[edit] TOKEN EXTRACTED:", token);
+
   if (!token) {
-    return <div className="p-6 text-red-500">Missing edit token.</div>;
+    return (
+      <div className="p-6 text-red-500">
+        Missing edit token (server did not receive ?token=...).
+      </div>
+    );
   }
 
-  const valid = await validateEventEditToken(eventId, token);
+  // ----------------------------
+  // 2. Validate token
+  // ----------------------------
+  let valid;
+  try {
+    valid = await validateEventEditToken(eventId, token);
+    console.log("[edit] TOKEN VALID?", valid);
+  } catch (err: any) {
+    console.error("[edit] TOKEN VALIDATION ERROR:", err);
+    return (
+      <div className="p-6 text-red-500">
+        Internal error while validating edit token.
+      </div>
+    );
+  }
+
   if (!valid) {
-    return <div className="p-6 text-red-500">Invalid or expired edit link.</div>;
+    return (
+      <div className="p-6 text-red-500">
+        Invalid or expired edit token.
+      </div>
+    );
   }
 
-  const event = await db.event.findUnique({
-    where: { id: eventId }
-  });
+  // ----------------------------
+  // 3. Load event from DB
+  // ----------------------------
+  let event;
+  try {
+    event = await db.event.findUnique({
+      where: { id: eventId }
+    });
+
+    console.log("[edit] EVENT LOADED:", event);
+  } catch (err: any) {
+    console.error("[edit] PRISMA ERROR:", err);
+    return (
+      <div className="p-6 text-red-500">
+        Failed to load event. Database error.
+      </div>
+    );
+  }
 
   if (!event) return notFound();
 
+  // ----------------------------
+  // 4. Render form
+  // ----------------------------
   return (
     <div className="max-w-2xl mx-auto p-8">
       <h1 className="text-2xl font-semibold mb-6">Edit Event</h1>
 
-      <form method="POST" action={`/api/events/${eventId}/update`} className="space-y-4">
+      <form
+        method="POST"
+        action={`/api/events/${eventId}/update`}
+        className="space-y-4"
+      >
         <input type="hidden" name="token" value={token} />
 
         <div>
