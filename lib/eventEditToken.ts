@@ -1,128 +1,121 @@
-// lib/eventEditToken.ts
-import { db } from "@/lib/db"
-import { randomUUID } from "crypto"
-import bcrypt from "bcryptjs"
-import { createAuditLog } from "@/lib/audit-log"
+import db from "@/lib/db";
+import bcrypt from "bcryptjs";
+import { randomUUID } from "crypto";
+import { createAuditLog } from "@/lib/audit-log";
 
-/**
- * Creates an event edit token for the given event.
- * Returns the plain token string (for emailing to the user).
- */
-export async function createEventEditToken(
-  eventId: string,
-  endsAt: Date
-): Promise<string> {
-  const token = randomUUID()
-  const tokenHash = await bcrypt.hash(token, 10)
+/* -------------------------------------------------------------------------- */
+/*  Create a new event edit token                                             */
+/* -------------------------------------------------------------------------- */
+export async function createEventEditToken(eventId: string): Promise<string> {
+  const token = randomUUID();
+  const tokenHash = await bcrypt.hash(token, 12);
 
-  // Token expires in 30 days (endsAt is currently unused, kept for compatibility)
-  const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
 
   try {
-    const row = await db.eventEditToken.create({
+    await db.eventEditToken.create({
       data: {
-        tokenHash,
         eventId,
-        expires,
+        tokenHash,
+        expires: expiresAt,
       },
-    })
+    });
 
-    console.log("[edit-token] Created token row", {
-      id: row.id,
-      eventId: row.eventId,
-      expires: row.expires.toISOString(),
-    })
+    console.log("[edit-token] Created token", {
+      eventId,
+      expires: expiresAt.toISOString(),
+    });
   } catch (err) {
-    console.error("[edit-token] FAILED to create token row for event", eventId, err)
-    throw err
+    console.error("[edit-token] FAILED to create token", err);
+    throw err;
   }
 
-  return token
+  return token;
 }
 
-/**
- * Validates an event edit token.
- * Returns "ok", "expired", or "invalid".
- */
+/* -------------------------------------------------------------------------- */
+/*  Validate a token (returns: ok | invalid | expired)                         */
+/* -------------------------------------------------------------------------- */
 export async function validateEventEditToken(
   eventId: string,
   token: string
-): Promise<"ok" | "expired" | "invalid"> {
-  console.log("[edit-token] VALIDATE called", { eventId, tokenPrefix: token.slice(0, 8) })
+): Promise<"ok" | "invalid" | "expired"> {
+  if (!token || token.trim() === "") return "invalid";
 
-  const tokenRecords = await db.eventEditToken.findMany({
+  // Fetch all existing tokens for this event
+  const records = await db.eventEditToken.findMany({
     where: { eventId },
     select: {
+      id: true,
       tokenHash: true,
       expires: true,
+      usedAt: true,
     },
-  })
+  });
 
-  console.log("[edit-token] Found token records", {
-    eventId,
-    count: tokenRecords.length,
-  })
-
-  if (tokenRecords.length === 0) {
-    console.warn("[edit-token] No tokens found for event", eventId)
-
+  // If none exist → do NOT reveal that fact: return invalid
+  if (records.length === 0) {
     await createAuditLog({
       eventId,
       action: "EDIT_TOKEN_INVALID",
-      details: "No edit tokens found for this event",
-      metadata: { tokenProvided: token.substring(0, 8) + "..." },
-    }).catch((err) =>
-      console.error("[edit-token] Failed to create audit log:", err)
-    )
+      details: "No edit tokens exist for this event",
+      metadata: { tokenPrefix: token.slice(0, 8) },
+    });
 
-    return "invalid"
+    return "invalid";
   }
 
-  const now = new Date()
+  const now = new Date();
 
-  for (const record of tokenRecords) {
-    const isMatch = await bcrypt.compare(token, record.tokenHash)
+  /* ---------------------------------------------------------------------- */
+  /*  Try all tokens (bcrypt-compare constant-time)                         */
+  /* ---------------------------------------------------------------------- */
+  for (const rec of records) {
+    const isMatch = await bcrypt.compare(token, rec.tokenHash);
 
-    console.log("[edit-token] Comparing token to record", {
-      eventId,
-      expires: record.expires.toISOString(),
-      isMatch,
-    })
+    if (!isMatch) continue;
 
-    if (isMatch) {
-      if (record.expires <= now) {
-        console.warn("[edit-token] Token expired for event", eventId)
+    // Matched a token hash → now check expiry
+    if (rec.expires <= now) {
+      await createAuditLog({
+        eventId,
+        action: "EDIT_TOKEN_EXPIRED",
+        details: "Matched hash but token expired",
+        metadata: {
+          expiredAt: rec.expires.toISOString(),
+          attemptedAt: now.toISOString(),
+          tokenPrefix: token.slice(0, 8),
+        },
+      });
 
-        await createAuditLog({
-          eventId,
-          action: "EDIT_TOKEN_EXPIRED",
-          details: `Edit token expired on ${record.expires.toISOString()}`,
-          metadata: {
-            expiredAt: record.expires.toISOString(),
-            attemptedAt: now.toISOString(),
-          },
-        }).catch((err) =>
-          console.error("[edit-token] Failed to create audit log:", err)
-        )
-
-        return "expired"
-      }
-
-      console.log("[edit-token] Token validation successful for event", eventId)
-      return "ok"
+      return "expired";
     }
+
+    // OPTIONAL: One-time token invalidation (disabled for now)
+    // await db.eventEditToken.update({
+    //   where: { id: rec.id },
+    //   data: { usedAt: now },
+    // });
+
+    await createAuditLog({
+      eventId,
+      action: "EDIT_TOKEN_OK",
+      details: "Token validated successfully",
+      metadata: { tokenPrefix: token.slice(0, 8) },
+    });
+
+    return "ok";
   }
 
-  console.warn("[edit-token] Token hash mismatch for event", eventId)
-
+  /* ---------------------------------------------------------------------- */
+  /*  No matching hash found → invalid                                      */
+  /* ---------------------------------------------------------------------- */
   await createAuditLog({
     eventId,
     action: "EDIT_TOKEN_INVALID",
-    details: "Token hash does not match any stored tokens",
-    metadata: { tokenProvided: token.substring(0, 8) + "..." },
-  }).catch((err) =>
-    console.error("[edit-token] Failed to create audit log:", err)
-  )
+    details: "Provided token does not match any stored hashes",
+    metadata: { tokenPrefix: token.slice(0, 8) },
+  });
 
-  return "invalid"
+  return "invalid";
 }
