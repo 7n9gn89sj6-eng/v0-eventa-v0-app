@@ -1,6 +1,7 @@
 import db from "@/lib/db";
 import { validateEventEditToken } from "@/lib/eventEditToken";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { headers } from "next/headers";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -10,20 +11,24 @@ interface EditPageProps {
   searchParams?: Record<string, string | string[]>;
 }
 
-export default async function EditEventPage({ params, searchParams }: EditPageProps) {
+export default async function EditEventPage({ params }: EditPageProps) {
   const eventId = params.id;
 
-  // FIX: searchParams may be undefined OR empty object
-  if (!searchParams) {
-    return <div className="p-6 text-red-500">Missing edit token.</div>;
-  }
+  // Read full URL from headers — reliable on Render
+  const headerList = headers();
+  const rawUrl =
+    headerList.get("x-forwarded-url") ||
+    headerList.get("referer") ||
+    "";
 
-  // Try to pull token from ANY possible key
+  // Reconstruct URL (dummy base required)
+  const url = new URL(rawUrl, "https://example.com");
+
+  // Extract token from actual query string
   const token =
-    searchParams.token ||
-    searchParams.Token ||
-    searchParams.TOKEN ||
-    Object.keys(searchParams)[0];
+    url.searchParams.get("token") ||
+    url.searchParams.get("Token") ||
+    url.searchParams.get("TOKEN");
 
   if (!token) {
     return <div className="p-6 text-red-500">Missing edit token.</div>;
