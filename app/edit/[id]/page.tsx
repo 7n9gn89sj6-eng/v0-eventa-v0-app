@@ -7,12 +7,19 @@ export const revalidate = 0;
 
 interface EditPageProps {
   params: { id: string };
-  searchParams: { token?: string };
+  searchParams: { [key: string]: string | string[] | undefined };
 }
 
 export default async function EditEventPage({ params, searchParams }: EditPageProps) {
   const eventId = params.id;
-  const token = searchParams?.token;
+
+  // FIX: Robust token extraction for Render / App Router inconsistencies
+  const token =
+    searchParams?.token ??
+    searchParams?.Token ??
+    searchParams?.TOKEN ??
+    // sometimes searchParams is delivered as { "2ffacca8..." : "" }
+    Object.keys(searchParams || {})[0];
 
   if (!token) {
     return <div className="p-6 text-red-500">Missing edit token.</div>;
