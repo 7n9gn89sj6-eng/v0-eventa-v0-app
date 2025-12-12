@@ -13,19 +13,14 @@ interface EditPageProps {
 export default async function EditEventPage({ params }: EditPageProps) {
   const eventId = params.id;
 
-  // ----------------------------
-  // 1. Extract token properly on Render
-  // ----------------------------
+  /* --------------------------------------------------------------
+     1. Extract ?token=... (Render does not pass raw query params)
+  -------------------------------------------------------------- */
   const h = headers();
   const orig = h.get("x-original-url");
   const referer = h.get("referer");
 
-  const rawUrl =
-    orig ||
-    referer ||
-    ""; // final fallback
-
-  // Local fake base because URL requires absolute URL
+  const rawUrl = orig || referer || "";
   const url = new URL(rawUrl, "https://example.com");
 
   const token =
@@ -45,9 +40,9 @@ export default async function EditEventPage({ params }: EditPageProps) {
     );
   }
 
-  // ----------------------------
-  // 2. Validate token
-  // ----------------------------
+  /* --------------------------------------------------------------
+     2. Validate token (returns "ok" | "invalid" | "expired")
+  -------------------------------------------------------------- */
   let valid;
   try {
     valid = await validateEventEditToken(eventId, token);
@@ -61,7 +56,8 @@ export default async function EditEventPage({ params }: EditPageProps) {
     );
   }
 
-  if (!valid) {
+  // IMPORTANT FIX — ONLY "ok" is valid
+  if (valid !== "ok") {
     return (
       <div className="p-6 text-red-500">
         Invalid or expired edit token.
@@ -69,17 +65,16 @@ export default async function EditEventPage({ params }: EditPageProps) {
     );
   }
 
-  // ----------------------------
-  // 3. Load event from DB
-  // ----------------------------
+  /* --------------------------------------------------------------
+     3. Load event data
+  -------------------------------------------------------------- */
   let event;
   try {
     event = await db.event.findUnique({
-      where: { id: eventId }
+      where: { id: eventId },
     });
-
     console.log("[edit] EVENT LOADED:", event);
-  } catch (err: any) {
+  } catch (err) {
     console.error("[edit] PRISMA ERROR:", err);
     return (
       <div className="p-6 text-red-500">
@@ -90,9 +85,9 @@ export default async function EditEventPage({ params }: EditPageProps) {
 
   if (!event) return notFound();
 
-  // ----------------------------
-  // 4. Render form
-  // ----------------------------
+  /* --------------------------------------------------------------
+     4. Render edit form
+  -------------------------------------------------------------- */
   return (
     <div className="max-w-2xl mx-auto p-8">
       <h1 className="text-2xl font-semibold mb-6">Edit Event</h1>
