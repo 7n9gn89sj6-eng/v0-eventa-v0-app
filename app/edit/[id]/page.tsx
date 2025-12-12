@@ -1,7 +1,7 @@
 import db from "@/lib/db";
 import { validateEventEditToken } from "@/lib/eventEditToken";
-import { notFound } from "next/navigation";
 import { headers } from "next/headers";
+import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -13,62 +13,75 @@ interface EditPageProps {
 export default async function EditEventPage({ params }: EditPageProps) {
   const eventId = params.id;
 
-  /* --------------------------------------------------------------
-     1. Extract ?token=... (Render does not pass raw query params)
-  -------------------------------------------------------------- */
+  /* ------------------------------------------------------------ */
+  /*  1. Extract token — Render strips query params from pathname  */
+  /* ------------------------------------------------------------ */
   const h = headers();
-  const orig = h.get("x-original-url");
-  const referer = h.get("referer");
+
+  const orig = h.get("x-original-url");     // Render's internal rewrite
+  const referer = h.get("referer");         // Sometimes the only source
 
   const rawUrl = orig || referer || "";
-  const url = new URL(rawUrl, "https://example.com");
 
-  const token =
-    url.searchParams.get("token") ||
-    url.searchParams.get("Token") ||
-    url.searchParams.get("TOKEN");
+  let token: string | null = null;
+
+  try {
+    // Must provide full URL because rawUrl is a path only
+    const url = new URL(rawUrl, "https://example.com");
+    token =
+      url.searchParams.get("token") ||
+      url.searchParams.get("Token") ||
+      url.searchParams.get("TOKEN") ||
+      null;
+  } catch (err) {
+    console.error("[edit] URL PARSE ERROR:", err);
+  }
 
   console.log("[edit] EVENT ID:", eventId);
   console.log("[edit] RAW URL:", rawUrl);
-  console.log("[edit] TOKEN EXTRACTED:", token);
+  console.log("[edit] TOKEN:", token);
 
   if (!token) {
     return (
-      <div className="p-6 text-red-500">
-        Missing edit token (server did not receive ?token=...).
+      <div className="p-6 text-red-600">
+        Missing edit token.  
+        <br />
+        The server did not receive <code>?token=...</code>.
       </div>
     );
   }
 
-  /* --------------------------------------------------------------
-     2. Validate token (returns "ok" | "invalid" | "expired")
-  -------------------------------------------------------------- */
-  let valid;
+  /* ------------------------------------------------------------ */
+  /*  2. Validate token                                           */
+  /* ------------------------------------------------------------ */
+  let isValid = false;
+
   try {
-    valid = await validateEventEditToken(eventId, token);
-    console.log("[edit] TOKEN VALID?", valid);
-  } catch (err: any) {
+    const result = await validateEventEditToken(eventId, token);
+    isValid = result === "ok";
+    console.log("[edit] TOKEN VALIDATION RESULT:", result);
+  } catch (err) {
     console.error("[edit] TOKEN VALIDATION ERROR:", err);
     return (
-      <div className="p-6 text-red-500">
-        Internal error while validating edit token.
+      <div className="p-6 text-red-600">
+        Internal error during token validation.
       </div>
     );
   }
 
-  // IMPORTANT FIX — ONLY "ok" is valid
-  if (valid !== "ok") {
+  if (!isValid) {
     return (
-      <div className="p-6 text-red-500">
+      <div className="p-6 text-red-600">
         Invalid or expired edit token.
       </div>
     );
   }
 
-  /* --------------------------------------------------------------
-     3. Load event data
-  -------------------------------------------------------------- */
+  /* ------------------------------------------------------------ */
+  /*  3. Load event                                               */
+  /* ------------------------------------------------------------ */
   let event;
+
   try {
     event = await db.event.findUnique({
       where: { id: eventId },
@@ -77,17 +90,17 @@ export default async function EditEventPage({ params }: EditPageProps) {
   } catch (err) {
     console.error("[edit] PRISMA ERROR:", err);
     return (
-      <div className="p-6 text-red-500">
-        Failed to load event. Database error.
+      <div className="p-6 text-red-600">
+        Failed to load event from database.
       </div>
     );
   }
 
   if (!event) return notFound();
 
-  /* --------------------------------------------------------------
-     4. Render edit form
-  -------------------------------------------------------------- */
+  /* ------------------------------------------------------------ */
+  /*  4. Render UI                                                */
+  /* ------------------------------------------------------------ */
   return (
     <div className="max-w-2xl mx-auto p-8">
       <h1 className="text-2xl font-semibold mb-6">Edit Event</h1>
