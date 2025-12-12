@@ -1,3 +1,30 @@
+import db from "@/lib/db";
+import bcrypt from "bcryptjs";
+import { randomUUID } from "crypto";
+
+/* -------------------------------------------------------------------------- */
+/*  Create a new event edit token                                             */
+/* -------------------------------------------------------------------------- */
+export async function createEventEditToken(eventId: string): Promise<string> {
+  const token = randomUUID();
+  const tokenHash = await bcrypt.hash(token, 12);
+
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
+  await db.eventEditToken.create({
+    data: {
+      eventId,
+      tokenHash,
+      expires: expiresAt,
+    },
+  });
+
+  return token;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Validate an event edit token                                              */
+/* -------------------------------------------------------------------------- */
 export async function validateEventEditToken(
   eventId: string,
   token: string
@@ -5,7 +32,6 @@ export async function validateEventEditToken(
   try {
     if (!token || token.trim() === "") return false;
 
-    // Fetch all tokens for this event
     const records = await db.eventEditToken.findMany({
       where: { eventId },
       select: { tokenHash: true, expires: true },
