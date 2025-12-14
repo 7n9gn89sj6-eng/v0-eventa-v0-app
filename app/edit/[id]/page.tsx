@@ -5,40 +5,31 @@ import { notFound } from "next/navigation";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function EditEventPage(props: {
+interface EditPageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  // ✅ Next 16 FIX: explicitly await both
+  searchParams: Promise<{ token?: string }>;
+}
+
+export default async function EditEventPage(props: EditPageProps) {
   const params = await props.params;
   const searchParams = await props.searchParams;
 
-  const eventId = params?.id ?? null;
+  const eventId = params.id;
+  const token = searchParams.token ?? null;
 
-  const rawToken = searchParams?.token;
-  const token =
-    typeof rawToken === "string"
-      ? rawToken
-      : Array.isArray(rawToken)
-      ? rawToken[0]
-      : null;
-
-  console.log("[edit] eventId:", eventId);
-  console.log("[edit] token:", token);
-
-  if (!eventId) {
-    return <div className="p-6 text-red-600">Missing event ID.</div>;
-  }
-
-  if (!token) {
-    return <div className="p-6 text-red-600">Missing edit token.</div>;
+  if (!eventId || !token) {
+    return (
+      <div className="p-6 text-red-500">
+        Missing edit token.
+      </div>
+    );
   }
 
   const isValid = await validateEventEditToken(eventId, token);
 
   if (!isValid) {
     return (
-      <div className="p-6 text-red-600">
+      <div className="p-6 text-red-500">
         Invalid or expired edit token.
       </div>
     );
