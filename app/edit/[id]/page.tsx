@@ -5,37 +5,44 @@ import { notFound } from "next/navigation";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-interface EditPageProps {
-  params: { id: string };
-  searchParams: { token?: string };
-}
+type SearchParams = Record<string, string | string[] | undefined>;
 
 export default async function EditEventPage({
   params,
   searchParams,
-}: EditPageProps) {
+}: {
+  params: { id: string };
+  searchParams?: SearchParams;
+}) {
   const eventId = params.id;
-  const token = searchParams?.token ?? null;
 
-  if (!token) {
-    return <div className="p-6 text-red-500">Missing edit token.</div>;
+  // Defensive extraction: token can be string, string[], or undefined
+  const raw = searchParams?.token;
+  const token =
+    typeof raw === "string" ? raw : Array.isArray(raw) ? raw[0] : null;
+
+  // Server-side logs (visible in Render logs)
+  console.log("[edit] eventId:", eventId);
+  console.log("[edit] searchParams:", searchParams);
+  console.log("[edit] token:", token);
+
+  if (!token || token.trim() === "") {
+    return <div className="p-6 text-red-600">Missing edit token.</div>;
   }
 
   let isValid = false;
   try {
     isValid = await validateEventEditToken(eventId, token);
-  } catch {
-    return <div className="p-6 text-red-500">Token validation error.</div>;
+  } catch (err) {
+    console.error("[edit] validateEventEditToken threw:", err);
+    return <div className="p-6 text-red-600">Token validation error.</div>;
   }
 
   if (!isValid) {
-    return <div className="p-6 text-red-500">Invalid or expired token.</div>;
+    return <div className="p-6 text-red-600">Invalid or expired edit token.</div>;
   }
 
-  const event = await db.event.findUnique({
-    where: { id: eventId },
-  });
-
+  const event = await db.event.findUnique({ where: { id: eventId } });
   if (!event) return notFound();
 
   return (
@@ -68,7 +75,7 @@ export default async function EditEventPage({
           />
         </div>
 
-        <button className="bg-blue-600 text-white px-4 py-2 rounded">
+        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">
           Save Changes
         </button>
       </form>
