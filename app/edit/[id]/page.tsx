@@ -10,35 +10,26 @@ interface EditPageProps {
   searchParams: { token?: string };
 }
 
-export default async function EditEventPage({ params, searchParams }: EditPageProps) {
+export default async function EditEventPage({
+  params,
+  searchParams,
+}: EditPageProps) {
   const eventId = params.id;
   const token = searchParams?.token ?? null;
 
   if (!token) {
-    return (
-      <div className="p-6 text-red-500">
-        Missing ?token=... parameter in URL.
-      </div>
-    );
+    return <div className="p-6 text-red-500">Missing edit token.</div>;
   }
 
   let isValid = false;
   try {
     isValid = await validateEventEditToken(eventId, token);
   } catch {
-    return (
-      <div className="p-6 text-red-500">
-        Internal token validation error.
-      </div>
-    );
+    return <div className="p-6 text-red-500">Token validation error.</div>;
   }
 
   if (!isValid) {
-    return (
-      <div className="p-6 text-red-500">
-        Invalid or expired edit token.
-      </div>
-    );
+    return <div className="p-6 text-red-500">Invalid or expired token.</div>;
   }
 
   const event = await db.event.findUnique({
@@ -47,13 +38,15 @@ export default async function EditEventPage({ params, searchParams }: EditPagePr
 
   if (!event) return notFound();
 
-  console.log("[edit] event loaded"); // SAFE — no Prisma object logged
-
   return (
     <div className="max-w-2xl mx-auto p-8">
       <h1 className="text-2xl font-semibold mb-6">Edit Event</h1>
 
-      <form method="POST" action={`/api/events/${eventId}/update`} className="space-y-4">
+      <form
+        method="POST"
+        action={`/api/events/${eventId}/update`}
+        className="space-y-4"
+      >
         <input type="hidden" name="token" value={token} />
 
         <div>
@@ -75,7 +68,7 @@ export default async function EditEventPage({ params, searchParams }: EditPagePr
           />
         </div>
 
-        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">
+        <button className="bg-blue-600 text-white px-4 py-2 rounded">
           Save Changes
         </button>
       </form>
