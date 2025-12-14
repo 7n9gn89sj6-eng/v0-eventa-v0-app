@@ -5,44 +5,49 @@ import { notFound } from "next/navigation";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type SearchParams = Record<string, string | string[] | undefined>;
-
-export default async function EditEventPage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams?: SearchParams;
+export default async function EditEventPage(props: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const eventId = params.id;
+  // ✅ Next 16 FIX: explicitly await both
+  const params = await props.params;
+  const searchParams = await props.searchParams;
 
-  // Defensive extraction: token can be string, string[], or undefined
-  const raw = searchParams?.token;
+  const eventId = params?.id ?? null;
+
+  const rawToken = searchParams?.token;
   const token =
-    typeof raw === "string" ? raw : Array.isArray(raw) ? raw[0] : null;
+    typeof rawToken === "string"
+      ? rawToken
+      : Array.isArray(rawToken)
+      ? rawToken[0]
+      : null;
 
-  // Server-side logs (visible in Render logs)
   console.log("[edit] eventId:", eventId);
-  console.log("[edit] searchParams:", searchParams);
   console.log("[edit] token:", token);
 
-  if (!token || token.trim() === "") {
+  if (!eventId) {
+    return <div className="p-6 text-red-600">Missing event ID.</div>;
+  }
+
+  if (!token) {
     return <div className="p-6 text-red-600">Missing edit token.</div>;
   }
 
-  let isValid = false;
-  try {
-    isValid = await validateEventEditToken(eventId, token);
-  } catch (err) {
-    console.error("[edit] validateEventEditToken threw:", err);
-    return <div className="p-6 text-red-600">Token validation error.</div>;
-  }
+  const isValid = await validateEventEditToken(eventId, token);
 
   if (!isValid) {
-    return <div className="p-6 text-red-600">Invalid or expired edit token.</div>;
+    return (
+      <div className="p-6 text-red-600">
+        Invalid or expired edit token.
+      </div>
+    );
   }
 
-  const event = await db.event.findUnique({ where: { id: eventId } });
+  const event = await db.event.findUnique({
+    where: { id: eventId },
+  });
+
   if (!event) return notFound();
 
   return (
@@ -75,7 +80,10 @@ export default async function EditEventPage({
           />
         </div>
 
-        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">
+        <button
+          type="submit"
+          className="bg-blue-600 text-white px-4 py-2 rounded"
+        >
           Save Changes
         </button>
       </form>
