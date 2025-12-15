@@ -16,15 +16,17 @@ export default function EditEventForm({ event, token }: Props) {
   const [description, setDescription] = useState(event.description ?? "");
   const [saving, setSaving] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (saving) return;
+
     setSaving(true);
 
     try {
       const res = await fetch(
-        `/api/events/${event.id}?token=${token}`,
+        `/api/events/${event.id}?token=${encodeURIComponent(token)}`,
         {
-          method: "PUT",
+          method: "PATCH", // 🔑 must match the API route
           headers: {
             "Content-Type": "application/json",
           },
@@ -36,17 +38,18 @@ export default function EditEventForm({ event, token }: Props) {
       );
 
       if (!res.ok) {
-        console.error("Save failed", await res.text());
+        const text = await res.text();
+        console.error("Save failed:", text);
         alert("Save failed");
-        setSaving(false);
         return;
       }
 
-      // success → go back to event page
+      // success → return to event page
       window.location.href = `/events/${event.id}`;
     } catch (err) {
-      console.error("Save error", err);
+      console.error("Unexpected save error:", err);
       alert("Unexpected error while saving");
+    } finally {
       setSaving(false);
     }
   }
@@ -56,6 +59,7 @@ export default function EditEventForm({ event, token }: Props) {
       <div>
         <label className="block mb-1 font-medium">Title</label>
         <input
+          type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           className="border p-2 w-full rounded"
