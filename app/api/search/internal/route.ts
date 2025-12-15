@@ -2,6 +2,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { DateTime } from "luxon"
 import { PUBLIC_EVENT_WHERE } from "@/lib/events"
+import { searchDatabase } from "@/lib/search/database-search"
+import { normalizeQuery } from "@/lib/search/query-normalization"
+import { detectLanguage } from "@/lib/search/language-detection"
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
@@ -13,15 +16,81 @@ export async function POST(request: NextRequest) {
 
     console.log(`[v0] Internal search request - uiLang: ${uiLang}`, { entities, query })
 
+    // Parse date filter from entities
     let dateFilter: { gte?: Date; lte?: Date } | undefined
     if (entities.date) {
       dateFilter = parseDatePhrase(entities.date)
     }
 
+    // Use full-text search if query is provided
+    let searchResults: any[] = []
+    let eventIds: string[] = []
+
+    if (query && query.trim().length > 0) {
+      // Normalize query for full-text search
+      const langDetected = detectLanguage(query)
+      const normalized = normalizeQuery(query, langDetected)
+
+      // Build search filters from entities
+      const searchFilters: { dateRange?: "today" | "weekend" | "month" | "all" } = {}
+      
+      // Convert date filter to dateRange format
+      if (dateFilter) {
+        const now = DateTime.now()
+        if (dateFilter.gte && dateFilter.lte) {
+          const start = DateTime.fromJSDate(dateFilter.gte)
+          const end = DateTime.fromJSDate(dateFilter.lte)
+          const daysDiff = end.diff(start, "days").days
+          
+          if (daysDiff <= 1) {
+            searchFilters.dateRange = "today"
+          } else if (daysDiff <= 2) {
+            searchFilters.dateRange = "weekend"
+          } else {
+            searchFilters.dateRange = "month"
+          }
+        } else if (dateFilter.gte) {
+          // Only start date provided, use month range
+          searchFilters.dateRange = "month"
+        }
+      }
+
+      // Collect categories for searchDatabase
+      const categories: string[] = []
+      if (normalized.categories.length > 0) {
+        categories.push(...normalized.categories)
+      }
+      if (entities.type || entities.category) {
+        const searchCategory = entities.type || entities.category
+        if (searchCategory) {
+          categories.push(searchCategory)
+        }
+      }
+
+      // Perform full-text search
+      const fullTextResults = await searchDatabase({
+        query: normalized.normalized,
+        synonyms: normalized.synonyms,
+        categories: categories,
+        filters: Object.keys(searchFilters).length > 0 ? searchFilters : undefined,
+        limit: 50, // Get more results to filter by entities
+      })
+
+      eventIds = fullTextResults.map((r) => r.id!).filter(Boolean)
+      console.log(`[v0] Full-text search found ${eventIds.length} events`)
+    }
+
+    // Build where clause for fetching full event objects
     const where: any = {
       ...PUBLIC_EVENT_WHERE,
       moderationStatus: "APPROVED", // Keep for backward compatibility
       startAt: dateFilter || { gte: new Date() },
+    }
+
+    // If we have full-text search results, filter by those IDs
+    // This ensures we only get events that matched the full-text search
+    if (eventIds.length > 0) {
+      where.id = { in: eventIds }
     }
 
     // City filter
@@ -40,6 +109,7 @@ export async function POST(request: NextRequest) {
       ]
     }
 
+    // Category filter
     if (entities.type || entities.category) {
       const searchCategory = entities.type || entities.category
       const categoryEnum = mapToEventCategory(searchCategory)
@@ -48,22 +118,66 @@ export async function POST(request: NextRequest) {
       where.OR = [
         ...(where.OR || []),
         { category: categoryEnum },
-        { categories: { hasSome: [searchCategory, categoryEnum] } },
+        { categories: { hasSome: [searchCategory, categoryEnum].filter(Boolean) } },
       ]
     }
 
     console.log("[v0] Search query where clause:", JSON.stringify(where, null, 2))
 
-    // Execute search
-    const events = await db.event.findMany({
+    // Execute search - fetch full event objects
+    let events = await db.event.findMany({
       where,
       orderBy: [{ startAt: "asc" }],
       take: 20,
     })
 
-    console.log(`[v0] Found ${events.length} events`)
+    console.log(`[v0] Found ${events.length} events after filtering`)
 
-    const rankedEvents = events.map((event) => {
+    // If no results from full-text search but we have entity filters, try entity-only search
+    if (events.length === 0 && eventIds.length === 0 && (entities.city || entities.venue || entities.type || entities.category)) {
+      console.log("[v0] No full-text results, trying entity-only search")
+      const fallbackWhere: any = {
+        ...PUBLIC_EVENT_WHERE,
+        moderationStatus: "APPROVED",
+        startAt: dateFilter || { gte: new Date() },
+      }
+
+      if (entities.city) {
+        fallbackWhere.city = { contains: entities.city, mode: "insensitive" }
+      }
+
+      if (entities.venue) {
+        fallbackWhere.OR = [
+          { venueName: { contains: entities.venue, mode: "insensitive" } },
+          { locationAddress: { contains: entities.venue, mode: "insensitive" } },
+        ]
+      }
+
+      if (entities.type || entities.category) {
+        const searchCategory = entities.type || entities.category
+        const categoryEnum = mapToEventCategory(searchCategory)
+        fallbackWhere.OR = [
+          ...(fallbackWhere.OR || []),
+          { category: categoryEnum },
+          { categories: { hasSome: [searchCategory, categoryEnum].filter(Boolean) } },
+        ]
+      }
+
+      const fallbackEvents = await db.event.findMany({
+        where: fallbackWhere,
+        orderBy: [{ startAt: "asc" }],
+        take: 20,
+      })
+      
+      if (fallbackEvents.length > 0) {
+        events = fallbackEvents
+      }
+    }
+
+    searchResults = events
+
+    // Rank and score events
+    const rankedEvents = searchResults.map((event) => {
       let score = 0
       const searchTerms = [query, entities.title, entities.type, entities.category]
         .filter(Boolean)
@@ -71,24 +185,24 @@ export async function POST(request: NextRequest) {
         .toLowerCase()
 
       // Title match (weight: 3)
-      if (event.title.toLowerCase().includes(searchTerms)) {
+      if (searchTerms && event.title.toLowerCase().includes(searchTerms)) {
         score += 3
       }
 
       // Category match (weight: 2)
       const eventCategories = [...(event.categories || []), event.category].filter(Boolean)
 
-      if (eventCategories.some((cat) => searchTerms.includes(cat.toLowerCase()))) {
+      if (searchTerms && eventCategories.some((cat) => cat && searchTerms.includes(cat.toLowerCase()))) {
         score += 2
       }
 
       // Description match (weight: 1)
-      if (event.description.toLowerCase().includes(searchTerms)) {
+      if (searchTerms && event.description?.toLowerCase().includes(searchTerms)) {
         score += 1
       }
 
       // Boost for matching city
-      if (entities.city && event.city.toLowerCase().includes(entities.city.toLowerCase())) {
+      if (entities.city && event.city?.toLowerCase().includes(entities.city.toLowerCase())) {
         score += 1
       }
 
@@ -104,8 +218,13 @@ export async function POST(request: NextRequest) {
       return { ...event, score }
     })
 
-    // Sort by score
-    rankedEvents.sort((a, b) => b.score - a.score)
+    // Sort by score (highest first), then by start date
+    rankedEvents.sort((a, b) => {
+      if (b.score !== a.score) {
+        return b.score - a.score
+      }
+      return a.startAt.getTime() - b.startAt.getTime()
+    })
 
     const latency = Date.now() - startTime
 

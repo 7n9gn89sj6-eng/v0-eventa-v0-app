@@ -66,6 +66,9 @@ export async function searchDatabase(options: DatabaseSearchOptions): Promise<Se
       ? Prisma.sql`AND e.categories && ARRAY[${Prisma.join(categoryArray)}]::text[]`
       : Prisma.empty
 
+  // Public event filter - only show PUBLISHED events with SAFE AI status
+  const publicEventFilter = Prisma.sql`AND e.status = 'PUBLISHED' AND e.moderation_status = 'APPROVED'`
+
   // Execute search query
   const events = await db.$queryRaw<any[]>(Prisma.sql`
     SELECT 
@@ -91,6 +94,7 @@ export async function searchDatabase(options: DatabaseSearchOptions): Promise<Se
     FROM "Event" e
     WHERE 
       e.start_at >= ${where.startAt.gte || new Date()}
+      ${publicEventFilter}
       ${categorySQL}
       ${requiresFree}
       AND (
