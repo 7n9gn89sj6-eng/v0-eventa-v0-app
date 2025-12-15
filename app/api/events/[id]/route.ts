@@ -5,7 +5,7 @@ import { validateEventEditToken } from "@/lib/eventEditToken";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export async function PUT(
+async function handleUpdate(
   req: Request,
   { params }: { params: { id: string } }
 ) {
@@ -47,4 +47,18 @@ export async function PUT(
   });
 
   return NextResponse.json({ success: true, event });
+}
+
+export async function PUT(
+  req: Request,
+  ctx: { params: { id: string } }
+) {
+  return handleUpdate(req, ctx);
+}
+
+export async function PATCH(
+  req: Request,
+  ctx: { params: { id: string } }
+) {
+  return handleUpdate(req, ctx);
 }
