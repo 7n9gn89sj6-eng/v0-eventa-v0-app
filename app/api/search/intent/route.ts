@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { generateObject } from "ai"
+import { createOpenAI } from "@ai-sdk/openai"
 import { z } from "zod"
 import {
   parseDatePhrase,
@@ -99,8 +100,13 @@ export async function POST(request: NextRequest) {
       fr: "French",
     }
 
+    // Create OpenAI provider instance with explicit API key
+    const openai = createOpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    })
+
     const { object } = await generateObject({
-      model: "openai/gpt-4o-mini",
+      model: openai("gpt-4o-mini"),
       schema: intentSchema,
       prompt: `You are a multilingual event assistant. The user's interface language is ${languageNames[uiLang] || "English"} (${uiLang}).
 
