@@ -42,6 +42,32 @@ export async function POST(request: NextRequest) {
 
     console.log(`[v0] Intent request - uiLang: ${uiLang}, query: ${query}`)
 
+    // Check if OpenAI API key is configured
+    if (!process.env.OPENAI_API_KEY) {
+      console.error("[v0] OPENAI_API_KEY not configured")
+      errorCode = "ERR_MISSING_API_KEY"
+      
+      console.log(
+        JSON.stringify({
+          phase: step.toString(),
+          intent: "UNKNOWN",
+          entities: {},
+          input_mode: inputMode,
+          ui_lang: uiLang,
+          error_code: errorCode,
+        }),
+      )
+
+      return NextResponse.json(
+        {
+          error: "AI service unavailable. Please configure OPENAI_API_KEY.",
+          error_code: errorCode,
+          intent: "unclear",
+        },
+        { status: 503 },
+      )
+    }
+
     if (!query || typeof query !== "string" || query.trim().length === 0) {
       errorCode = "ERR_EMPTY"
       console.log(
@@ -232,8 +258,23 @@ User input: "${query}"`,
       latency_ms: latency,
     })
   } catch (error) {
-    console.error("[v0] Intent recognition error:", error)
-    errorCode = "ERR_INTENT_PROCESSING"
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
+    
+    console.error("[v0] Intent recognition error:", errorMessage)
+    if (errorStack) {
+      console.error("[v0] Error stack:", errorStack)
+    }
+    
+    // Check for common error types
+    if (errorMessage.includes("API key") || errorMessage.includes("OPENAI_API_KEY")) {
+      errorCode = "ERR_MISSING_API_KEY"
+      console.error("[v0] OpenAI API key missing or invalid")
+    } else if (errorMessage.includes("timeout") || errorMessage.includes("TIMEOUT")) {
+      errorCode = "ERR_TIMEOUT"
+    } else {
+      errorCode = "ERR_INTENT_PROCESSING"
+    }
 
     console.log(
       JSON.stringify({
@@ -242,13 +283,17 @@ User input: "${query}"`,
         entities: {},
         input_mode: inputMode,
         error_code: errorCode,
+        error_message: errorMessage,
       }),
     )
 
     return NextResponse.json(
       {
-        error: "Failed to process query",
+        error: errorCode === "ERR_MISSING_API_KEY" 
+          ? "AI service unavailable. Please check API configuration."
+          : "Failed to process query",
         error_code: errorCode,
+        ...(process.env.NODE_ENV === "development" && { details: errorMessage }),
       },
       { status: 500 },
     )
