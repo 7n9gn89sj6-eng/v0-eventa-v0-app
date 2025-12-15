@@ -149,9 +149,16 @@ export function EventsListingContent({
     }
   }
 
+  // Sync q state with initialQuery prop when it changes
+  useEffect(() => {
+    if (initialQuery !== undefined && initialQuery !== q) {
+      setQ(initialQuery)
+    }
+  }, [initialQuery])
+
   useEffect(() => {
     runSearch()
-  }, [cityFilter, selectedCategory, initialDateFrom, initialDateTo])
+  }, [q, cityFilter, selectedCategory, initialDateFrom, initialDateTo])
 
   const handleSmartSearch = async (query: string) => {
     setQ(query)
