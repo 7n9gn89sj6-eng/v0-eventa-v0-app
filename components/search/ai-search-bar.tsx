@@ -132,7 +132,33 @@ export const AISearchBar = forwardRef<AISearchBarRef, AISearchBarProps>(({ onSea
         }),
       })
 
-      const intentData = await intentResponse.json()
+      let intentData: any = null
+      let intentFailed = false
+
+      if (!intentResponse.ok) {
+        console.error("[v0] Intent API failed, using fallback")
+        intentFailed = true
+        // Fallback: treat as search intent with basic entity extraction
+        intentData = {
+          intent: "search",
+          extracted: {},
+          paraphrase: `Searching for: ${query}`,
+        }
+      } else {
+        intentData = await intentResponse.json()
+        
+        // If response has error, use fallback
+        if (intentData.error || !intentData.intent) {
+          console.error("[v0] Intent API returned error, using fallback:", intentData.error)
+          intentFailed = true
+          intentData = {
+            intent: "search",
+            extracted: {},
+            paraphrase: `Searching for: ${query}`,
+          }
+        }
+      }
+
       console.log("[v0] Intent response:", intentData)
 
       if (intentData.paraphrase) {
