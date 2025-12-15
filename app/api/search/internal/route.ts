@@ -12,9 +12,19 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { entities, query, uiLang = "en" } = body
+    const { entities = {}, query, uiLang = "en" } = body
 
     console.log(`[v0] Internal search request - uiLang: ${uiLang}`, { entities, query })
+
+    // Ensure query exists for search
+    if (!query || typeof query !== "string" || query.trim().length === 0) {
+      console.log("[v0] No query provided, returning empty results")
+      return NextResponse.json({
+        results: [],
+        count: 0,
+        latency_ms: Date.now() - startTime,
+      })
+    }
 
     // Parse date filter from entities
     let dateFilter: { gte?: Date; lte?: Date } | undefined
@@ -78,6 +88,12 @@ export async function POST(request: NextRequest) {
 
       eventIds = fullTextResults.map((r) => r.id!).filter(Boolean)
       console.log(`[v0] Full-text search found ${eventIds.length} events`)
+      
+      if (eventIds.length === 0) {
+        console.log("[v0] Full-text search returned no results, will try entity-only search if entities provided")
+      }
+    } else {
+      console.log("[v0] No query provided, will search by entities only if provided")
     }
 
     // Build where clause for fetching full event objects
@@ -93,36 +109,45 @@ export async function POST(request: NextRequest) {
       where.id = { in: eventIds }
     }
 
-    // City filter
-    if (entities.city) {
+    // Build OR conditions for venue and category
+    const orConditions: any[] = []
+
+    // Venue filter
+    if (entities?.venue) {
+      orConditions.push(
+        { venueName: { contains: entities.venue, mode: "insensitive" } },
+        { locationAddress: { contains: entities.venue, mode: "insensitive" } }
+      )
+    }
+
+    // Category filter
+    if (entities?.type || entities?.category) {
+      const searchCategory = entities.type || entities.category
+      const categoryEnum = mapToEventCategory(searchCategory)
+
+      if (categoryEnum) {
+        orConditions.push({ category: categoryEnum })
+      }
+      if (searchCategory) {
+        orConditions.push({ categories: { hasSome: [searchCategory, categoryEnum].filter(Boolean) } })
+      }
+    }
+
+    // Add OR conditions if any exist
+    if (orConditions.length > 0) {
+      where.OR = orConditions
+    }
+
+    // City filter (applied separately as it's not part of OR)
+    if (entities?.city) {
       where.city = {
         contains: entities.city,
         mode: "insensitive",
       }
     }
 
-    // Venue filter
-    if (entities.venue) {
-      where.OR = [
-        { venueName: { contains: entities.venue, mode: "insensitive" } },
-        { locationAddress: { contains: entities.venue, mode: "insensitive" } },
-      ]
-    }
-
-    // Category filter
-    if (entities.type || entities.category) {
-      const searchCategory = entities.type || entities.category
-      const categoryEnum = mapToEventCategory(searchCategory)
-
-      // Search in both category (new) and categories (old) fields
-      where.OR = [
-        ...(where.OR || []),
-        { category: categoryEnum },
-        { categories: { hasSome: [searchCategory, categoryEnum].filter(Boolean) } },
-      ]
-    }
-
     console.log("[v0] Search query where clause:", JSON.stringify(where, null, 2))
+    console.log(`[v0] Searching with: query="${query}", eventIds=${eventIds.length}, entities=`, entities)
 
     // Execute search - fetch full event objects
     let events = await db.event.findMany({
