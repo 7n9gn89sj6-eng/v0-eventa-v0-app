@@ -1,40 +1,65 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
-export default function EditEventForm({ event, token }: any) {
-  const router = useRouter();
+interface Props {
+  event: {
+    id: string;
+    title: string;
+    description: string | null;
+  };
+  token: string;
+}
+
+export default function EditEventForm({ event, token }: Props) {
   const [title, setTitle] = useState(event.title);
   const [description, setDescription] = useState(event.description ?? "");
   const [saving, setSaving] = useState(false);
 
-  async function handleSave() {
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
     setSaving(true);
 
-    const res = await fetch(`/api/events/${event.id}?token=${token}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, description }),
-    });
+    try {
+      const res = await fetch(
+        `/api/events/${event.id}?token=${token}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            title,
+            description,
+          }),
+        }
+      );
 
-    if (!res.ok) {
-      alert("Save failed");
+      if (!res.ok) {
+        console.error("Save failed", await res.text());
+        alert("Save failed");
+        setSaving(false);
+        return;
+      }
+
+      // success → go back to event page
+      window.location.href = `/events/${event.id}`;
+    } catch (err) {
+      console.error("Save error", err);
+      alert("Unexpected error while saving");
       setSaving(false);
-      return;
     }
-
-    router.push(`/events/${event.id}`);
   }
 
   return (
-    <div className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <label className="block mb-1 font-medium">Title</label>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           className="border p-2 w-full rounded"
+          required
         />
       </div>
 
@@ -49,12 +74,12 @@ export default function EditEventForm({ event, token }: any) {
       </div>
 
       <button
-        onClick={handleSave}
+        type="submit"
         disabled={saving}
-        className="bg-blue-600 text-white px-4 py-2 rounded"
+        className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
       >
         {saving ? "Saving…" : "Save Changes"}
       </button>
-    </div>
+    </form>
   );
 }
