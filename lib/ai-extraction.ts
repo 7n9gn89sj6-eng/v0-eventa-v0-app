@@ -318,8 +318,12 @@ export async function suggestFollowUpQuestion(
   extraction: EventExtractionOutput,
   missingField: "datetime" | "location",
 ): Promise<string> {
+  const openai = createOpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  })
+
   const { text } = await generateObject({
-    model: "openai/gpt-4o-mini",
+    model: openai("gpt-4o-mini"),
     schema: {
       type: "object",
       properties: {
