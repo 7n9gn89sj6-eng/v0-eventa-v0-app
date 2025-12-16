@@ -12,23 +12,46 @@ interface EditPageProps {
 }
 
 export default async function EditEventPage(props: EditPageProps) {
+  let params: { id: string };
+  let searchParams: { token?: string };
+  let eventId: string;
+  let token: string | null;
+
   try {
-    const params = await props.params;
-    const searchParams = await props.searchParams;
+    params = await props.params;
+    searchParams = await props.searchParams;
+    eventId = params.id;
+    token = searchParams.token ?? null;
+  } catch (error) {
+    return (
+      <div className="max-w-2xl mx-auto p-8">
+        <div className="p-6 text-red-500">Error loading page parameters.</div>
+      </div>
+    );
+  }
 
-    const eventId = params.id;
-    const token = searchParams.token ?? null;
+  if (!eventId || !token) {
+    return <div className="p-6 text-red-500">Missing edit token.</div>;
+  }
 
-    if (!eventId || !token) {
-      return <div className="p-6 text-red-500">Missing edit token.</div>;
-    }
+  let isValid: boolean;
+  try {
+    isValid = await validateEventEditToken(eventId, token);
+  } catch (error) {
+    return (
+      <div className="max-w-2xl mx-auto p-8">
+        <div className="p-6 text-red-500">Error validating edit token. Please try again.</div>
+      </div>
+    );
+  }
 
-    const isValid = await validateEventEditToken(eventId, token);
-    if (!isValid) {
-      return <div className="p-6 text-red-500">Invalid or expired edit token.</div>;
-    }
+  if (!isValid) {
+    return <div className="p-6 text-red-500">Invalid or expired edit token.</div>;
+  }
 
-    const event = await db.event.findUnique({ 
+  let event;
+  try {
+    event = await db.event.findUnique({ 
       where: { id: eventId },
       select: {
         id: true,
@@ -36,30 +59,29 @@ export default async function EditEventPage(props: EditPageProps) {
         description: true,
       },
     });
-    
-    if (!event) {
-      return notFound();
-    }
-
-    // Ensure description is serializable (can be null)
-    const serializableEvent = {
-      id: event.id,
-      title: event.title,
-      description: event.description ?? null,
-    };
-
+  } catch (error) {
     return (
       <div className="max-w-2xl mx-auto p-8">
-        <h1 className="text-2xl font-semibold mb-6">Edit Event</h1>
-        <EditEventForm event={serializableEvent} token={token} />
+        <div className="p-6 text-red-500">Error loading event. Please try again.</div>
       </div>
     );
-  } catch (error) {
-    // Log error for debugging (only in development)
-    if (process.env.NODE_ENV === "development") {
-      console.error("[edit/page] Error:", error);
-    }
-    // Re-throw to let Next.js error boundary handle it
-    throw error;
   }
+  
+  if (!event) {
+    return notFound();
+  }
+
+  // Ensure description is serializable (can be null)
+  const serializableEvent = {
+    id: event.id,
+    title: event.title,
+    description: event.description ?? null,
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto p-8">
+      <h1 className="text-2xl font-semibold mb-6">Edit Event</h1>
+      <EditEventForm event={serializableEvent} token={token} />
+    </div>
+  );
 }
