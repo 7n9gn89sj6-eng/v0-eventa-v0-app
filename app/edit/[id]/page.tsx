@@ -12,28 +12,47 @@ interface EditPageProps {
 }
 
 export default async function EditEventPage(props: EditPageProps) {
-  const params = await props.params;
-  const searchParams = await props.searchParams;
+  try {
+    const params = await props.params;
+    const searchParams = await props.searchParams;
 
-  const eventId = params.id;
-  const token = searchParams.token ?? null;
+    const eventId = params.id;
+    const token = searchParams.token ?? null;
 
-  if (!eventId || !token) {
-    return <div className="p-6 text-red-500">Missing edit token.</div>;
+    if (!eventId || !token) {
+      return <div className="p-6 text-red-500">Missing edit token.</div>;
+    }
+
+    const isValid = await validateEventEditToken(eventId, token);
+    if (!isValid) {
+      return <div className="p-6 text-red-500">Invalid or expired edit token.</div>;
+    }
+
+    const event = await db.event.findUnique({ 
+      where: { id: eventId },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+      },
+    });
+    
+    if (!event) return notFound();
+
+    return (
+      <div className="max-w-2xl mx-auto p-8">
+        <h1 className="text-2xl font-semibold mb-6">Edit Event</h1>
+        <EditEventForm event={event} token={token} />
+      </div>
+    );
+  } catch (error) {
+    console.error("[edit/page] Error:", error);
+    return (
+      <div className="max-w-2xl mx-auto p-8">
+        <div className="p-6 text-red-500">
+          An error occurred while loading the edit page. Please try again.
+        </div>
+      </div>
+    );
   }
-
-  const isValid = await validateEventEditToken(eventId, token);
-  if (!isValid) {
-    return <div className="p-6 text-red-500">Invalid or expired edit token.</div>;
-  }
-
-  const event = await db.event.findUnique({ where: { id: eventId } });
-  if (!event) return notFound();
-
-  return (
-    <div className="max-w-2xl mx-auto p-8">
-      <h1 className="text-2xl font-semibold mb-6">Edit Event</h1>
-      <EditEventForm event={event} token={token} />
-    </div>
-  );
 }

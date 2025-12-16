@@ -4,8 +4,8 @@ import { EventDetail } from "@/components/events/event-detail"
 import type { Metadata } from "next"
 import { getSession } from "@/lib/jwt"
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const { id } = params
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params
 
   const event = await db.event.findUnique({
     where: { id },
@@ -27,11 +27,11 @@ export default async function EventPage({
   params,
   searchParams,
 }: {
-  params: { id: string }
-  searchParams: { created?: string; edited?: string }
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ created?: string; edited?: string }>
 }) {
-  const { id } = params
-  const { created, edited } = searchParams
+  const { id } = await params
+  const { created, edited } = await searchParams
 
   const session = await getSession()
 
