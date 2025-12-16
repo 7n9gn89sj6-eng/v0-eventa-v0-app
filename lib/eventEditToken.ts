@@ -1,6 +1,7 @@
 import db from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
+import { logger } from "@/lib/logger";
 
 export async function createEventEditToken(eventId: string, endDate?: Date): Promise<string> {
   const token = randomUUID();
@@ -26,19 +27,41 @@ export async function validateEventEditToken(
   eventId: string,
   token: string
 ): Promise<boolean> {
-  if (!token) return false;
+  try {
+    if (!token) {
+      logger.debug("[eventEditToken] No token provided", { eventId });
+      return false;
+    }
 
-  const records = await db.eventEditToken.findMany({
-    where: { eventId },
-    select: { tokenHash: true, expires: true },
-  });
+    const records = await db.eventEditToken.findMany({
+      where: { eventId },
+      select: { tokenHash: true, expires: true },
+    });
 
-  const now = new Date();
+    if (records.length === 0) {
+      logger.debug("[eventEditToken] No tokens found for event", { eventId });
+      return false;
+    }
 
-  for (const rec of records) {
-    const match = await bcrypt.compare(token, rec.tokenHash);
-    if (match && rec.expires > now) return true;
+    const now = new Date();
+
+    for (const rec of records) {
+      try {
+        const match = await bcrypt.compare(token, rec.tokenHash);
+        if (match && rec.expires > now) {
+          logger.debug("[eventEditToken] Valid token found", { eventId });
+          return true;
+        }
+      } catch (compareError) {
+        logger.error("[eventEditToken] Error comparing token", compareError, { eventId });
+        // Continue checking other tokens
+      }
+    }
+
+    logger.debug("[eventEditToken] No valid token found", { eventId });
+    return false;
+  } catch (error) {
+    logger.error("[eventEditToken] Validation error", error, { eventId });
+    return false;
   }
-
-  return false;
 }
