@@ -3,6 +3,27 @@ import { Prisma } from "@prisma/client"
 import type { SearchResult, SearchFilters } from "@/lib/types"
 import { DateTime } from "luxon"
 import { foldAccents } from "@/lib/search/accent-fold"
+import { logger } from "@/lib/logger"
+
+// Type for raw database query result
+interface DatabaseEventRow {
+  id: string
+  title: string
+  description: string | null
+  startAt: Date | string
+  endAt: Date | string
+  city: string
+  country: string
+  venueName: string | null
+  address: string | null
+  lat: number | null
+  lng: number | null
+  categories: string[]
+  priceFree: boolean
+  imageUrls: string[]
+  rank: number
+  distance_km: number | null
+}
 
 export interface DatabaseSearchOptions {
   query: string
@@ -15,10 +36,12 @@ export interface DatabaseSearchOptions {
 }
 
 export async function searchDatabase(options: DatabaseSearchOptions): Promise<SearchResult[]> {
-  const { query, synonyms, categories, filters, userLat, userLng, limit = 20 } = options
+  try {
+    const { query, synonyms, categories, filters, userLat, userLng, limit = 20 } = options
 
-  const searchTerms = [query, ...synonyms].filter(Boolean).join(" | ")
-  const searchTermsFolded = foldAccents(searchTerms)
+    // Build search terms - join with OR operator for PostgreSQL full-text search
+    const searchTerms = [query, ...synonyms].filter(Boolean).join(" | ")
+    const searchTermsFolded = foldAccents(searchTerms)
 
   // Build where-clause
   const where: any = {
@@ -66,64 +89,90 @@ export async function searchDatabase(options: DatabaseSearchOptions): Promise<Se
       ? Prisma.sql`AND e.categories && ARRAY[${Prisma.join(categoryArray)}]::text[]`
       : Prisma.empty
 
-  // Public event filter - only show PUBLISHED events with SAFE AI status
-  const publicEventFilter = Prisma.sql`AND e.status = 'PUBLISHED' AND e.moderation_status = 'APPROVED'`
+  // Public event filter - only show PUBLISHED events with APPROVED moderation status
+  // Note: Prisma uses camelCase column names
+  const publicEventFilter = Prisma.sql`AND e.status = 'PUBLISHED' AND e."moderationStatus" = 'APPROVED'`
 
   // Execute search query
-  const events = await db.$queryRaw<any[]>(Prisma.sql`
+  // Note: Prisma uses camelCase for column names, so we need to quote them
+  // Escape search terms for SQL injection safety - replace single quotes with double single quotes
+  const escapedSearchTerms = searchTerms.replace(/'/g, "''")
+  const escapedSearchTermsFolded = searchTermsFolded.replace(/'/g, "''")
+  
+  // Use Prisma.raw() to safely inject escaped strings into SQL
+  const searchTermsSQL = Prisma.raw(`'${escapedSearchTerms}'`)
+  const searchTermsFoldedSQL = Prisma.raw(`'${escapedSearchTermsFolded}'`)
+  
+  const events = await db.$queryRaw<DatabaseEventRow[]>(Prisma.sql`
     SELECT 
-      e.*,
+      e.id, e.title, e.description, e."startAt", e."endAt", e.city, e.country,
+      e."venueName", e.address, e.lat, e.lng, e.categories, e."priceFree", e."imageUrls",
       GREATEST(
-        ts_rank(to_tsvector('simple', e.search_text), plainto_tsquery('simple', ${searchTerms})),
-        ts_rank(to_tsvector('simple', COALESCE(e.search_text_folded, '')), plainto_tsquery('simple', ${searchTermsFolded}))
+        ts_rank(to_tsvector('simple', e."searchText"), plainto_tsquery('simple', ${searchTermsSQL}::text)),
+        ts_rank(to_tsvector('simple', COALESCE(e."searchTextFolded", '')), plainto_tsquery('simple', ${searchTermsFoldedSQL}::text))
       ) AS rank,
       CASE 
-        WHEN ${userLat}::float IS NOT NULL 
-         AND ${userLng}::float IS NOT NULL 
+        WHEN ${userLat ?? null}::float IS NOT NULL 
+         AND ${userLng ?? null}::float IS NOT NULL 
          AND e.lat IS NOT NULL 
          AND e.lng IS NOT NULL
         THEN (
           6371 * acos(
-            cos(radians(${userLat}::float)) * cos(radians(e.lat)) *
-            cos(radians(e.lng) - radians(${userLng}::float)) +
-            sin(radians(${userLat}::float)) * sin(radians(e.lat))
+            cos(radians(${userLat ?? null}::float)) * cos(radians(e.lat)) *
+            cos(radians(e.lng) - radians(${userLng ?? null}::float)) +
+            sin(radians(${userLat ?? null}::float)) * sin(radians(e.lat))
           )
         )
         ELSE NULL
       END AS distance_km
     FROM "Event" e
     WHERE 
-      e.start_at >= ${where.startAt.gte || new Date()}
+      e."startAt" >= ${where.startAt.gte || new Date()}
       ${publicEventFilter}
       ${categorySQL}
       ${requiresFree}
       AND (
-        to_tsvector('simple', e.search_text) @@ plainto_tsquery('simple', ${searchTerms})
-        OR to_tsvector('simple', COALESCE(e.search_text_folded, '')) @@ plainto_tsquery('simple', ${searchTermsFolded})
+        to_tsvector('simple', e."searchText") @@ plainto_tsquery('simple', ${searchTermsSQL}::text)
+        OR to_tsvector('simple', COALESCE(e."searchTextFolded", '')) @@ plainto_tsquery('simple', ${searchTermsFoldedSQL}::text)
       )
     ORDER BY 
       rank DESC,
       CASE WHEN distance_km IS NOT NULL THEN distance_km ELSE 999999 END ASC,
-      e.start_at ASC
+      e."startAt" ASC
     LIMIT ${limit}
   `)
 
   // Convert rows to SearchResult
-  return events.map((event) => ({
-    source: "eventa" as const,
-    id: event.id,
-    title: event.title,
-    startAt: event.start_at.toISOString(),
-    endAt: event.end_at.toISOString(),
-    venue: event.venue_name,
-    address: event.address,
-    lat: event.lat,
-    lng: event.lng,
-    url: `/events/${event.id}`,
-    snippet: (event.description || "").slice(0, 200) + "...",
-    distanceKm: event.distance_km ? Math.round(event.distance_km * 10) / 10 : undefined,
-    categories: event.categories,
-    priceFree: event.price_free,
-    imageUrl: event.image_urls?.[0],
-  }))
+  // Note: Prisma returns camelCase field names from raw queries
+  return events.map((event) => {
+    const startAt = event.startAt instanceof Date ? event.startAt : new Date(event.startAt);
+    const endAt = event.endAt instanceof Date ? event.endAt : new Date(event.endAt);
+    
+    return {
+      source: "eventa" as const,
+      id: event.id,
+      title: event.title,
+      startAt: startAt.toISOString(),
+      endAt: endAt.toISOString(),
+      venue: event.venueName || null,
+      address: event.address || null,
+      lat: event.lat ?? null,
+      lng: event.lng ?? null,
+      url: `/events/${event.id}`,
+      snippet: (event.description || "").slice(0, 200) + (event.description && event.description.length > 200 ? "..." : ""),
+      distanceKm: event.distance_km ? Math.round(event.distance_km * 10) / 10 : undefined,
+      categories: event.categories || [],
+      priceFree: event.priceFree ?? false,
+      imageUrl: event.imageUrls?.[0] || null,
+    };
+  })
+  } catch (error) {
+    logger.error("[searchDatabase] Database search failed", error, {
+      query: options.query,
+      synonyms: options.synonyms,
+      categories: options.categories,
+      filters: options.filters,
+    });
+    throw error;
+  }
 }

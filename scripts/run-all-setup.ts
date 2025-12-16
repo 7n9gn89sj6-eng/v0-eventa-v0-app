@@ -3,6 +3,9 @@ if (process.env.VERCEL === "1" || process.env.NODE_ENV === "production") {
   process.exit(0)
 }
 
+import dotenv from "dotenv"
+dotenv.config({ path: ".env.local" })
+
 import { neon } from "@neondatabase/serverless"
 import { exec } from "child_process"
 import { promisify } from "util"

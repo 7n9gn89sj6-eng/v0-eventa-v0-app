@@ -2,11 +2,14 @@ import db from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
 
-export async function createEventEditToken(eventId: string): Promise<string> {
+export async function createEventEditToken(eventId: string, endDate?: Date): Promise<string> {
   const token = randomUUID();
   const tokenHash = await bcrypt.hash(token, 12);
 
-  const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  // Token expires 30 days after creation, or 30 days after event end date, whichever is later
+  const baseExpiry = Date.now() + 30 * 24 * 60 * 60 * 1000;
+  const eventEndExpiry = endDate ? endDate.getTime() + 30 * 24 * 60 * 60 * 1000 : 0;
+  const expires = new Date(Math.max(baseExpiry, eventEndExpiry));
 
   await db.eventEditToken.create({
     data: {

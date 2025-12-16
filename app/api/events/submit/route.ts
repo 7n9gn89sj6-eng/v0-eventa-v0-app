@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import db from "@/lib/db";                       // <-- FIXED HERE
+import db from "@/lib/db";
 import { createEventEditToken } from "@/lib/eventEditToken";
 import { sendEventEditLinkEmailAPI } from "@/lib/email";
 import { moderateEvent } from "@/lib/ai-moderation";
 import { notifyAdminsEventNeedsReview } from "@/lib/admin-notifications";
+import { checkRateLimit, getClientIdentifier, rateLimiters } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,8 +46,24 @@ const EventSubmitSchema = z
 
 export async function POST(request: NextRequest) {
   try {
+    // Check rate limit
+    const clientId = getClientIdentifier(request);
+    const rateLimitResult = await checkRateLimit(clientId, rateLimiters.submit);
+    
+    if (!rateLimitResult.success) {
+      logger.warn("[submit] Rate limit exceeded", {
+        clientId,
+        limit: rateLimitResult.limit,
+        remaining: rateLimitResult.remaining,
+      });
+      return NextResponse.json(
+        { error: `Rate limit exceeded. Please try again in ${rateLimitResult.reset ? Math.ceil((rateLimitResult.reset - Date.now()) / 1000) : 'a few'} seconds.` },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
-    console.log("[submit] Incoming body:", body);
+    logger.debug("[submit] Incoming request", { clientId });
 
     const validated = EventSubmitSchema.parse(body);
 
@@ -190,12 +208,26 @@ export async function POST(request: NextRequest) {
         validated.end ?? validated.start
       );
 
-      await sendEventEditLinkEmailAPI(
+      const emailResult = await sendEventEditLinkEmailAPI(
         validated.creatorEmail,
         validated.title,
         event.id,
         token
       );
+
+      if (!emailResult.success) {
+        console.error("[submit] Email send failed:", emailResult.error);
+        console.error("[submit] Email config check:", {
+          RESEND_API_KEY: process.env.RESEND_API_KEY ? "SET" : "NOT SET",
+          EMAIL_FROM: process.env.EMAIL_FROM,
+          recipient: validated.creatorEmail,
+        });
+      } else {
+        console.log("[submit] Email sent successfully:", {
+          messageId: emailResult.result?.data?.id,
+          recipient: validated.creatorEmail,
+        });
+      }
     } catch (err) {
       console.error("[submit] Email error:", err);
     }

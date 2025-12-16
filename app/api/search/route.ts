@@ -4,23 +4,45 @@ import { normalizeQuery } from "@/lib/search/query-normalization"
 import { searchDatabase } from "@/lib/search/database-search"
 import { searchWeb, deduplicateResults } from "@/lib/search/web-search"
 import { ok, fail } from "@/lib/http"
+import { logger } from "@/lib/logger"
+import { checkRateLimit, getClientIdentifier, rateLimiters } from "@/lib/rate-limit"
+import type { SearchFilters, SearchResult } from "@/lib/types"
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now()
+  let body: any = null
+  
   try {
-    const body = await request.json()
+    // Check rate limit
+    const clientId = getClientIdentifier(request)
+    const rateLimitResult = await checkRateLimit(clientId, rateLimiters.search)
+    
+    if (!rateLimitResult.success) {
+      logger.warn("[search] Rate limit exceeded", {
+        clientId,
+        limit: rateLimitResult.limit,
+        remaining: rateLimitResult.remaining,
+        reset: rateLimitResult.reset,
+      })
+      return fail(
+        `Rate limit exceeded. Please try again in ${rateLimitResult.reset ? Math.ceil((rateLimitResult.reset - Date.now()) / 1000) : 'a few'} seconds.`,
+        429
+      )
+    }
+
+    body = await request.json()
     const { query, userLat, userLng, uiLang, filters, includeWeb = false } = body
 
     if (!query || query.trim().length === 0) {
       return fail("Query is required", 400)
     }
-
-    console.log("[v0] Search request:", { query, userLat, userLng, filters, includeWeb })
+    logger.info("[search] Request received", { query, userLat, userLng, filters, includeWeb })
 
     const langDetected = detectLanguage(query)
-    console.log("[v0] Detected language:", langDetected)
+    logger.debug("[search] Language detected", { lang: langDetected })
 
     const normalized = normalizeQuery(query, langDetected)
-    console.log("[v0] Normalized query:", normalized)
+    logger.debug("[search] Query normalized", normalized)
 
     const key = process.env.GOOGLE_API_KEY
     const cx = process.env.GOOGLE_PSE_ID
@@ -37,26 +59,54 @@ export async function POST(request: NextRequest) {
       limit: 20,
     })
 
-    console.log("[v0] Found", eventaResults.length, "Eventa results")
+    logger.info("[search] Database results", { count: eventaResults.length })
 
-    let webResults: any[] = []
+    let webResults: SearchResult[] = []
     const shouldSearchWeb = canWeb && (includeWeb || eventaResults.length < 6)
 
     if (shouldSearchWeb) {
-      console.log("[v0] Searching web...")
+      logger.debug("[search] Searching web")
       webResults = await searchWeb({
         query: normalized.normalized,
         limit: 10,
       })
-      console.log("[v0] Found", webResults.length, "web results")
+      logger.info("[search] Web results", { count: webResults.length })
     }
 
     const allResults = deduplicateResults(eventaResults, webResults)
-    console.log("[v0] Total results after deduplication:", allResults.length)
+    const duration = Date.now() - startTime
+    logger.info("[search] Search completed", { 
+      totalResults: allResults.length,
+      databaseResults: eventaResults.length,
+      webResults: webResults.length,
+      durationMs: duration,
+    })
 
     return ok(allResults)
   } catch (error) {
-    console.error("Search error:", error)
-    return fail("Search failed", 500)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const duration = Date.now() - startTime
+    
+    logger.error("[search] Search failed", error, {
+      query: body?.query,
+      filters: body?.filters,
+      durationMs: duration,
+    })
+    
+    // Return more specific error messages based on error type
+    if (errorMessage.includes("database") || errorMessage.includes("prisma") || errorMessage.includes("DATABASE")) {
+      return fail("Database search unavailable. Please try again later.", 503)
+    }
+    
+    if (errorMessage.includes("timeout") || errorMessage.includes("TIMEOUT")) {
+      return fail("Search request timed out. Please try again.", 504)
+    }
+    
+    // In development, include error details
+    if (process.env.NODE_ENV === "development") {
+      return fail(`Search failed: ${errorMessage}`, 500)
+    }
+    
+    return fail("Search failed. Please try again.", 500)
   }
 }

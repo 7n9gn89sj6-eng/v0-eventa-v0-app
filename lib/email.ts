@@ -7,7 +7,19 @@ import { Resend } from "resend";
 /*  Environment + URL hardening                                               */
 /* -------------------------------------------------------------------------- */
 
-const RAW_FROM = process.env.EMAIL_FROM || "no-reply@ithakigrouptour.com";
+// Use Resend test domain for development if EMAIL_FROM is not set or uses unverified domain
+const getDefaultFrom = () => {
+  if (process.env.EMAIL_FROM) {
+    return process.env.EMAIL_FROM;
+  }
+  // Use Resend test domain for local development (no verification needed)
+  if (process.env.NODE_ENV === "development") {
+    return "onboarding@resend.dev";
+  }
+  return "no-reply@ithakigrouptour.com";
+};
+
+const RAW_FROM = getDefaultFrom();
 const RAW_APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 const RESEND_KEY = process.env.RESEND_API_KEY;
 
@@ -92,6 +104,13 @@ async function coreSend(to: string, subject: string, html: string) {
   }
 
   try {
+    console.log("[email] Attempting to send email:", {
+      from: FROM,
+      to,
+      subject,
+      hasResendKey: !!RESEND_KEY,
+    });
+
     const result = await resend.emails.send({
       from: FROM,
       to,
@@ -99,10 +118,27 @@ async function coreSend(to: string, subject: string, html: string) {
       html,
     });
 
+    // Log full result for debugging
+    console.log("[email] Resend API response:", JSON.stringify(result, null, 2));
+
+    // Resend API can return errors in the result object without throwing
+    if (result.error) {
+      const errorMessage = result.error.message || "Resend API error";
+      console.error("[email] Resend API error:", errorMessage, result.error);
+      return { success: false, error: errorMessage };
+    }
+
+    console.log("[email] Email sent successfully:", {
+      messageId: result.data?.id,
+      to,
+      from: FROM,
+      status: result.data?.status,
+    });
+
     return { success: true, result };
   } catch (err: any) {
     const message = err?.message || "Email send error";
-    console.error("[email] Send failed:", message);
+    console.error("[email] Send failed:", message, err);
     return { success: false, error: message };
   }
 }
