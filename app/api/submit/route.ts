@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server"
 import type { NextResponse } from "next/server"
-import { jsonOk, jsonError, logInfo, logError } from "@/lib/logger"
+import { ok as jsonOk, fail as jsonError } from "@/lib/http"
+import { logger } from "@/lib/logger"
 import { FormSchema } from "@/lib/schemas/form"
 import { assertEnv } from "@/lib/env"
 import { randomUUID } from "crypto"
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
 
   const envCheck = assertEnv(["DATABASE_URL", "RESEND_API_KEY"])
   if (!envCheck.ok) {
-    logError("missing env", { requestId, missingKeys: envCheck.missing })
+    logger.error("missing env", undefined, { requestId, missingKeys: envCheck.missing })
     return withReqId(
       jsonError("Server error", 500, {
         label: "MISSING_ENV",
@@ -42,11 +43,9 @@ export async function POST(req: NextRequest) {
 
     if (!parsed.success) {
       const label = "VALIDATION_ERROR"
-      logError("form submit failed", {
+      logger.error("form submit failed", new Error("Validation failed"), {
         requestId,
         label,
-        err: "Validation failed",
-        stack: undefined,
       })
       return withReqId(
         jsonError("Validation error", 400, {
@@ -80,7 +79,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Log success with detailed metrics
-    logInfo("form submit ok", {
+    logger.info("form submit ok", {
       requestId,
       inputSummary: {
         title,
@@ -102,11 +101,9 @@ export async function POST(req: NextRequest) {
       label = "UPSTREAM_FETCH"
     }
 
-    logError("form submit failed", {
+    logger.error("form submit failed", err, {
       requestId,
       label,
-      err: err?.message,
-      stack: err?.stack,
     })
 
     const isDev = process.env.NODE_ENV !== "production"

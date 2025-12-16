@@ -10,12 +10,25 @@ export function ok<T>(data: T, status = 200): NextResponse {
 }
 
 /**
+ * Alias for ok() - for backward compatibility
+ */
+export const jsonOk = ok
+
+/**
  * Standard error response helper
  * @param message - Error message
  * @param status - HTTP status code (default: 400)
+ * @param meta - Additional metadata to include in error response
  */
-export function fail(message: string, status = 400): NextResponse {
-  return NextResponse.json({ error: message }, { status })
+export function fail(message: string, status = 400, meta?: Record<string, unknown>): NextResponse {
+  return NextResponse.json({ error: message, ...meta }, { status })
+}
+
+/**
+ * Alias for fail() with metadata support - for backward compatibility
+ */
+export function jsonError(message: string, status = 400, meta?: Record<string, unknown>): NextResponse {
+  return fail(message, status, meta)
 }
 
 /**
