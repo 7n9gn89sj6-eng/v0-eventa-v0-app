@@ -6,7 +6,8 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 
 export function getAdminInfo() {
   try {
-    const token = cookies().get(COOKIE_NAME)?.value;
+    const cookieStore = cookies();
+    const token = cookieStore.get(COOKIE_NAME)?.value;
     if (!token) return null;
 
     const decoded: any = jwt.verify(token, JWT_SECRET);

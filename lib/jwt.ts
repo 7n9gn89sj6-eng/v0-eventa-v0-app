@@ -21,23 +21,32 @@ export function createAdminJwt(adminId: string) {
 
 /** Store the admin JWT in a secure cookie */
 export function setAdminCookie(token: string) {
-  cookies().set({
-    name: "admin_token",
-    value: token,
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 7, // 7 days
-  });
+  try {
+    const cookieStore = cookies();
+    cookieStore.set({
+      name: "admin_token",
+      value: token,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+    });
+  } catch (error) {
+    // Silently fail if cookies are not available (e.g., in static generation)
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[jwt] Failed to set admin cookie:", error);
+    }
+  }
 }
 
 /** Validate admin cookie and return decoded payload */
 export async function getAdminSession() {
-  const token = cookies().get("admin_token")?.value;
-  if (!token) return null;
-
   try {
+    const cookieStore = cookies();
+    const token = cookieStore.get("admin_token")?.value;
+    if (!token) return null;
+
     const decoded = jwt.verify(token, JWT_SECRET) as {
       userId: string;
       role: string;
@@ -73,15 +82,23 @@ export async function createSession(userId: string) {
   });
 
   // Set session cookie
-  cookies().set({
-    name: "session",
-    value: sessionToken,
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 30,
-  });
+  try {
+    const cookieStore = cookies();
+    cookieStore.set({
+      name: "session",
+      value: sessionToken,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30,
+    });
+  } catch (error) {
+    // Silently fail if cookies are not available (e.g., in static generation)
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[jwt] Failed to set session cookie:", error);
+    }
+  }
 
   return sessionToken;
 }
@@ -91,16 +108,25 @@ export async function createSession(userId: string) {
  * Returns: { userId } or null
  */
 export async function getSession() {
-  const token = cookies().get("session")?.value;
-  if (!token) return null;
+  try {
+    const cookieStore = cookies();
+    const token = cookieStore.get("session")?.value;
+    if (!token) return null;
 
-  const session = await db.session.findUnique({
-    where: { sessionToken: token },
-    select: { userId: true, expires: true },
-  });
+    const session = await db.session.findUnique({
+      where: { sessionToken: token },
+      select: { userId: true, expires: true },
+    });
 
-  if (!session) return null;
-  if (session.expires < new Date()) return null;
+    if (!session) return null;
+    if (session.expires < new Date()) return null;
 
-  return { userId: session.userId };
+    return { userId: session.userId };
+  } catch (error) {
+    // Return null if cookies are not available (e.g., in static generation)
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[jwt] Failed to get session:", error);
+    }
+    return null;
+  }
 }
