@@ -7,7 +7,7 @@ import { notifyAdminsEventUpdated } from "@/lib/admin-notifications";
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getSession();
@@ -27,6 +27,7 @@ export async function PATCH(
       );
     }
 
+    const { id } = await params;
     const { action, reason } = await request.json();
 
     const validActions = [
@@ -42,7 +43,7 @@ export async function PATCH(
     }
 
     const event = await db.event.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: {
         id: true,
         title: true,
@@ -67,7 +68,7 @@ export async function PATCH(
     --------------------------------------------------------- */
     if (action === "approve") {
       updated = await db.event.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           status: "PUBLISHED",
           aiStatus: "SAFE",
@@ -93,7 +94,7 @@ export async function PATCH(
       });
 
       await notifyAdminsEventUpdated({
-        eventId: params.id,
+        eventId: id,
         title: updated.title,
         action: "ADMIN_APPROVED",
         adminEmail: admin.email,
@@ -106,7 +107,7 @@ export async function PATCH(
     --------------------------------------------------------- */
     else if (action === "reject") {
       updated = await db.event.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           status: "DRAFT",
           aiStatus: "REJECTED",
@@ -131,7 +132,7 @@ export async function PATCH(
       });
 
       await notifyAdminsEventUpdated({
-        eventId: params.id,
+        eventId: id,
         title: updated.title,
         action: "ADMIN_REJECTED",
         adminEmail: admin.email,
@@ -144,7 +145,7 @@ export async function PATCH(
     --------------------------------------------------------- */
     else if (action === "needs_review") {
       updated = await db.event.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           status: "PENDING",
           aiStatus: "NEEDS_REVIEW",
@@ -169,7 +170,7 @@ export async function PATCH(
       });
 
       await notifyAdminsEventUpdated({
-        eventId: params.id,
+        eventId: id,
         title: updated.title,
         action: "ADMIN_MARKED_NEEDS_REVIEW",
         adminEmail: admin.email,
@@ -182,7 +183,7 @@ export async function PATCH(
     --------------------------------------------------------- */
     else if (action === "publish") {
       updated = await db.event.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           status: "PUBLISHED",
           publishedAt: event.publishedAt ?? now,
@@ -201,7 +202,7 @@ export async function PATCH(
       });
 
       await notifyAdminsEventUpdated({
-        eventId: params.id,
+        eventId: id,
         title: updated.title,
         action: "ADMIN_PUBLISHED",
         adminEmail: admin.email,
@@ -214,7 +215,7 @@ export async function PATCH(
     --------------------------------------------------------- */
     else if (action === "unpublish") {
       updated = await db.event.update({
-        where: { id: params.id },
+        where: { id },
         data: {
           status: "DRAFT",
         },
@@ -232,7 +233,7 @@ export async function PATCH(
       });
 
       await notifyAdminsEventUpdated({
-        eventId: params.id,
+        eventId: id,
         title: updated.title,
         action: "ADMIN_UNPUBLISHED",
         adminEmail: admin.email,

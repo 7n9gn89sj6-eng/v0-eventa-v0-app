@@ -28,13 +28,8 @@ export async function GET() {
     });
   }
 
-  // Create session (correct payload!)
-  const token = await createSession({
-    userId: user.id,
-    email: user.email,
-    isVerified: true,
-    isAdmin: true,
-  });
+  // Create session - createSession expects userId as a string
+  const token = await createSession(user.id);
 
   const res = NextResponse.json({ ok: true, admin: email });
   res.cookies.set("eventa-session", token, {

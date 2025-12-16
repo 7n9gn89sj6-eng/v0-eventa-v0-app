@@ -4,7 +4,10 @@ import { getSession } from "@/lib/jwt";
 import { db } from "@/lib/db";
 import { analyzeEventContent } from "@/lib/ai-moderation";
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const session = await getSession();
     if (!session) {
@@ -20,8 +23,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    const { id } = await params;
     const event = await db.event.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!event) {

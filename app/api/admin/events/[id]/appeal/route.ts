@@ -7,7 +7,10 @@ import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit-log";
 import { sendEmailAPI } from "@/lib/email"; // ⬅️ changed
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const session = await getSession();
 
@@ -24,7 +27,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "Forbidden - Admin access required" }, { status: 403 });
     }
 
-    const { id } = params;
+    const { id } = await params;
     const { appealId, action, reviewNotes } = await request.json();
 
     if (!["approve", "reject"].includes(action)) {
