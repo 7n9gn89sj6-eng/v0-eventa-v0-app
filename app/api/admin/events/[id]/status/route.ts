@@ -83,7 +83,7 @@ export async function PATCH(
       });
 
       await createAuditLog({
-        eventId: params.id,
+        eventId: id,
         actor: "admin",
         actorId: admin.id,
         action: "ADMIN_APPROVED",
@@ -121,7 +121,7 @@ export async function PATCH(
       });
 
       await createAuditLog({
-        eventId: params.id,
+        eventId: id,
         actor: "admin",
         actorId: admin.id,
         action: "ADMIN_REJECTED",
@@ -159,7 +159,7 @@ export async function PATCH(
       });
 
       await createAuditLog({
-        eventId: params.id,
+        eventId: id,
         actor: "admin",
         actorId: admin.id,
         action: "ADMIN_MARKED_NEEDS_REVIEW",
@@ -191,7 +191,7 @@ export async function PATCH(
       });
 
       await createAuditLog({
-        eventId: params.id,
+        eventId: id,
         actor: "admin",
         actorId: admin.id,
         action: "ADMIN_PUBLISHED",
@@ -222,7 +222,7 @@ export async function PATCH(
       });
 
       await createAuditLog({
-        eventId: params.id,
+        eventId: id,
         actor: "admin",
         actorId: admin.id,
         action: "ADMIN_UNPUBLISHED",
