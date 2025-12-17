@@ -39,14 +39,31 @@ export function intentToURLParams(intentResponse: any): URLSearchParams {
 
   // Add date range if extracted (use date_iso if available, otherwise parse date)
   if (extracted.date_iso) {
-    // If we have an ISO date, use it as both from and to for that day
     const date = new Date(extracted.date_iso)
-    const startOfDay = new Date(date)
-    startOfDay.setHours(0, 0, 0, 0)
-    const endOfDay = new Date(date)
-    endOfDay.setHours(23, 59, 59, 999)
-    params.set("date_from", startOfDay.toISOString())
-    params.set("date_to", endOfDay.toISOString())
+    
+    // Check if this is a month-only date (no specific day mentioned)
+    // Pattern: "March 2026", "March 2025" (month name + year, no day)
+    const dateStr = (extracted.date || "").toLowerCase().trim()
+    const monthYearPattern = /^(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{4}$/i
+    const isMonthOnly = monthYearPattern.test(dateStr)
+    
+    if (isMonthOnly) {
+      // Month range: from first day to last day of the month
+      const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1)
+      startOfMonth.setHours(0, 0, 0, 0)
+      const endOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0)
+      endOfMonth.setHours(23, 59, 59, 999)
+      params.set("date_from", startOfMonth.toISOString())
+      params.set("date_to", endOfMonth.toISOString())
+    } else {
+      // Single day: use the date as both from and to
+      const startOfDay = new Date(date)
+      startOfDay.setHours(0, 0, 0, 0)
+      const endOfDay = new Date(date)
+      endOfDay.setHours(23, 59, 59, 999)
+      params.set("date_from", startOfDay.toISOString())
+      params.set("date_to", endOfDay.toISOString())
+    }
   } else if (extracted.date) {
     const dateRange = parseDateExpression(extracted.date)
     if (dateRange.date_from) {

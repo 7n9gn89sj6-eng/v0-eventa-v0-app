@@ -150,12 +150,16 @@ ENTITY EXTRACTION (normalize to English):
 - date: date phrase - extract ANY date mentioned:
   * Relative dates: "today", "tomorrow", "this weekend", "next Monday" → keep as-is in English
   * Specific dates: "March 15th", "March 15, 2025", "15/03/2025", "March 20" → normalize to English format like "March 15, 2025" or "March 15th"
+  * Month + Year: "March 2026", "March 2025" → normalize to "March 2026" or "March 2025"
   * Multilingual: "mañana" → "tomorrow", "αύριο" → "tomorrow", "domani" → "tomorrow"
+  * IMPORTANT: If a year is explicitly mentioned (e.g., "2026", "2025"), ALWAYS use that exact year. Never default to current year if a year is specified.
   * If year is missing, assume current or next year based on context
-- date_iso: For SPECIFIC calendar dates (not relative), also provide ISO format (YYYY-MM-DD):
-  * "March 15th" → "2025-03-15" (assume current year if not specified, or next year if date has passed)
-  * "March 15, 2025" → "2025-03-15"
-  * "15/03/2025" → "2025-03-15"
+- date_iso: For SPECIFIC calendar dates (not relative), also provide ISO format:
+  * Single day: "March 15, 2026" → "2026-03-15"
+  * Month + Year (no day): "March 2026" → "2026-03-01" (first day of month)
+  * Year only: "2026" → "2026-01-01" (first day of year)
+  * CRITICAL: Always use the EXACT year specified. If user says "March 2026", use 2026, NOT 2025.
+  * If year is missing: "March 15th" → "2025-03-15" (assume current year if date hasn't passed, or next year if it has)
   * Only provide date_iso for specific calendar dates, NOT for relative dates like "today" or "tomorrow"
 - time: time phrase (normalize to English: "8pm", "20:00" → "8pm")
 - description: any descriptive text (translate to English)
@@ -200,6 +204,19 @@ User input: "${query}"`,
       // Validate ISO date format
       if (/^\d{4}-\d{2}-\d{2}$/.test(object.extracted.date_iso)) {
         dateISO = object.extracted.date_iso
+        
+        // Validate that if a year was mentioned in the query, it matches the extracted date_iso
+        const queryYear = query.match(/\b(20\d{2})\b/)
+        if (queryYear) {
+          const extractedYear = object.extracted.date_iso.substring(0, 4)
+          if (queryYear[1] !== extractedYear) {
+            console.warn(`[v0] Year mismatch: query mentions ${queryYear[1]} but extracted ${extractedYear}. Correcting to ${queryYear[1]}.`)
+            // Force the correct year from the query
+            dateISO = queryYear[1] + object.extracted.date_iso.substring(4)
+          }
+        }
+      } else {
+        console.warn(`[v0] Invalid date_iso format: ${object.extracted.date_iso}`)
       }
     }
     
