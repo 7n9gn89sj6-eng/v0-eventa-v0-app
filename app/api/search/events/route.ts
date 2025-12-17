@@ -198,11 +198,22 @@ export async function GET(req: NextRequest) {
     }
 
     // City filter: must match exactly (case-insensitive)
+    // If we have an AND array, add city to it; otherwise add as top-level property
     if (city) {
-      where.city = { contains: city, mode: "insensitive" }
+      const cityFilter = { city: { contains: city, mode: "insensitive" } }
+      if (where.AND && Array.isArray(where.AND)) {
+        where.AND.push(cityFilter)
+      } else {
+        where.city = cityFilter.city
+      }
     }
     if (country) {
-      where.country = { contains: country, mode: "insensitive" }
+      const countryFilter = { country: { contains: country, mode: "insensitive" } }
+      if (where.AND && Array.isArray(where.AND)) {
+        where.AND.push(countryFilter)
+      } else {
+        where.country = countryFilter.country
+      }
     }
 
     console.log("[v0] Final where clause:", JSON.stringify(where, null, 2))
