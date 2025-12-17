@@ -329,9 +329,48 @@ export async function GET(req: NextRequest) {
       return matchesQuery && matchesCity && matchesCountry
     })
 
+    // Filter web results by city if city filter is specified
+    let filteredWebResults = webResults
+    if (city) {
+      const cityLower = city.toLowerCase()
+      filteredWebResults = webResults.filter((result) => {
+        const resultCity = (result.city || result.location?.city || "").toLowerCase()
+        return resultCity.includes(cityLower) || cityLower.includes(resultCity)
+      })
+      console.log(`[v0] Filtered web results by city "${city}": ${webResults.length} → ${filteredWebResults.length}`)
+    }
+
     // Combine internal and web results
-    const allEvents = [...events, ...webResults]
-    const allExternal = [...webResults, ...externalEvents]
+    const allEvents = [...events, ...filteredWebResults]
+    
+    // Sort results: prioritize city matches, then by date
+    if (city) {
+      const cityLower = city.toLowerCase()
+      allEvents.sort((a, b) => {
+        const aCity = (a.city || "").toLowerCase()
+        const bCity = (b.city || "").toLowerCase()
+        const aMatchesCity = aCity.includes(cityLower) || cityLower.includes(aCity)
+        const bMatchesCity = bCity.includes(cityLower) || cityLower.includes(bCity)
+        
+        // First sort: city match (matching city first)
+        if (aMatchesCity && !bMatchesCity) return -1
+        if (!aMatchesCity && bMatchesCity) return 1
+        
+        // Second sort: date (earlier dates first)
+        const aDate = new Date(a.startAt).getTime()
+        const bDate = new Date(b.startAt).getTime()
+        return aDate - bDate
+      })
+    } else {
+      // No city filter: just sort by date
+      allEvents.sort((a, b) => {
+        const aDate = new Date(a.startAt).getTime()
+        const bDate = new Date(b.startAt).getTime()
+        return aDate - bDate
+      })
+    }
+    
+    const allExternal = [...filteredWebResults, ...externalEvents]
 
     return NextResponse.json({
       events: allEvents,
