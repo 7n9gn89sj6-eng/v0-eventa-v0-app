@@ -117,19 +117,30 @@ IMPORTANT MULTILINGUAL RULES:
 4. The paraphrase MUST be in ${languageNames[uiLang] || "English"} (${uiLang}) - the user's chosen interface language
 
 INTENT CLASSIFICATION:
-SEARCH intent keywords (any language): "find", "show me", "what's on", "look for", "search", "near me", "happening", "events in", "what's happening"
+SEARCH intent: Default to SEARCH if the query contains:
+- Location names (cities, venues, places)
+- Event categories/types (food, music, art, sports, etc.)
+- Date/time references (today, tomorrow, weekend, etc.)
+- Explicit search keywords: "find", "show me", "what's on", "look for", "search", "near me", "happening", "events in", "what's happening"
   - Greek: "βρες", "δείξε μου", "τι γίνεται", "ψάχνω", "κοντά μου", "εκδηλώσεις"
   - Italian: "trova", "mostrami", "cosa c'è", "cerco", "vicino a me", "eventi"
   - Spanish: "encuentra", "muéstrame", "qué hay", "busco", "cerca de mí", "eventos"
   - French: "trouve", "montre-moi", "qu'est-ce qu'il y a", "cherche", "près de moi", "événements"
 
-CREATE intent keywords (any language): "create", "add", "host", "make", "schedule", "publish", "organize", "plan", "set up"
+CREATE intent: Only if the query explicitly indicates creating/adding an event:
+- Keywords: "create", "add", "host", "make", "schedule", "publish", "organize", "plan", "set up"
   - Greek: "δημιούργησε", "πρόσθεσε", "φιλοξένησε", "κάνε", "προγραμμάτισε", "δημοσίευσε", "οργάνωσε"
   - Italian: "crea", "aggiungi", "ospita", "fai", "programma", "pubblica", "organizza"
   - Spanish: "crea", "añade", "organiza", "haz", "programa", "publica", "planifica"
   - French: "crée", "ajoute", "héberge", "fais", "programme", "publie", "organise"
 
-If the intent is unclear or ambiguous, return "unclear".
+IMPORTANT: If the query mentions a location (city, venue) OR a category/type (food, music, art, etc.) WITHOUT explicit CREATE keywords, it's a SEARCH query. Examples:
+- "Athens food" → SEARCH (location + category)
+- "jazz this weekend" → SEARCH (category + date)
+- "events in Melbourne" → SEARCH (location)
+- "create a music festival" → CREATE (explicit create keyword)
+
+Only return "unclear" if the query is completely ambiguous and contains no location, category, date, or action keywords.
 
 ENTITY EXTRACTION (normalize to English):
 - title: event name/title (translate to English if needed)
