@@ -11,7 +11,14 @@ export async function searchWeb(options: WebSearchOptions): Promise<SearchResult
 
   const key = process.env.GOOGLE_API_KEY
   const cx = process.env.GOOGLE_PSE_ID
-  if (!key || !cx) return []
+  
+  if (!key || !cx) {
+    console.log("[web-search] Skipping web search - missing configuration:", {
+      hasApiKey: !!key,
+      hasPseId: !!cx,
+    })
+    return []
+  }
 
   try {
     const url = new URL("https://www.googleapis.com/customsearch/v1")

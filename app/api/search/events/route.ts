@@ -219,21 +219,33 @@ export async function GET(req: NextRequest) {
 
     console.log("[v0] Search query:", q, "filters:", { city, category, dateFrom, dateTo }, "found:", count, "events")
 
-    // Automatically search web if internal results are low or empty
+    // Always search web if we have a query (not just when results are low)
     let webResults: any[] = []
-    const shouldSearchWeb = count < 6 && q.trim().length > 0
+    const shouldSearchWeb = q.trim().length > 0
     
     if (shouldSearchWeb) {
-      console.log("[v0] Internal results low, searching web...")
+      const hasGoogleConfig = Boolean(process.env.GOOGLE_API_KEY && process.env.GOOGLE_PSE_ID)
+      console.log("[v0] Searching web...", { 
+        hasGoogleConfig, 
+        hasApiKey: !!process.env.GOOGLE_API_KEY, 
+        hasPseId: !!process.env.GOOGLE_PSE_ID 
+      })
+      
       try {
         // Build web search query from original query, city, and category
         let webQuery = q
-        if (city) {
+        if (city && !webQuery.toLowerCase().includes(city.toLowerCase())) {
           webQuery = `${webQuery} ${city}`
         }
-        if (category && category !== "all") {
+        if (category && category !== "all" && !webQuery.toLowerCase().includes(category.toLowerCase())) {
           webQuery = `${webQuery} ${category}`
         }
+        // Add "events" to improve search results
+        if (!webQuery.toLowerCase().includes("event")) {
+          webQuery = `${webQuery} events`
+        }
+        
+        console.log("[v0] Web search query:", webQuery.trim())
         
         const webSearchResults = await searchWeb({
           query: webQuery.trim(),
@@ -280,10 +292,17 @@ export async function GET(req: NextRequest) {
         })
         
         console.log("[v0] Web search found:", webResults.length, "events")
-      } catch (error) {
-        console.error("[v0] Web search error:", error)
+      } catch (error: any) {
+        console.error("[v0] Web search error:", error?.message || error)
+        console.error("[v0] Web search error details:", {
+          hasApiKey: !!process.env.GOOGLE_API_KEY,
+          hasPseId: !!process.env.GOOGLE_PSE_ID,
+          error: error?.message || String(error),
+        })
         // Continue without web results
       }
+    } else if (!q.trim()) {
+      console.log("[v0] Skipping web search - no query provided")
     }
 
     // Legacy stub events (can be removed if web search is working)
