@@ -147,7 +147,16 @@ ENTITY EXTRACTION (normalize to English):
 - type: category like jazz, yoga, workshop, concert, open mic (translate to English)
 - city: city name (keep original if proper noun, e.g., "Athens", "Milano", "París")
 - venue: specific venue or location name (keep original if proper noun)
-- date: date phrase (translate to English: "mañana" → "tomorrow", "αύριο" → "tomorrow", "domani" → "tomorrow")
+- date: date phrase - extract ANY date mentioned:
+  * Relative dates: "today", "tomorrow", "this weekend", "next Monday" → keep as-is in English
+  * Specific dates: "March 15th", "March 15, 2025", "15/03/2025", "March 20" → normalize to English format like "March 15, 2025" or "March 15th"
+  * Multilingual: "mañana" → "tomorrow", "αύριο" → "tomorrow", "domani" → "tomorrow"
+  * If year is missing, assume current or next year based on context
+- date_iso: For SPECIFIC calendar dates (not relative), also provide ISO format (YYYY-MM-DD):
+  * "March 15th" → "2025-03-15" (assume current year if not specified, or next year if date has passed)
+  * "March 15, 2025" → "2025-03-15"
+  * "15/03/2025" → "2025-03-15"
+  * Only provide date_iso for specific calendar dates, NOT for relative dates like "today" or "tomorrow"
 - time: time phrase (normalize to English: "8pm", "20:00" → "8pm")
 - description: any descriptive text (translate to English)
 
@@ -185,21 +194,30 @@ User input: "${query}"`,
     let pastDate = false
     let invalidDate = false
 
-    if (step >= 3 && object.intent === "create") {
-      // Parse date phrase
-      if (object.extracted.date) {
-        dateISO = parseDatePhrase(object.extracted.date)
-        if (!dateISO) {
-          invalidDate = true
-        }
+    // Parse date for both SEARCH and CREATE intents
+    // First check if AI provided date_iso directly (for specific calendar dates)
+    if (object.extracted.date_iso) {
+      // Validate ISO date format
+      if (/^\d{4}-\d{2}-\d{2}$/.test(object.extracted.date_iso)) {
+        dateISO = object.extracted.date_iso
       }
-
-      // Parse time
-      if (object.extracted.time) {
-        time24h = parseTime(object.extracted.time)
+    }
+    
+    // If no date_iso, try parsing the date string (for relative dates or as fallback)
+    if (!dateISO && object.extracted.date) {
+      dateISO = parseDatePhrase(object.extracted.date)
+      if (!dateISO && object.intent === "create") {
+        invalidDate = true
       }
+    }
 
-      // Detect time conflicts
+    // Parse time
+    if (object.extracted.time) {
+      time24h = parseTime(object.extracted.time)
+    }
+
+    // Detect time conflicts (only for CREATE)
+    if (object.intent === "create") {
       timeConflicts = detectTimeConflicts(query)
 
       if (dateISO && time24h) {
