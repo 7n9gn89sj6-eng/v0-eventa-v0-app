@@ -110,6 +110,15 @@ export function EventsListingContent({
       const data = await r.json()
       if (!r.ok) throw new Error(data?.error || `Search failed (${r.status})`)
 
+      console.log("[v0] Search API response:", {
+        internalCount: data.internal?.length || 0,
+        externalCount: data.external?.length || 0,
+        eventsCount: data.events?.length || 0,
+        count: data.count,
+        total: data.total,
+        sampleExternal: data.external?.[0],
+      })
+
       const allEvents = [
         ...(data.internal || []),
         ...(data.external || []).map((ext: any) => ({
@@ -118,23 +127,30 @@ export function EventsListingContent({
           description: ext.description,
           startAt: ext.startAt,
           endAt: ext.endAt,
-          city: ext.location?.city || "",
-          country: ext.location?.country || "",
-          address: ext.location?.address || "",
-          venueName: ext.location?.address || "",
-          categories: [],
-          priceFree: false,
-          imageUrls: ext.imageUrl ? [ext.imageUrl] : [],
+          city: ext.location?.city || ext.city || "",
+          country: ext.location?.country || ext.country || "",
+          address: ext.location?.address || ext.address || "",
+          venueName: ext.location?.address || ext.venueName || "",
+          categories: ext.categories || [],
+          priceFree: ext.priceFree || false,
+          imageUrls: ext.imageUrl ? [ext.imageUrl] : (ext.imageUrls || []),
           status: "PUBLISHED",
           aiStatus: "SAFE",
-          source: ext.source,
+          source: ext.source || "web",
           imageUrl: ext.imageUrl,
-          externalUrl: ext.externalUrl,
+          externalUrl: ext.externalUrl || ext.url,
         })),
       ]
 
+      console.log("[v0] Combined events:", {
+        totalEvents: allEvents.length,
+        internalEvents: data.internal?.length || 0,
+        externalEvents: data.external?.length || 0,
+        firstEvent: allEvents[0],
+      })
+
       setResults(allEvents)
-      setTotal(data.count ?? 0)
+      setTotal(data.count ?? allEvents.length)
 
       if (q.trim()) {
         router.push(`/discover?q=${encodeURIComponent(q)}`, { scroll: false })
