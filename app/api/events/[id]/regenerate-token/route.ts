@@ -6,7 +6,7 @@ import { sendEventEditLinkEmailAPI } from "@/lib/email"
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getSession()
@@ -14,7 +14,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const eventId = params.id
+    const { id: eventId } = await params
 
     // Admin required
     const user = await db.user.findUnique({

@@ -12,7 +12,7 @@ export async function GET(req: Request) {
   }
 
   const apiKey = process.env.GOOGLE_API_KEY;
-  const cseId = process.env.GOOGLE_CSE_ID;
+  const cseId = process.env.GOOGLE_PSE_ID || process.env.GOOGLE_CSE_ID; // Support both names
 
   if (!apiKey || !cseId) {
     return NextResponse.json(

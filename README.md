@@ -89,6 +89,22 @@ cp .env.example .env
   - Get from: https://platform.openai.com/api-keys
   - Used for: Automatic event screening, harmful content detection
 
+#### Web Search (Optional but Recommended)
+- `GOOGLE_API_KEY`: Google API key for Custom Search API
+  - Get from: https://console.cloud.google.com/apis/credentials
+  - Enable "Custom Search API" in Google Cloud Console
+- `GOOGLE_PSE_ID`: Google Programmable Search Engine ID (also called Custom Search Engine ID)
+  - **How to get it:**
+    1. Go to https://programmablesearchengine.google.com/
+    2. Click "Add" to create a new search engine
+    3. In "Sites to search", enter `*` (asterisk) to search the entire web
+    4. Give it a name (e.g., "Eventa Web Search")
+    5. Click "Create"
+    6. Go to "Setup" → "Basics"
+    7. Copy the "Search engine ID" (looks like: `017576662512468239146:omuauf_lfve`)
+    8. Add it to your `.env` file as `GOOGLE_PSE_ID`
+  - **Note**: Free tier allows 100 searches per day. For production, consider upgrading.
+
 #### Redis (Required for Rate Limiting)
 - `UPSTASH_KV_KV_REST_API_URL`: Upstash Redis REST API URL
 - `UPSTASH_KV_KV_REST_API_TOKEN`: Upstash Redis REST API token

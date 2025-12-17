@@ -2,14 +2,14 @@ import { type NextRequest, NextResponse } from "next/server"
 import db from "@/lib/db"                         // <-- FIXED HERE
 import { getSession } from "@/lib/jwt"
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession()
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = params
+    const { id } = await params
 
     // Verify ownership and get event
     const event = await db.event.findUnique({

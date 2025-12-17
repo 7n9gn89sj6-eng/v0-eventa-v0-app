@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/db"
 import { PUBLIC_EVENT_WHERE } from "@/lib/events"
 import type { EventCategory } from "@prisma/client"
+import { searchWeb } from "@/lib/search/web-search"
 
 const EXTERNAL_STUB_EVENTS = [
   {
@@ -53,6 +54,19 @@ export async function GET(req: NextRequest) {
   console.log("[v0] Search params:", { q, city, category, dateFrom, dateTo })
 
   try {
+    // If no query and no filters, return empty
+    if (!q && !city && !category && !dateFrom && !dateTo) {
+      return NextResponse.json({
+        events: [],
+        count: 0,
+        page: 1,
+        take,
+        internal: [],
+        external: [],
+        total: 0,
+      })
+    }
+
     if (!q) {
       const where: any = {
         ...PUBLIC_EVENT_WHERE,
@@ -97,20 +111,83 @@ export async function GET(req: NextRequest) {
       })
     }
 
+    // Clean query: remove city if provided as separate filter, but keep category terms for better matching
+    let cleanedQuery = q
+    if (city) {
+      // Remove city name from query (case-insensitive) to avoid double-matching
+      const cityRegex = new RegExp(`\\b${city}\\b`, "gi")
+      cleanedQuery = cleanedQuery.replace(cityRegex, "").trim()
+    }
+    // Don't remove category from query - it helps with text matching
+    // The category filter will be applied separately as a filter
+    
+    // Clean up multiple spaces
+    cleanedQuery = cleanedQuery.replace(/\s+/g, " ").trim()
+    
+    // If cleaned query is empty but we have filters, use empty string (will search by filters only)
+    // If cleaned query is not empty, use it for text search
+
+    console.log("[v0] Cleaned query:", cleanedQuery, "from original:", q, "city:", city, "category:", category)
+
     const where: any = {
       ...PUBLIC_EVENT_WHERE,
-      OR: [
-        { title: { contains: q, mode: "insensitive" } },
-        { description: { contains: q, mode: "insensitive" } },
-        { city: { contains: q, mode: "insensitive" } },
-        { country: { contains: q, mode: "insensitive" } },
-        { venueName: { contains: q, mode: "insensitive" } },
-      ],
     }
 
+    // Build OR clause for text search (only if we have a cleaned query)
+    // If cleaned query is empty but we have filters, we'll search by filters only
+    if (cleanedQuery) {
+      where.OR = [
+        { title: { contains: cleanedQuery, mode: "insensitive" } },
+        { description: { contains: cleanedQuery, mode: "insensitive" } },
+        { venueName: { contains: cleanedQuery, mode: "insensitive" } },
+      ]
+      // Only include city/country in OR if not filtering by them
+      if (!city) {
+        where.OR.push({ city: { contains: cleanedQuery, mode: "insensitive" } })
+      }
+      if (!country) {
+        where.OR.push({ country: { contains: cleanedQuery, mode: "insensitive" } })
+      }
+    }
+    // If cleaned query is empty but we have city/category filters, search by those filters only
+    // (no OR clause needed - filters will be applied below)
+
+    // Apply category filter
     if (category && category !== "all") {
-      const categoryEnum = category.toUpperCase() as EventCategory
-      where.category = categoryEnum
+      // Map category string to EventCategory enum
+      const categoryMap: Record<string, EventCategory> = {
+        food: "FOOD_DRINK",
+        music: "MUSIC_NIGHTLIFE",
+        arts: "ARTS_CULTURE",
+        sports: "SPORTS_OUTdoors",
+        family: "FAMILY_KIDS",
+        community: "COMMUNITY_CAUSES",
+        learning: "LEARNING_TALKS",
+        markets: "MARKETS_FAIRS",
+        online: "ONLINE_VIRTUAL",
+      }
+      const normalizedCategory = category.toLowerCase()
+      const categoryEnum = categoryMap[normalizedCategory] || (category.toUpperCase() as EventCategory)
+      
+      // Check both the category field and the categories array
+      const categoryConditions: any[] = [
+        { category: categoryEnum },
+        { categories: { hasSome: [category, normalizedCategory, categoryEnum] } },
+      ]
+      
+      // If we have an OR clause for text search, combine with AND
+      if (where.OR && where.OR.length > 0) {
+        // We have both text search and category filter - combine with AND
+        const textSearchOR = where.OR
+        delete where.OR
+        where.AND = [
+          { OR: textSearchOR },
+          { OR: categoryConditions },
+        ]
+      } else {
+        // No text search, just filter by category
+        where.OR = categoryConditions
+      }
     }
 
     if (dateFrom) {
@@ -120,12 +197,15 @@ export async function GET(req: NextRequest) {
       where.startAt = { ...where.startAt, lte: new Date(dateTo) }
     }
 
+    // City filter: must match exactly (case-insensitive)
     if (city) {
       where.city = { contains: city, mode: "insensitive" }
     }
     if (country) {
       where.country = { contains: country, mode: "insensitive" }
     }
+
+    console.log("[v0] Final where clause:", JSON.stringify(where, null, 2))
 
     const [events, count] = await Promise.all([
       prisma.event.findMany({
@@ -139,6 +219,74 @@ export async function GET(req: NextRequest) {
 
     console.log("[v0] Search query:", q, "filters:", { city, category, dateFrom, dateTo }, "found:", count, "events")
 
+    // Automatically search web if internal results are low or empty
+    let webResults: any[] = []
+    const shouldSearchWeb = count < 6 && q.trim().length > 0
+    
+    if (shouldSearchWeb) {
+      console.log("[v0] Internal results low, searching web...")
+      try {
+        // Build web search query from original query, city, and category
+        let webQuery = q
+        if (city) {
+          webQuery = `${webQuery} ${city}`
+        }
+        if (category && category !== "all") {
+          webQuery = `${webQuery} ${category}`
+        }
+        
+        const webSearchResults = await searchWeb({
+          query: webQuery.trim(),
+          limit: 10,
+        })
+        
+        // Transform web results to match expected format (both internal and external formats)
+        webResults = webSearchResults.map((result, index) => {
+          // Try to extract city from snippet if not provided
+          let extractedCity = city || ""
+          if (!extractedCity && result.snippet) {
+            // Simple extraction: look for common city patterns in snippet
+            const cityMatch = result.snippet.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/)
+            if (cityMatch) {
+              extractedCity = cityMatch[1]
+            }
+          }
+          
+          return {
+            id: `web-${Date.now()}-${index}`,
+            title: result.title,
+            description: result.snippet || "",
+            startAt: result.startAt,
+            endAt: result.startAt, // Use same as start if no end date
+            city: extractedCity,
+            country: "",
+            address: "",
+            venueName: "",
+            categories: category && category !== "all" ? [category] : [],
+            priceFree: false,
+            imageUrls: [],
+            status: "PUBLISHED" as const,
+            aiStatus: "SAFE" as const,
+            source: "web" as const,
+            externalUrl: result.url,
+            imageUrl: undefined,
+            // Also include location object for compatibility with external format
+            location: {
+              city: extractedCity,
+              country: "",
+              address: "",
+            },
+          }
+        })
+        
+        console.log("[v0] Web search found:", webResults.length, "events")
+      } catch (error) {
+        console.error("[v0] Web search error:", error)
+        // Continue without web results
+      }
+    }
+
+    // Legacy stub events (can be removed if web search is working)
     const externalEvents = EXTERNAL_STUB_EVENTS.filter((event) => {
       const matchesQuery =
         event.title.toLowerCase().includes(q.toLowerCase()) ||
@@ -151,15 +299,19 @@ export async function GET(req: NextRequest) {
       return matchesQuery && matchesCity && matchesCountry
     })
 
+    // Combine internal and web results
+    const allEvents = [...events, ...webResults]
+    const allExternal = [...webResults, ...externalEvents]
+
     return NextResponse.json({
-      events,
-      count,
+      events: allEvents,
+      count: allEvents.length,
       page,
       take,
       query: q,
       internal: events,
-      external: externalEvents,
-      total: count + externalEvents.length,
+      external: allExternal,
+      total: allEvents.length,
     })
   } catch (e: any) {
     console.error("[v0] search/events error:", e)

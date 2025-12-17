@@ -4,7 +4,7 @@ import { getSession } from "@/lib/jwt"
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }           // <-- FIXED TYPE
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getSession()
@@ -12,7 +12,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = params
+    const { id } = await params
 
     // Verify the event belongs to the user
     const event = await db.event.findUnique({

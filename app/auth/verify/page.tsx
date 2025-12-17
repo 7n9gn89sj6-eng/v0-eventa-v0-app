@@ -7,12 +7,13 @@ export const metadata: Metadata = {
   description: "Check your email for the magic link",
 }
 
-export default function VerifyPage({
+export default async function VerifyPage({
   searchParams,
 }: {
-  searchParams: { email?: string }
+  searchParams: Promise<{ email?: string }>
 }) {
-  const email = searchParams.email
+  const params = await searchParams
+  const email = params.email
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">

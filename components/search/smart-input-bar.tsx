@@ -128,8 +128,13 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
           // Convert to URL params
           const params = intentToURLParams(intent)
 
-          // Add location if available
-          if (userLocation && userLocation.city !== "Unknown location") {
+          // Always include the original query
+          if (query && !params.has("q")) {
+            params.set("q", query)
+          }
+
+          // Add location if available (but don't override extracted city)
+          if (userLocation && userLocation.city !== "Unknown location" && !params.has("city")) {
             params.set("city", userLocation.city)
             params.set("lat", userLocation.lat.toString())
             params.set("lng", userLocation.lng.toString())

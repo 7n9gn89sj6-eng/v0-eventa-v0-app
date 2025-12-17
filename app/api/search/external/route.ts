@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { PROVIDER_WHITELIST, type ProviderName } from "@/lib/external-search/provider-whitelist"
 import { validateAndNormalizeExternalEvent } from "@/lib/external-search/schema-validator"
 import { checkRateLimit, checkCircuitBreaker, recordFailure, recordSuccess } from "@/lib/external-search/rate-limiter"
+import { searchWeb } from "@/lib/search/web-search"
 
 const PROVIDER_TIMEOUT = 1500 // 1.5 seconds
 
@@ -58,7 +59,24 @@ async function fetchFromProvider(
     // Validate and normalize each result
     const validated = rawResults.map((raw) => validateAndNormalizeExternalEvent(raw, provider))
 
-    const accepted = validated.filter((v) => v.event !== null).map((v) => v.event!)
+    // Transform validated events to include startAt for dual search compatibility
+    const accepted = validated
+      .filter((v) => v.event !== null)
+      .map((v) => {
+        const event = v.event!
+        // Combine date and time into startAt ISO string
+        let startAt: string
+        if (event.time) {
+          startAt = new Date(`${event.date}T${event.time}:00`).toISOString()
+        } else {
+          // If no time, use start of day
+          startAt = new Date(`${event.date}T00:00:00`).toISOString()
+        }
+        return {
+          ...event,
+          startAt,
+        }
+      })
     const dropped_schema = validated.filter((v) => v.error?.code === "ERR_EXT_SCHEMA_REQUIRED").length
     const dropped_safety = validated.filter((v) => v.error?.code === "ERR_EXT_SAFETY_FILTER").length
 
@@ -98,32 +116,61 @@ async function fetchFromProvider(
 }
 
 async function fetchProviderData(provider: ProviderName, params: any, signal: AbortSignal): Promise<any[]> {
-  // In production, this would call actual provider APIs
-  // For now, return stub data based on provider
+  // Handle web search providers using Google Custom Search API
+  if (provider === "stub_web" || provider === "google_events") {
+    // Build search query from keywords, category, city
+    const queryParts: string[] = []
+    
+    if (params.keywords && params.keywords.length > 0) {
+      queryParts.push(...params.keywords)
+    }
+    
+    if (params.category) {
+      queryParts.push(params.category)
+    }
+    
+    if (params.city) {
+      queryParts.push(params.city)
+    }
+    
+    const searchQuery = queryParts.join(" ")
+    
+    if (!searchQuery.trim()) {
+      return []
+    }
 
-  if (provider === "stub_web") {
-    return [
-      {
-        title: "Summer Music Festival",
-        description: "Annual outdoor music festival featuring local and international artists",
-        startAt: new Date("2025-07-15T18:00:00Z").toISOString(),
-        city: "Athens",
-        venue: "Olympic Stadium",
-        category: "Music",
-        sourceUrl: "https://example.com/summer-festival",
-      },
-      {
-        title: "Tech Innovation Summit",
-        description: "Leading technology conference with keynotes and workshops",
-        startAt: new Date("2025-08-20T09:00:00Z").toISOString(),
-        city: "Melbourne",
-        venue: "Convention Centre",
-        category: "Technology",
-        sourceUrl: "https://example.com/tech-summit",
-      },
-    ]
+    try {
+      // Use the actual web search function
+      const webResults = await searchWeb({
+        query: searchQuery,
+        limit: 10,
+        signal,
+      })
+
+      // Transform web search results to external event format
+      return webResults.map((result) => {
+        // Try to extract city and venue from snippet or title
+        const snippet = result.snippet || ""
+        const cityMatch = params.city || snippet.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/)?.[0]
+        const venueMatch = snippet.match(/(?:at|@|venue:)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i)?.[1]
+
+        return {
+          title: result.title,
+          description: result.snippet || null,
+          startAt: result.startAt,
+          city: cityMatch || null,
+          venue: venueMatch || null,
+          sourceUrl: result.url || null,
+        }
+      })
+    } catch (error) {
+      console.error(`[v0] Web search error for ${provider}:`, error)
+      return []
+    }
   }
 
+  // For other providers (eventbrite, meetup, facebook_events), return empty for now
+  // These would need actual API integrations
   return []
 }
 

@@ -6,7 +6,7 @@ import { db } from "@/lib/db"
 import { createAuditLog } from "@/lib/audit-log"
 import { sendSafeEmail } from "@/lib/email"
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSession()
 
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { id } = params
+    const { id } = await params
     const { reason } = await request.json()
 
     if (!reason || reason.length < 50) {

@@ -11,8 +11,9 @@ export const metadata: Metadata = {
 export default async function NewEventPage({
   searchParams,
 }: {
-  searchParams: { title?: string; description?: string; location?: string; date?: string; draftId?: string }
+  searchParams: Promise<{ title?: string; description?: string; location?: string; date?: string; draftId?: string }>
 }) {
+  const params = await searchParams
   const user = await getCurrentUser()
 
   if (!user) {
@@ -24,12 +25,12 @@ export default async function NewEventPage({
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Post an Event</h1>
         <p className="mt-2 text-muted-foreground">
-          {searchParams.draftId
+          {params.draftId
             ? "Review and complete your AI-generated event details"
             : "Share your event with the community. Fill in the details below."}
         </p>
       </div>
-      <EventForm initialData={searchParams} draftId={searchParams.draftId} />
+      <EventForm initialData={params} draftId={params.draftId} />
     </div>
   )
 }

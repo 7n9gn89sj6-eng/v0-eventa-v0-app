@@ -3,10 +3,11 @@ import type { SearchResult } from "@/lib/types"
 export interface WebSearchOptions {
   query: string
   limit?: number
+  signal?: AbortSignal
 }
 
 export async function searchWeb(options: WebSearchOptions): Promise<SearchResult[]> {
-  const { query, limit = 10 } = options
+  const { query, limit = 10, signal } = options
 
   const key = process.env.GOOGLE_API_KEY
   const cx = process.env.GOOGLE_PSE_ID
@@ -19,7 +20,7 @@ export async function searchWeb(options: WebSearchOptions): Promise<SearchResult
     url.searchParams.set("q", `${query} events`)
     url.searchParams.set("num", Math.min(limit, 10).toString())
 
-    const response = await fetch(url.toString())
+    const response = await fetch(url.toString(), { signal })
 
     if (!response.ok) {
       console.error("Google PSE error:", response.status, response.statusText)

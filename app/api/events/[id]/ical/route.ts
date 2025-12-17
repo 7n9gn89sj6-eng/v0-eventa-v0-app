@@ -2,10 +2,11 @@ import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/db"
 import { generateICS } from "@/lib/ical"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const event = await db.event.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: {
         id: true,
         title: true,

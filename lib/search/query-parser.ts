@@ -9,28 +9,46 @@ import { addDays, startOfWeek, endOfWeek, addWeeks } from "date-fns"
  */
 export function intentToURLParams(intentResponse: any): URLSearchParams {
   const params = new URLSearchParams()
+  const extracted = intentResponse.extracted || {}
 
-  // Add original query if present
-  if (intentResponse.query || intentResponse.description) {
-    params.set("q", intentResponse.query || intentResponse.description || "")
+  // Add original query if present (use the original query from the request, not from extracted)
+  // The query should be passed separately or we can use the paraphrase
+  if (intentResponse.query) {
+    params.set("q", intentResponse.query)
+  } else if (intentResponse.description) {
+    params.set("q", intentResponse.description)
   }
 
   // Add city if extracted
-  if (intentResponse.city) {
-    params.set("city", intentResponse.city)
+  if (extracted.city) {
+    params.set("city", extracted.city)
   }
 
-  // Add category if extracted
-  if (intentResponse.type) {
-    const category = categoryToEnum(intentResponse.type)
+  // Add category if extracted (check both type and category fields)
+  if (extracted.type) {
+    const category = categoryToEnum(extracted.type)
+    if (category) {
+      params.set("category", category)
+    }
+  } else if (extracted.category) {
+    const category = categoryToEnum(extracted.category)
     if (category) {
       params.set("category", category)
     }
   }
 
-  // Add date range if extracted
-  if (intentResponse.date) {
-    const dateRange = parseDateExpression(intentResponse.date)
+  // Add date range if extracted (use date_iso if available, otherwise parse date)
+  if (extracted.date_iso) {
+    // If we have an ISO date, use it as both from and to for that day
+    const date = new Date(extracted.date_iso)
+    const startOfDay = new Date(date)
+    startOfDay.setHours(0, 0, 0, 0)
+    const endOfDay = new Date(date)
+    endOfDay.setHours(23, 59, 59, 999)
+    params.set("date_from", startOfDay.toISOString())
+    params.set("date_to", endOfDay.toISOString())
+  } else if (extracted.date) {
+    const dateRange = parseDateExpression(extracted.date)
     if (dateRange.date_from) {
       params.set("date_from", dateRange.date_from)
     }
