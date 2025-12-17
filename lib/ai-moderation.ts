@@ -80,13 +80,27 @@ Return ONLY JSON. NO extra text. Format:
 `;
 
   try {
-    const response = await client.responses.create({
-      model: "gpt-4.1-mini",
-      input: prompt,
-      max_output_tokens: 200,
+    const response = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are an event moderation AI. Return ONLY valid JSON, no other text.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      max_tokens: 200,
+      temperature: 0.3,
     });
 
-    const raw = response.output_text;
+    const raw = response.choices[0]?.message?.content;
+    if (!raw) {
+      throw new Error("AI returned empty response");
+    }
+
     const parsed = extractJson(raw);
 
     return {

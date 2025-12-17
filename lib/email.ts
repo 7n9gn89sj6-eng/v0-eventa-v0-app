@@ -168,10 +168,14 @@ export async function sendSafeEmail({
   to,
   subject,
   html,
+  emailType,
+  eventId,
 }: {
   to: string;
   subject: string;
   html: string;
+  emailType?: string;
+  eventId?: string;
 }) {
   const res = await coreSend(to, subject, html);
 
