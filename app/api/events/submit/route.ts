@@ -7,7 +7,6 @@ import { moderateEvent } from "@/lib/ai-moderation";
 import { detectEventLanguage } from "@/lib/search/language-detection-enhanced";
 import { generateEventEmbedding, shouldSkipEmbedding } from "@/lib/embeddings/generate";
 import { storeEventEmbedding } from "@/lib/embeddings/store";
-import { storeEventEmbedding } from "@/lib/embeddings/store";
 import { notifyAdminsEventNeedsReview } from "@/lib/admin-notifications";
 import { checkRateLimit, getClientIdentifier, rateLimiters } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";

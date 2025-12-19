@@ -102,22 +102,10 @@ export function detectLanguageEnhancedSync(text: string, minLength: number = 10)
     return null
   }
 
-  try {
-    // Try to use franc synchronously (only works if already loaded)
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const franc = require("franc")
-    const detected = franc(text, { minLength })
-    
-    if (!detected || detected === "und") {
-      return null
-    }
-
-    const iso6391 = languageCodeMap[detected] || detected.substring(0, 2)
-    return SUPPORTED_LANGUAGES.has(iso6391) ? iso6391 : null
-  } catch {
-    // Fallback to heuristic
-    return detectLanguageHeuristic(text)
-  }
+  // Sync version always uses heuristic fallback since franc requires async import
+  // This avoids build-time errors when franc is not installed
+  // For async detection, use detectLanguageEnhanced() which handles franc dynamically
+  return detectLanguageHeuristic(text)
 }
 
 /**
