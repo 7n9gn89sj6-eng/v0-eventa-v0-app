@@ -8,7 +8,7 @@ const PROVIDER_TIMEOUT = 1500 // 1.5 seconds
 
 async function fetchFromProvider(
   provider: ProviderName,
-  params: { keywords: string[]; category?: string; city?: string; date?: string },
+  params: { keywords: string[]; category?: string; city?: string; country?: string; date?: string },
 ): Promise<{
   provider: ProviderName
   results: any[]
@@ -72,6 +72,33 @@ async function fetchFromProvider(
           // If no time, use start of day
           startAt = new Date(`${event.date}T00:00:00`).toISOString()
         }
+        
+        // Try to extract a better date from title/description if structured date seems wrong
+        // Look for date patterns like "April 2026", "16-19 April 2026", etc.
+        const textToSearch = `${event.title} ${event.description || ""}`.toLowerCase()
+        const monthNames = ["january", "february", "march", "april", "may", "june", 
+                           "july", "august", "september", "october", "november", "december"]
+        
+        for (let i = 0; i < monthNames.length; i++) {
+          if (textToSearch.includes(monthNames[i])) {
+            // Found a month name - try to extract year
+            const yearMatch = textToSearch.match(new RegExp(`${monthNames[i]}[^0-9]*?(20\\d{2})`, "i"))
+            if (yearMatch) {
+              const extractedYear = parseInt(yearMatch[1], 10)
+              const monthNumber = i + 1
+              const structuredDate = new Date(event.date)
+              
+              // If structured date year doesn't match extracted year, use extracted date
+              if (structuredDate.getFullYear() !== extractedYear) {
+                const extractedDate = new Date(extractedYear, monthNumber - 1, 1)
+                startAt = extractedDate.toISOString()
+                console.log(`[v0] Corrected date for "${event.title}": ${event.date} -> ${extractedDate.toISOString().split('T')[0]} (extracted from text)`)
+              }
+            }
+            break
+          }
+        }
+        
         return {
           ...event,
           startAt,
@@ -133,6 +160,11 @@ async function fetchProviderData(provider: ProviderName, params: any, signal: Ab
       queryParts.push(params.city)
     }
     
+    // Add country to query to improve disambiguation (e.g., "Ithaki Greece" vs "Ithaca USA")
+    if (params.country) {
+      queryParts.push(params.country)
+    }
+    
     const searchQuery = queryParts.join(" ")
     
     if (!searchQuery.trim()) {
@@ -161,6 +193,7 @@ async function fetchProviderData(provider: ProviderName, params: any, signal: Ab
           city: cityMatch || null,
           venue: venueMatch || null,
           sourceUrl: result.url || null,
+          imageUrl: result.imageUrl || null, // Include imageUrl from web search
         }
       })
     } catch (error) {
@@ -179,13 +212,13 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { keywords = [], category, city, date, uiLang = "en" } = body
+    const { keywords = [], category, city, country, date, date_iso, uiLang = "en" } = body
 
-    console.log(`[v0] External search request - uiLang: ${uiLang}`, { keywords, category, city, date })
+    console.log(`[v0] External search request - uiLang: ${uiLang}`, { keywords, category, city, country, date, date_iso })
 
     // Query all whitelisted providers in parallel
     const providerResults = await Promise.all(
-      PROVIDER_WHITELIST.map((provider) => fetchFromProvider(provider, { keywords, category, city, date })),
+      PROVIDER_WHITELIST.map((provider) => fetchFromProvider(provider, { keywords, category, city, country, date })),
     )
 
     // Merge results in whitelist order
@@ -201,17 +234,137 @@ export async function POST(request: NextRequest) {
       totalDroppedSafety += pr.dropped_safety
     })
 
+    // Filter results by date range if date_iso or date is provided
+    let filteredResults = allResults
+    if (date_iso || date) {
+      try {
+        const { DateTime } = await import("luxon")
+        let startDate: DateTime
+        let endDate: DateTime
+        
+        if (date_iso) {
+          // Specific date ISO format
+          startDate = DateTime.fromISO(date_iso).startOf("day")
+          
+          // Parse duration from keywords if available (e.g., "one week")
+          const queryText = keywords.join(" ").toLowerCase()
+          let durationDays = 7 // Default to 1 week
+          if (queryText.includes("one week") || queryText.includes("1 week")) {
+            durationDays = 7
+          } else {
+            const daysMatch = queryText.match(/(\d+)\s+days?/i)
+            if (daysMatch) durationDays = parseInt(daysMatch[1], 10)
+            const weeksMatch = queryText.match(/(\d+)\s+weeks?/i)
+            if (weeksMatch) durationDays = parseInt(weeksMatch[1], 10) * 7
+          }
+          
+          endDate = startDate.plus({ days: durationDays }).endOf("day")
+        } else if (date) {
+          // Parse natural language date (e.g., "next weekend")
+          const lowerDate = date.toLowerCase()
+          const now = DateTime.now()
+          
+          if (lowerDate.includes("next weekend")) {
+            const daysUntilSaturday = (6 - now.weekday + 7) % 7
+            startDate = now.plus({ days: (daysUntilSaturday || 7) + 7 }).startOf("day")
+            endDate = startDate.plus({ days: 1 }).endOf("day")
+          } else if (lowerDate.includes("this weekend") || lowerDate.includes("weekend")) {
+            const daysUntilSaturday = (6 - now.weekday + 7) % 7
+            startDate = now.plus({ days: daysUntilSaturday || 7 }).startOf("day")
+            endDate = startDate.plus({ days: 1 }).endOf("day")
+          } else if (lowerDate.includes("tomorrow")) {
+            startDate = now.plus({ days: 1 }).startOf("day")
+            endDate = startDate.endOf("day")
+          } else if (lowerDate.includes("today")) {
+            startDate = now.startOf("day")
+            endDate = now.endOf("day")
+          } else {
+            // Unknown date format, skip filtering
+            console.log(`[v0] Unknown date format for external search filtering: "${date}"`)
+            startDate = null as any
+            endDate = null as any
+          }
+        } else {
+          startDate = null as any
+          endDate = null as any
+        }
+        
+        if (startDate && endDate && startDate.isValid && endDate.isValid) {
+          filteredResults = allResults.filter((result) => {
+            if (!result.startAt) return false
+            const eventDate = DateTime.fromISO(result.startAt)
+            return eventDate >= startDate && eventDate <= endDate
+          })
+          
+          console.log(`[v0] Filtered external results by date: ${allResults.length} -> ${filteredResults.length} (range: ${startDate.toISODate()} to ${endDate.toISODate()})`, {
+            date_iso,
+            date,
+            dateRange: `${startDate.toISODate()} to ${endDate.toISODate()}`,
+          })
+        }
+      } catch (error) {
+        console.warn(`[v0] Failed to filter by date (date_iso: ${date_iso}, date: ${date}):`, error)
+      }
+    } else {
+      console.log(`[v0] No date filter for external search (date_iso: ${date_iso}, date: ${date})`)
+    }
+
+    // Filter results by city if provided (exclude ambiguous matches like "Berlin Maryland" when searching for "Berlin")
+    if (city) {
+      const cityLower = city.toLowerCase().trim()
+      const beforeCityFilter = filteredResults.length
+      
+      filteredResults = filteredResults.filter((result) => {
+        const resultCity = (result.city || "").toLowerCase().trim()
+        const resultLocation = (result.location?.city || "").toLowerCase().trim()
+        const resultAddress = (result.address || "").toLowerCase()
+        const resultTitle = (result.title || "").toLowerCase()
+        const resultDescription = (result.description || "").toLowerCase()
+        
+        // Check if city appears as a standalone word (not part of a compound name)
+        // This helps avoid "Berlin Maryland" matching "Berlin"
+        const cityRegex = new RegExp(`\\b${cityLower}\\b`, "i")
+        
+        // Must match city in city field or location
+        const matchesCity = cityRegex.test(resultCity) || cityRegex.test(resultLocation)
+        
+        // If city matches, check for disambiguation words that indicate wrong location
+        // Common patterns: "City, State" or "City State" (e.g., "Berlin Maryland")
+        if (matchesCity) {
+          // Check if there's a state/country mentioned that doesn't match
+          const hasStateAfter = /\b(maryland|md|california|ca|texas|tx|new york|ny|florida|fl)\b/i.test(resultCity + " " + resultLocation + " " + resultAddress)
+          const hasCountryAfter = /\b(usa|united states|us)\b/i.test(resultCity + " " + resultLocation + " " + resultAddress)
+          
+          // If searching for a major city like "Berlin", exclude US state matches unless explicitly mentioned
+          const majorCities = ["berlin", "paris", "london", "rome", "madrid", "athens", "milan", "vienna"]
+          if (majorCities.includes(cityLower) && hasStateAfter && !hasCountryAfter) {
+            // Likely a US city with same name, exclude it
+            return false
+          }
+          
+          return true
+        }
+        
+        // Also check title/description for city mentions, but be more lenient
+        return cityRegex.test(resultTitle) || cityRegex.test(resultDescription)
+      })
+      
+      console.log(`[v0] Filtered external results by city "${city}": ${beforeCityFilter} -> ${filteredResults.length}`)
+    }
+
     const totalLatency = Date.now() - startTime
 
     return NextResponse.json({
-      results: allResults,
-      count: allResults.length,
+      results: filteredResults,
+      count: filteredResults.length,
       latency_ms: totalLatency,
       providers: providerResults,
       stats: {
         total_accepted: totalAccepted,
         dropped_schema: totalDroppedSchema,
         dropped_safety: totalDroppedSafety,
+        filtered_by_date: date_iso ? allResults.length - filteredResults.length : 0,
+        filtered_by_city: city ? allResults.length - filteredResults.length : 0,
       },
     })
   } catch (error) {

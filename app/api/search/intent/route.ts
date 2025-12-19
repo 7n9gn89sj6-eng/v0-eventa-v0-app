@@ -19,8 +19,10 @@ const intentSchema = z.object({
     title: z.string().optional().describe("Event title if creating"),
     type: z.string().optional().describe("Event type/category (e.g., jazz, yoga, workshop)"),
     city: z.string().optional().describe("City name"),
+    country: z.string().optional().describe("Country name (e.g., 'Greece', 'Italy', 'USA', 'United States') - extract when mentioned to disambiguate cities"),
     venue: z.string().optional().describe("Venue or specific location name (e.g., 'The Dock')"),
     date: z.string().optional().describe("Date phrase (keep natural language like 'this Friday', 'next Saturday')"),
+    date_iso: z.string().optional().describe("ISO date format (YYYY-MM-DD) for specific calendar dates only, not relative dates"),
     time: z.string().optional().describe("Time phrase (keep natural language like '8pm', '9am')"),
     description: z.string().optional().describe("Event description if creating"),
   }),
@@ -145,7 +147,24 @@ Only return "unclear" if the query is completely ambiguous and contains no locat
 ENTITY EXTRACTION (normalize to English):
 - title: event name/title (translate to English if needed)
 - type: category like jazz, yoga, workshop, concert, open mic (translate to English)
-- city: city name (keep original if proper noun, e.g., "Athens", "Milano", "París")
+- city: city name - MUST normalize to English for major cities:
+  * Greek: "Αθήνα" → "Athens", "Ρώμη" → "Rome", "Παρίσι" → "Paris", "Μελίν" → "Melbourne"
+  * Italian: "Roma" → "Rome", "Milano" → "Milan", "Firenze" → "Florence", "Napoli" → "Naples"
+  * Spanish: "Madrid" → "Madrid", "Barcelona" → "Barcelona", "Roma" → "Rome", "París" → "Paris"
+  * French: "Paris" → "Paris", "Lyon" → "Lyon", "Rome" → "Rome", "Londres" → "London"
+  * Keep in English if already in English (e.g., "Athens", "Rome", "Paris", "London", "Berlin")
+  * For less common cities, translate if you know the English name, otherwise keep original
+  * CRITICAL LOCATION DISAMBIGUATION: When a country is mentioned (e.g., "Greece", "Italy", "Spain"), prioritize locations in that country:
+    - "Ithaki, Greece" → city: "Ithaki", country: "Greece" (NOT "Ithaca" which is in New York, USA)
+    - "Ithaca, Greece" → city: "Ithaki", country: "Greece" (the Greek island, not the US city)
+    - "Ithaca, New York" or "Ithaca, USA" → city: "Ithaca", country: "United States" (the US city)
+    - "Naples, Italy" → city: "Naples", country: "Italy" (the Italian city, not Naples, Florida, USA)
+    - "Naples, Florida" or "Naples, USA" → city: "Naples", country: "United States" (the US city)
+  * If country context is provided, use it to disambiguate between cities with the same name in different countries
+  * Always extract country when mentioned to enable proper filtering
+- country: country name - extract when mentioned to disambiguate cities with the same name:
+  * Normalize to standard English names: "Greece", "Italy", "Spain", "France", "United States" (or "USA"), "United Kingdom" (or "UK")
+  * Use full country name when possible (e.g., "United States" not just "US")
 - venue: specific venue or location name (keep original if proper noun)
 - date: date phrase - extract ANY date mentioned:
   * Relative dates: "today", "tomorrow", "this weekend", "next Monday" → keep as-is in English

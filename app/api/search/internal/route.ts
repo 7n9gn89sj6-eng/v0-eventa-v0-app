@@ -15,6 +15,14 @@ export async function POST(request: NextRequest) {
     const { entities = {}, query, uiLang = "en" } = body
 
     console.log(`[v0] Internal search request - uiLang: ${uiLang}`, { entities, query })
+    console.log(`[v0] Extracted entities:`, {
+      city: entities.city,
+      date: entities.date,
+      date_iso: entities.date_iso,
+      type: entities.type,
+      category: entities.category,
+      venue: entities.venue,
+    })
 
     // Ensure query exists for search
     if (!query || typeof query !== "string" || query.trim().length === 0) {
@@ -28,7 +36,44 @@ export async function POST(request: NextRequest) {
 
     // Parse date filter from entities
     let dateFilter: { gte?: Date; lte?: Date } | undefined
-    if (entities.date) {
+    
+    // Helper function to parse duration from query
+    const parseDuration = (text: string): number => {
+      const lower = text.toLowerCase()
+      // Match patterns like "for one week", "for 1 week", "stay for 7 days", etc.
+      const weekMatch = lower.match(/(?:for|stay\s+for|will\s+stay\s+for)\s+(?:one|1|a)\s+week/i)
+      if (weekMatch) return 7
+      
+      const daysMatch = lower.match(/(?:for|stay\s+for|will\s+stay\s+for)\s+(\d+)\s+days?/i)
+      if (daysMatch) return parseInt(daysMatch[1], 10)
+      
+      const weeksMatch = lower.match(/(?:for|stay\s+for|will\s+stay\s+for)\s+(\d+)\s+weeks?/i)
+      if (weeksMatch) return parseInt(weeksMatch[1], 10) * 7
+      
+      return 7 // Default to 1 week if no duration found
+    }
+    
+    // Priority: use date_iso if available (for specific dates like "30 April 2026")
+    if (entities.date_iso) {
+      try {
+        const startDate = DateTime.fromISO(entities.date_iso).startOf("day")
+        if (startDate.isValid) {
+          // Parse duration from query if available
+          const durationDays = query ? parseDuration(query) : 7
+          const endDate = startDate.plus({ days: durationDays }).endOf("day")
+          dateFilter = {
+            gte: startDate.toJSDate(),
+            lte: endDate.toJSDate(),
+          }
+          console.log(`[v0] Using date_iso: ${entities.date_iso}, duration: ${durationDays} days, range: ${startDate.toISODate()} to ${endDate.toISODate()}`)
+        }
+      } catch (error) {
+        console.warn(`[v0] Failed to parse date_iso: ${entities.date_iso}`, error)
+      }
+    }
+    
+    // Fallback to parsing natural language date
+    if (!dateFilter && entities.date) {
       dateFilter = parseDatePhrase(entities.date)
     }
 
@@ -44,24 +89,32 @@ export async function POST(request: NextRequest) {
       // Build search filters from entities
       const searchFilters: { dateRange?: "today" | "weekend" | "month" | "all" } = {}
       
-      // Convert date filter to dateRange format
-      if (dateFilter) {
+      // Only convert date filter to dateRange format for relative dates (today, weekend, etc.)
+      // For specific dates (like "30 April 2026"), skip dateRange conversion and rely on WHERE clause filtering
+      if (dateFilter && !entities.date_iso) {
+        // Only convert relative dates, not specific calendar dates
         const now = DateTime.now()
         if (dateFilter.gte && dateFilter.lte) {
           const start = DateTime.fromJSDate(dateFilter.gte)
           const end = DateTime.fromJSDate(dateFilter.lte)
           const daysDiff = end.diff(start, "days").days
           
-          if (daysDiff <= 1) {
+          // Only use dateRange for near-term relative dates
+          const daysFromNow = start.diff(now, "days").days
+          if (daysFromNow <= 7 && daysDiff <= 1) {
             searchFilters.dateRange = "today"
-          } else if (daysDiff <= 2) {
+          } else if (daysFromNow <= 7 && daysDiff <= 2) {
             searchFilters.dateRange = "weekend"
-          } else {
+          } else if (daysFromNow <= 30) {
             searchFilters.dateRange = "month"
           }
+          // For dates far in the future (like 2026), don't set dateRange - rely on WHERE clause
         } else if (dateFilter.gte) {
-          // Only start date provided, use month range
-          searchFilters.dateRange = "month"
+          const start = DateTime.fromJSDate(dateFilter.gte)
+          const daysFromNow = start.diff(now, "days").days
+          if (daysFromNow <= 30) {
+            searchFilters.dateRange = "month"
+          }
         }
       }
 
@@ -100,7 +153,39 @@ export async function POST(request: NextRequest) {
     const where: any = {
       ...PUBLIC_EVENT_WHERE,
       moderationStatus: "APPROVED", // Keep for backward compatibility
-      startAt: dateFilter || { gte: new Date() },
+    }
+    
+    // Apply date filter - use wider range for better results
+    if (dateFilter) {
+      // Expand the date range slightly to catch events near the requested range
+      const rangeStart = dateFilter.gte ? DateTime.fromJSDate(dateFilter.gte) : null
+      const rangeEnd = dateFilter.lte ? DateTime.fromJSDate(dateFilter.lte) : null
+      
+      if (rangeStart && rangeEnd) {
+        // Expand range by 7 days on each side for better coverage
+        const expandedStart = rangeStart.minus({ days: 7 }).startOf("day")
+        const expandedEnd = rangeEnd.plus({ days: 7 }).endOf("day")
+        
+        where.startAt = {
+          gte: expandedStart.toJSDate(),
+          lte: expandedEnd.toJSDate(),
+        }
+        console.log(`[v0] Applying expanded date filter:`, {
+          requested: {
+            gte: rangeStart.toISOString(),
+            lte: rangeEnd.toISOString(),
+          },
+          expanded: {
+            gte: expandedStart.toISOString(),
+            lte: expandedEnd.toISOString(),
+          },
+        })
+      } else if (rangeStart) {
+        where.startAt = { gte: rangeStart.minus({ days: 7 }).toJSDate() }
+      }
+    } else {
+      // Default: only show future events
+      where.startAt = { gte: new Date() }
     }
 
     // If we have full-text search results, filter by those IDs
@@ -139,11 +224,72 @@ export async function POST(request: NextRequest) {
     }
 
     // City filter (applied separately as it's not part of OR)
+    // Use contains for flexibility but add post-filtering to exclude ambiguous matches
     if (entities?.city) {
+      const cityName = entities.city.trim()
+      const cityLower = cityName.toLowerCase()
+      
+      // Use contains to handle variations in city name formatting
       where.city = {
-        contains: entities.city,
+        contains: cityName,
         mode: "insensitive",
       }
+      console.log(`[v0] Filtering by city: ${cityName} (using contains for flexibility)`)
+      
+      // If country is also specified, filter by country to disambiguate cities with the same name
+      if (entities?.country) {
+        const countryName = entities.country.trim()
+        // Normalize country names for matching
+        const countryNormalized = countryName.toLowerCase()
+        // Handle common variations
+        const countryVariations: Record<string, string[]> = {
+          "united states": ["usa", "us", "united states", "america"],
+          "greece": ["greece", "greek"],
+          "italy": ["italy", "italian"],
+          "spain": ["spain", "spanish"],
+          "france": ["france", "french"],
+          "united kingdom": ["uk", "united kingdom", "britain", "british"],
+        }
+        
+        // Find matching country variation
+        let matchedCountry: string | null = null
+        for (const [standard, variations] of Object.entries(countryVariations)) {
+          if (variations.some(v => countryNormalized.includes(v) || v.includes(countryNormalized))) {
+            matchedCountry = standard
+            break
+          }
+        }
+        
+        if (matchedCountry) {
+          where.country = {
+            contains: matchedCountry,
+            mode: "insensitive",
+          }
+          console.log(`[v0] Also filtering by country: ${matchedCountry} (from extracted: ${countryName}) to disambiguate city: ${cityName}`)
+        } else {
+          // Try direct match
+          where.country = {
+            contains: countryName,
+            mode: "insensitive",
+          }
+          console.log(`[v0] Also filtering by country: ${countryName} (direct match) to disambiguate city: ${cityName}`)
+        }
+      }
+      
+      // Note: We'll do additional filtering after fetching to exclude ambiguous matches
+      // like "Berlin Maryland" when searching for "Berlin"
+    } else {
+      console.log(`[v0] No city filter applied (entities.city: ${entities?.city})`)
+    }
+
+    // Log date filter application
+    if (dateFilter) {
+      console.log(`[v0] Applying date filter to WHERE clause:`, {
+        gte: dateFilter.gte?.toISOString(),
+        lte: dateFilter.lte?.toISOString(),
+      })
+    } else {
+      console.log(`[v0] No date filter applied (dateFilter is null/undefined)`)
     }
 
     console.log("[v0] Search query where clause:", JSON.stringify(where, null, 2))
@@ -153,10 +299,59 @@ export async function POST(request: NextRequest) {
     let events = await db.event.findMany({
       where,
       orderBy: [{ startAt: "asc" }],
-      take: 20,
+      take: 50, // Get more results initially
     })
 
-    console.log(`[v0] Found ${events.length} events after filtering`)
+    console.log(`[v0] Found ${events.length} events after initial filtering`)
+
+    // If no results with strict filtering and we have a date filter, try without date filter
+    if (events.length === 0 && dateFilter && eventIds.length === 0) {
+      console.log("[v0] No results with date filter, trying without date filter")
+      const fallbackWhere = { ...where }
+      delete fallbackWhere.startAt
+      fallbackWhere.startAt = { gte: new Date() } // Only future events
+      
+      events = await db.event.findMany({
+        where: fallbackWhere,
+        orderBy: [{ startAt: "asc" }],
+        take: 50,
+      })
+      console.log(`[v0] Fallback search found ${events.length} events`)
+    }
+
+    // Post-filter to exclude ambiguous city matches (e.g., "Berlin Maryland" when searching for "Berlin")
+    if (entities?.city && events.length > 0) {
+      const cityLower = entities.city.toLowerCase().trim()
+      const cityWords = cityLower.split(/\s+/)
+      const majorCities = ["berlin", "paris", "london", "rome", "madrid", "athens", "milan", "vienna", "amsterdam", "barcelona"]
+      
+      events = events.filter((event) => {
+        const eventCity = (event.city || "").toLowerCase().trim()
+        const eventCountry = (event.country || "").toLowerCase().trim()
+        const eventAddress = (event.address || "").toLowerCase()
+        
+        // Check if city matches exactly or as a standalone word
+        const cityRegex = new RegExp(`\\b${cityLower}\\b`, "i")
+        const matchesCity = cityRegex.test(eventCity)
+        
+        if (!matchesCity) return false
+        
+        // For major cities, exclude US state matches unless country is explicitly mentioned
+        if (majorCities.includes(cityLower)) {
+          const hasUSState = /\b(maryland|md|california|ca|texas|tx|new york|ny|florida|fl|ohio|oh|pennsylvania|pa)\b/i.test(eventCity + " " + eventAddress)
+          const hasUSCountry = /\b(usa|united states|us|america)\b/i.test(eventCountry + " " + eventAddress)
+          
+          // If it's a US state but no country mentioned or country is not US, exclude it
+          if (hasUSState && !hasUSCountry) {
+            return false
+          }
+        }
+        
+        return true
+      })
+      
+      console.log(`[v0] Post-filtered by city: ${events.length} events remaining`)
+    }
 
     // If no results from full-text search but we have entity filters, try entity-only search
     if (events.length === 0 && eventIds.length === 0 && (entities.city || entities.venue || entities.type || entities.category)) {
@@ -196,55 +391,180 @@ export async function POST(request: NextRequest) {
       
       if (fallbackEvents.length > 0) {
         events = fallbackEvents
+        
+        // Apply same city filtering to fallback results
+        if (entities?.city) {
+          const cityLower = entities.city.toLowerCase().trim()
+          const majorCities = ["berlin", "paris", "london", "rome", "madrid", "athens", "milan", "vienna", "amsterdam", "barcelona"]
+          
+          events = events.filter((event) => {
+            const eventCity = (event.city || "").toLowerCase().trim()
+            const eventCountry = (event.country || "").toLowerCase().trim()
+            const eventAddress = (event.address || "").toLowerCase()
+            
+            const cityRegex = new RegExp(`\\b${cityLower}\\b`, "i")
+            const matchesCity = cityRegex.test(eventCity)
+            
+            if (!matchesCity) return false
+            
+            if (majorCities.includes(cityLower)) {
+              const hasUSState = /\b(maryland|md|california|ca|texas|tx|new york|ny|florida|fl|ohio|oh|pennsylvania|pa)\b/i.test(eventCity + " " + eventAddress)
+              const hasUSCountry = /\b(usa|united states|us|america)\b/i.test(eventCountry + " " + eventAddress)
+              
+              if (hasUSState && !hasUSCountry) {
+                return false
+              }
+            }
+            
+            return true
+          })
+        }
       }
     }
 
     searchResults = events
 
-    // Rank and score events
+    // Rank and score events with balanced matching
     const rankedEvents = searchResults.map((event) => {
       let score = 0
       const searchTerms = [query, entities.title, entities.type, entities.category]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
+        .split(/\s+/)
+        .filter(term => term.length > 1) // Allow shorter terms (changed from > 2)
 
-      // Title match (weight: 3)
-      if (searchTerms && event.title.toLowerCase().includes(searchTerms)) {
-        score += 3
+      // Title match - prioritize but allow partial matches
+      const titleLower = event.title.toLowerCase()
+      if (searchTerms.length > 0) {
+        const exactPhraseMatch = query && titleLower.includes(query.toLowerCase())
+        const allTermsMatch = searchTerms.every(term => titleLower.includes(term))
+        const matchedTerms = searchTerms.filter(term => titleLower.includes(term)).length
+        const matchRatio = matchedTerms / searchTerms.length
+        
+        if (exactPhraseMatch) {
+          score += 8 // Exact phrase match in title
+        } else if (allTermsMatch) {
+          score += 6 // All search terms found in title
+        } else if (matchRatio >= 0.5) {
+          score += 4 * matchRatio // Good partial match (50%+ terms)
+        } else if (matchRatio > 0) {
+          score += 2 * matchRatio // Some terms match
+        }
       }
 
-      // Category match (weight: 2)
+      // Category match - more lenient
       const eventCategories = [...(event.categories || []), event.category].filter(Boolean)
-
-      if (searchTerms && eventCategories.some((cat) => cat && searchTerms.includes(cat.toLowerCase()))) {
-        score += 2
+      const categoryMatch = entities.type || entities.category
+      if (categoryMatch) {
+        const categoryLower = categoryMatch.toLowerCase()
+        const hasExactCategory = eventCategories.some(
+          cat => cat && cat.toLowerCase() === categoryLower
+        )
+        const hasPartialCategory = eventCategories.some(
+          cat => cat && (categoryLower.includes(cat.toLowerCase()) || cat.toLowerCase().includes(categoryLower))
+        )
+        
+        if (hasExactCategory) {
+          score += 4 // Exact category match
+        } else if (hasPartialCategory) {
+          score += 2 // Partial category match (more lenient)
+        }
       }
 
-      // Description match (weight: 1)
-      if (searchTerms && event.description?.toLowerCase().includes(searchTerms)) {
-        score += 1
+      // Description match - boost for relevant content
+      if (searchTerms.length > 0 && event.description) {
+        const descLower = event.description.toLowerCase()
+        const matchedTerms = searchTerms.filter(term => descLower.includes(term)).length
+        const matchRatio = matchedTerms / searchTerms.length
+        if (matchRatio > 0) {
+          score += 2 * matchRatio // Proportional to match quality
+        }
       }
 
-      // Boost for matching city
-      if (entities.city && event.city?.toLowerCase().includes(entities.city.toLowerCase())) {
-        score += 1
+      // City match - important for location-based searches
+      if (entities.city) {
+        const cityLower = entities.city.toLowerCase().trim()
+        const eventCity = event.city?.toLowerCase().trim()
+        if (eventCity === cityLower) {
+          score += 4 // Exact city match
+        } else if (eventCity?.includes(cityLower) || cityLower.includes(eventCity || "")) {
+          score += 2 // Partial city match
+        }
       }
 
-      // Boost for date proximity
+      // Date relevance scoring - critical for date-filtered searches
       if (dateFilter) {
+        const eventDate = DateTime.fromJSDate(event.startAt)
+        const eventStart = eventDate.startOf("day")
+        
+        const rangeStart = dateFilter.gte ? DateTime.fromJSDate(dateFilter.gte).startOf("day") : null
+        const rangeEnd = dateFilter.lte ? DateTime.fromJSDate(dateFilter.lte).endOf("day") : null
+        
+        if (rangeStart && rangeEnd) {
+          if (eventStart >= rangeStart && eventStart <= rangeEnd) {
+            score += 12 // Strong boost for events in the requested range
+          } else {
+            const daysOutside = eventStart < rangeStart 
+              ? rangeStart.diff(eventStart, "days").days
+              : eventStart.diff(rangeEnd, "days").days
+            
+            // Reduced penalties - still prioritize in-range but don't eliminate close matches
+            if (daysOutside <= 3) {
+              score -= 3 // Slightly outside range - small penalty
+            } else if (daysOutside <= 7) {
+              score -= 6 // Moderately outside range
+            } else if (daysOutside <= 30) {
+              score -= 10 // Further outside range
+            } else {
+              score -= 20 // Far outside range - reduced from 50
+            }
+          }
+        } else if (rangeStart) {
+          if (eventStart >= rangeStart) {
+            score += 6
+          } else {
+            const daysBefore = rangeStart.diff(eventStart, "days").days
+            score -= Math.min(daysBefore * 1.5, 15) // Reduced penalty
+          }
+        }
+      } else {
+        // No date filter - use proximity-based scoring
         const eventDate = DateTime.fromJSDate(event.startAt)
         const now = DateTime.now()
         const daysDiff = eventDate.diff(now, "days").days
-        if (daysDiff <= 7) score += 2
-        else if (daysDiff <= 30) score += 1
+        if (daysDiff >= 0 && daysDiff <= 7) score += 3
+        else if (daysDiff > 7 && daysDiff <= 30) score += 2
+        else if (daysDiff > 30 && daysDiff <= 90) score += 1
+        // Don't penalize far future events when no date filter is specified
       }
 
       return { ...event, score }
     })
 
+    // Note: Date filtering is already applied in the WHERE clause, so all events here should be within range
+    // This additional filter is just a safety net for edge cases
+    let filteredEvents = rankedEvents
+    if (dateFilter && dateFilter.gte && dateFilter.lte) {
+      const rangeStart = DateTime.fromJSDate(dateFilter.gte).startOf("day")
+      const rangeEnd = DateTime.fromJSDate(dateFilter.lte).endOf("day")
+      
+      // Only filter if we have a valid range
+      if (rangeStart.isValid && rangeEnd.isValid) {
+        const beforeFilter = filteredEvents.length
+        filteredEvents = rankedEvents.filter((event) => {
+          const eventDate = DateTime.fromJSDate(event.startAt).startOf("day")
+          // Keep events within range or slightly outside (within 14 days for better UX)
+          return eventDate >= rangeStart.minus({ days: 14 }) && eventDate <= rangeEnd.plus({ days: 14 })
+        })
+        if (beforeFilter !== filteredEvents.length) {
+          console.log(`[v0] Post-filtered events by date range: ${beforeFilter} -> ${filteredEvents.length}`)
+        }
+      }
+    }
+
     // Sort by score (highest first), then by start date
-    rankedEvents.sort((a, b) => {
+    filteredEvents.sort((a, b) => {
       if (b.score !== a.score) {
         return b.score - a.score
       }
@@ -270,7 +590,7 @@ export async function POST(request: NextRequest) {
         search: {
           source: "internal",
           query_string: JSON.stringify(where),
-          results_count: rankedEvents.length,
+          results_count: filteredEvents.length,
           latency_ms: latency,
         },
         error_code: errorCode,
@@ -278,8 +598,8 @@ export async function POST(request: NextRequest) {
     )
 
     return NextResponse.json({
-      results: rankedEvents,
-      count: rankedEvents.length,
+      results: filteredEvents,
+      count: filteredEvents.length,
       latency_ms: latency,
     })
   } catch (error) {
@@ -369,9 +689,23 @@ function parseDatePhrase(phrase: string): { gte?: Date; lte?: Date } | undefined
     }
   }
 
+  // Handle "next weekend" - weekend after the upcoming one
+  if (lowerPhrase.includes("next weekend")) {
+    const daysUntilSaturday = (6 - now.weekday + 7) % 7
+    // Add 7 days to get the weekend after this one
+    const saturday = now.plus({ days: (daysUntilSaturday || 7) + 7 })
+    console.log(`[v0] Parsed "next weekend": ${saturday.toISODate()} to ${saturday.plus({ days: 1 }).toISODate()}`)
+    return {
+      gte: saturday.startOf("day").toJSDate(),
+      lte: saturday.plus({ days: 1 }).endOf("day").toJSDate(),
+    }
+  }
+
+  // Handle "this weekend" or just "weekend" - upcoming weekend
   if (lowerPhrase.includes("this weekend") || lowerPhrase.includes("weekend")) {
     const daysUntilSaturday = (6 - now.weekday + 7) % 7
-    const saturday = now.plus({ days: daysUntilSaturday })
+    const saturday = now.plus({ days: daysUntilSaturday || 7 })
+    console.log(`[v0] Parsed "this weekend": ${saturday.toISODate()} to ${saturday.plus({ days: 1 }).toISODate()}`)
     return {
       gte: saturday.startOf("day").toJSDate(),
       lte: saturday.plus({ days: 1 }).endOf("day").toJSDate(),
@@ -404,6 +738,47 @@ function parseDatePhrase(phrase: string): { gte?: Date; lte?: Date } | undefined
       return {
         gte: targetDate.startOf("day").toJSDate(),
         lte: targetDate.endOf("day").toJSDate(),
+      }
+    }
+  }
+
+  // Try to parse month names (e.g., "April", "April 2026", "in April")
+  const months = [
+    "january", "february", "march", "april", "may", "june",
+    "july", "august", "september", "october", "november", "december"
+  ]
+  
+  for (let i = 0; i < months.length; i++) {
+    if (lowerPhrase.includes(months[i])) {
+      // Extract year if mentioned (e.g., "April 2026")
+      const yearMatch = lowerPhrase.match(/\b(20\d{2})\b/)
+      const monthNumber = i + 1
+      
+      let actualYear: number
+      if (yearMatch) {
+        // Year explicitly mentioned - use it
+        actualYear = parseInt(yearMatch[1], 10)
+      } else {
+        // No year mentioned - determine based on current date
+        // If the month is in the past this year, assume next year
+        // If the month is current or future this year, use this year
+        if (monthNumber < now.month) {
+          actualYear = now.year + 1
+        } else {
+          actualYear = now.year
+        }
+      }
+      
+      const targetDate = DateTime.fromObject({ year: actualYear, month: monthNumber, day: 1 })
+      if (!targetDate.isValid) {
+        console.warn(`[v0] Invalid date created for month ${monthNumber}, year ${actualYear}`)
+        return undefined
+      }
+      
+      console.log(`[v0] Parsed month "${months[i]}" as ${targetDate.toISODate()} to ${targetDate.endOf("month").toISODate()}`)
+      return {
+        gte: targetDate.startOf("month").toJSDate(),
+        lte: targetDate.endOf("month").toJSDate(),
       }
     }
   }

@@ -4,21 +4,36 @@ import type { SearchResult } from "@/lib/types"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Calendar, MapPin, ExternalLink } from "lucide-react"
-import { DateTime } from "luxon"
+import { MapPin, ExternalLink } from "lucide-react"
 import Link from "next/link"
-import ClientOnly from "@/components/ClientOnly"
 
 interface ResultCardProps {
   result: SearchResult
 }
 
 export function ResultCard({ result }: ResultCardProps) {
-  const startDate = DateTime.fromISO(result.startAt)
   const isEventa = result.source === "eventa"
+  // Handle both imageUrl (string) and imageUrls (array) - internal events may have imageUrls
+  const imageUrl = result.imageUrl || (result as any).imageUrls?.[0] || "/placeholder.svg"
 
   return (
-    <Card className="transition-shadow hover:shadow-md">
+    <Card className="flex flex-col overflow-hidden transition-shadow hover:shadow-md">
+      {/* Event Image */}
+      <div className="aspect-video w-full overflow-hidden bg-muted">
+        <img
+          src={imageUrl}
+          alt={result.title}
+          className="h-full w-full object-cover transition-transform hover:scale-105"
+          onError={(e) => {
+            // Fallback to placeholder if image fails to load
+            const target = e.target as HTMLImageElement
+            if (target.src !== "/placeholder.svg") {
+              target.src = "/placeholder.svg"
+            }
+          }}
+        />
+      </div>
+
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
@@ -40,24 +55,6 @@ export function ResultCard({ result }: ResultCardProps) {
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {/* Date */}
-        <div className="flex items-start gap-2 text-sm">
-          <Calendar className="mt-0.5 h-4 w-4 text-muted-foreground" />
-          <ClientOnly
-            placeholder={
-              <div>
-                <p className="font-medium">—</p>
-                <p className="text-muted-foreground">—</p>
-              </div>
-            }
-          >
-            <div>
-              <p className="font-medium">{startDate.toLocaleString(DateTime.DATE_FULL)}</p>
-              <p className="text-muted-foreground">{startDate.toLocaleString(DateTime.TIME_SIMPLE)}</p>
-            </div>
-          </ClientOnly>
-        </div>
-
         {/* Location */}
         {(result.venue || result.address) && (
           <div className="flex items-start gap-2 text-sm">

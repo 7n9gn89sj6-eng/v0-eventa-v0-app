@@ -46,12 +46,36 @@ export async function searchWeb(options: WebSearchOptions): Promise<SearchResult
       const dateMatch = item.snippet?.match(/\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\w+ \d{1,2},? \d{4})\b/)
       const extractedDate = dateMatch ? new Date(dateMatch[0]) : null
 
+      // Extract image URL from Google search results
+      // Google Custom Search can return images in pagemap.cse_image or pagemap.metatags
+      let imageUrl: string | undefined
+      if (item.pagemap?.cse_image?.[0]?.src) {
+        imageUrl = item.pagemap.cse_image[0].src
+      } else if (item.pagemap?.metatags?.[0]?.["og:image"]) {
+        imageUrl = item.pagemap.metatags[0]["og:image"]
+      } else if (item.pagemap?.metatags?.[0]?.["twitter:image"]) {
+        imageUrl = item.pagemap.metatags[0]["twitter:image"]
+      }
+      
+      // Ensure image URL is absolute (not relative)
+      if (imageUrl && !imageUrl.startsWith("http://") && !imageUrl.startsWith("https://")) {
+        // If relative, try to make it absolute using the page URL
+        try {
+          const baseUrl = new URL(item.link)
+          imageUrl = new URL(imageUrl, baseUrl.origin).toString()
+        } catch (e) {
+          // Invalid URL, skip this image
+          imageUrl = undefined
+        }
+      }
+
       return {
         source: "web" as const,
         title: item.title,
         startAt: extractedDate?.toISOString() || new Date().toISOString(),
         url: item.link,
         snippet: item.snippet,
+        imageUrl: imageUrl || undefined,
       }
     })
   } catch (error) {

@@ -101,6 +101,28 @@ export function AdminEventReview({
             <strong>Created at:</strong>{" "}
             {new Date(event.createdAt).toLocaleString()}
           </p>
+          <p>
+            <strong>Detected Language:</strong>{" "}
+            {event.language ? (
+              <Badge variant="outline" className="ml-1">
+                {event.language}
+              </Badge>
+            ) : (
+              <span className="text-muted-foreground">Not detected</span>
+            )}
+          </p>
+          <p>
+            <strong>Embedding:</strong>{" "}
+            {event.hasEmbedding ? (
+              <Badge variant="outline" className="ml-1 text-green-600">
+                Present
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="ml-1 text-muted-foreground">
+                Missing
+              </Badge>
+            )}
+          </p>
         </div>
       </header>
 

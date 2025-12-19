@@ -38,6 +38,7 @@ interface Event {
   moderationCategory: string | null
   moderationReason: string | null
   adminNotes: string | null
+  language: string | null
   createdBy: {
     name: string | null
     email: string
@@ -278,6 +279,7 @@ export function AdminEventsTable({ events, stats, currentTab, currentPage, total
                       <TableHead>Event Title</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead className="w-[100px]">Language</TableHead>
                       <TableHead className="w-[50px]">Notes</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -307,6 +309,15 @@ export function AdminEventsTable({ events, stats, currentTab, currentPage, total
                             </span>
                           </TableCell>
                           <TableCell>{getStatusBadge(event)}</TableCell>
+                          <TableCell>
+                            {event.language ? (
+                              <Badge variant="outline" className="text-xs">
+                                {event.language}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
                           <TableCell>
                             {event.adminNotes && (
                               <div title="Has admin notes">

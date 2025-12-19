@@ -4,6 +4,7 @@ import type { SearchResult, SearchFilters } from "@/lib/types"
 import { DateTime } from "luxon"
 import { foldAccents } from "@/lib/search/accent-fold"
 import { logger } from "@/lib/logger"
+import { generateQueryEmbedding, embeddingToPGVector } from "@/lib/embeddings/query"
 
 // Type for raw database query result
 interface DatabaseEventRow {
@@ -33,15 +34,50 @@ export interface DatabaseSearchOptions {
   userLat?: number
   userLng?: number
   limit?: number
+  useSemanticSearch?: boolean // Enable hybrid search (default: true if embeddings available)
+  semanticWeight?: number // Weight for semantic search (0-1, default: 0.6)
 }
 
 export async function searchDatabase(options: DatabaseSearchOptions): Promise<SearchResult[]> {
   try {
-    const { query, synonyms, categories, filters, userLat, userLng, limit = 20 } = options
+    const {
+      query,
+      synonyms,
+      categories,
+      filters,
+      userLat,
+      userLng,
+      limit = 20,
+      useSemanticSearch = true,
+      semanticWeight = 0.6,
+    } = options
 
     // Build search terms - join with OR operator for PostgreSQL full-text search
     const searchTerms = [query, ...synonyms].filter(Boolean).join(" | ")
     const searchTermsFolded = foldAccents(searchTerms)
+
+    // Generate query embedding for semantic search (if enabled)
+    let queryEmbedding: number[] | null = null
+    let queryEmbeddingVector: string | null = null
+    if (useSemanticSearch) {
+      logger.info("[searchDatabase] Semantic search enabled, generating query embedding", { query: query.substring(0, 100) })
+      queryEmbedding = await generateQueryEmbedding(query).catch((error) => {
+        logger.warn("[searchDatabase] Query embedding generation failed, falling back to full-text only", error)
+        return null
+      })
+      if (queryEmbedding) {
+        queryEmbeddingVector = embeddingToPGVector(queryEmbedding)
+        logger.info("[searchDatabase] Query embedding generated successfully, using hybrid search", { 
+          queryPreview: query.substring(0, 50),
+          semanticWeight,
+          fullTextWeight: 1 - semanticWeight
+        })
+      } else {
+        logger.info("[searchDatabase] Query embedding not available, using full-text search only")
+      }
+    } else {
+      logger.info("[searchDatabase] Semantic search disabled, using full-text search only")
+    }
 
   // Build where-clause
   const where: any = {
@@ -103,14 +139,73 @@ export async function searchDatabase(options: DatabaseSearchOptions): Promise<Se
   const searchTermsSQL = Prisma.raw(`'${escapedSearchTerms}'`)
   const searchTermsFoldedSQL = Prisma.raw(`'${escapedSearchTermsFolded}'`)
   
-  const events = await db.$queryRaw<DatabaseEventRow[]>(Prisma.sql`
-    SELECT 
-      e.id, e.title, e.description, e."startAt", e."endAt", e.city, e.country,
-      e."venueName", e.address, e.lat, e.lng, e.categories, e."priceFree", e."imageUrls",
+  // Build ranking expression: hybrid of full-text + semantic search
+  const fullTextWeight = 1 - semanticWeight
+  let rankingSQL: Prisma.Sql
+
+  if (queryEmbeddingVector) {
+    // Hybrid search: combine full-text rank + semantic similarity
+    // Full-text rank is 0-1 scale, semantic similarity (1 - distance) is also 0-1 scale
+    // Handle NULL embeddings by using COALESCE to fall back to full-text only
+    rankingSQL = Prisma.sql`
+      (
+        GREATEST(
+          ts_rank(to_tsvector('simple', e."searchText"), plainto_tsquery('simple', ${searchTermsSQL}::text)),
+          ts_rank(to_tsvector('simple', COALESCE(e."searchTextFolded", '')), plainto_tsquery('simple', ${searchTermsFoldedSQL}::text))
+        ) * ${fullTextWeight} +
+        COALESCE(
+          (1 - (e.embedding <=> ${Prisma.raw(queryEmbeddingVector)}::vector)) * ${semanticWeight},
+          0
+        )
+      ) AS rank
+    `
+  } else {
+    // Full-text only (fallback if embedding unavailable)
+    rankingSQL = Prisma.sql`
       GREATEST(
         ts_rank(to_tsvector('simple', e."searchText"), plainto_tsquery('simple', ${searchTermsSQL}::text)),
         ts_rank(to_tsvector('simple', COALESCE(e."searchTextFolded", '')), plainto_tsquery('simple', ${searchTermsFoldedSQL}::text))
-      ) AS rank,
+      ) AS rank
+    `
+  }
+
+  // Build WHERE clause conditions
+  let whereConditions: Prisma.Sql[] = [
+    Prisma.sql`e."startAt" >= ${where.startAt.gte || new Date()}`,
+    publicEventFilter,
+    categorySQL,
+    requiresFree,
+  ]
+
+  // Add full-text search condition
+  whereConditions.push(Prisma.sql`
+    (
+      to_tsvector('simple', e."searchText") @@ plainto_tsquery('simple', ${searchTermsSQL}::text)
+      OR to_tsvector('simple', COALESCE(e."searchTextFolded", '')) @@ plainto_tsquery('simple', ${searchTermsFoldedSQL}::text)
+    )
+  `)
+
+  // If using semantic search, also include events with embeddings that match semantically
+  // This allows events to be found even if they don't match the full-text search exactly
+  if (queryEmbeddingVector) {
+    // Note: We keep the full-text condition above to ensure at least some text match
+    // In future, we could make this more flexible to allow pure semantic matches
+  }
+
+    logger.debug("[searchDatabase] Executing search query", {
+      queryPreview: query.substring(0, 50),
+      useSemanticSearch: !!queryEmbeddingVector,
+      limit,
+      hasDateFilter: !!filters?.dateRange,
+      hasCategoryFilter: categoryArray.length > 0,
+    })
+
+    const startTime = Date.now()
+    const events = await db.$queryRaw<DatabaseEventRow[]>(Prisma.sql`
+    SELECT 
+      e.id, e.title, e.description, e."startAt", e."endAt", e.city, e.country,
+      e."venueName", e.address, e.lat, e.lng, e.categories, e."priceFree", e."imageUrls",
+      ${rankingSQL},
       CASE 
         WHEN ${userLat ?? null}::float IS NOT NULL 
          AND ${userLng ?? null}::float IS NOT NULL 
@@ -127,20 +222,21 @@ export async function searchDatabase(options: DatabaseSearchOptions): Promise<Se
       END AS distance_km
     FROM "Event" e
     WHERE 
-      e."startAt" >= ${where.startAt.gte || new Date()}
-      ${publicEventFilter}
-      ${categorySQL}
-      ${requiresFree}
-      AND (
-        to_tsvector('simple', e."searchText") @@ plainto_tsquery('simple', ${searchTermsSQL}::text)
-        OR to_tsvector('simple', COALESCE(e."searchTextFolded", '')) @@ plainto_tsquery('simple', ${searchTermsFoldedSQL}::text)
-      )
+      ${Prisma.join(whereConditions, Prisma.sql` AND `)}
     ORDER BY 
       rank DESC,
       CASE WHEN distance_km IS NOT NULL THEN distance_km ELSE 999999 END ASC,
       e."startAt" ASC
     LIMIT ${limit}
   `)
+    const queryDuration = Date.now() - startTime
+
+    logger.info("[searchDatabase] Search query completed", {
+      resultsCount: events.length,
+      queryDurationMs: queryDuration,
+      queryPreview: query.substring(0, 50),
+      usedSemanticSearch: !!queryEmbeddingVector,
+    })
 
   // Convert rows to SearchResult
   // Note: Prisma returns camelCase field names from raw queries

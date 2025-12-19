@@ -287,12 +287,12 @@ export async function GET(req: NextRequest) {
             venueName: "",
             categories: category && category !== "all" ? [category] : [],
             priceFree: false,
-            imageUrls: [],
+            imageUrls: result.imageUrl ? [result.imageUrl] : [],
             status: "PUBLISHED" as const,
             aiStatus: "SAFE" as const,
             source: "web" as const,
             externalUrl: result.url,
-            imageUrl: undefined,
+            imageUrl: result.imageUrl || undefined, // Preserve imageUrl from web search
             // Also include location object for compatibility with external format
             location: {
               city: extractedCity,

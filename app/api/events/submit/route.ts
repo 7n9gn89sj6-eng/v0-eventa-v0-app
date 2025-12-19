@@ -4,6 +4,10 @@ import db from "@/lib/db";
 import { createEventEditToken } from "@/lib/eventEditToken";
 import { sendEventEditLinkEmailAPI } from "@/lib/email";
 import { moderateEvent } from "@/lib/ai-moderation";
+import { detectEventLanguage } from "@/lib/search/language-detection-enhanced";
+import { generateEventEmbedding, shouldSkipEmbedding } from "@/lib/embeddings/generate";
+import { storeEventEmbedding } from "@/lib/embeddings/store";
+import { storeEventEmbedding } from "@/lib/embeddings/store";
 import { notifyAdminsEventNeedsReview } from "@/lib/admin-notifications";
 import { checkRateLimit, getClientIdentifier, rateLimiters } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
@@ -101,6 +105,19 @@ export async function POST(request: NextRequest) {
     const city = parts[1] || parts[0] || "Unknown";
     const country = parts[parts.length - 1] || "Australia";
 
+    /* ------------------------- DETECT LANGUAGE ------------------------- */
+    
+    logger.info("[submit] Starting language detection", { titlePreview: validated.title.substring(0, 50) });
+    // Detect language from title + description (non-blocking)
+    const detectedLanguage = await detectEventLanguage(
+      validated.title,
+      validated.description || null
+    ).catch((error) => {
+      logger.warn("[submit] Language detection failed", error);
+      return null;
+    });
+    logger.info("[submit] Language detection result", { detectedLanguage, titlePreview: validated.title.substring(0, 50) });
+
     /* ------------------------- CREATE EVENT ------------------------- */
 
     const event = await db.event.create({
@@ -122,6 +139,7 @@ export async function POST(request: NextRequest) {
 
         categories,
         languages,
+        language: detectedLanguage, // Store detected language
 
         searchText: `${validated.title} ${validated.description} ${city} ${country}`.toLowerCase(),
 
@@ -134,6 +152,34 @@ export async function POST(request: NextRequest) {
     });
 
     console.log("[submit] Event created:", event.id);
+
+    /* ------------------------- GENERATE EMBEDDING (async, non-blocking) ------------------------- */
+    
+    if (!shouldSkipEmbedding()) {
+      logger.info("[submit] Starting embedding generation", { eventId: event.id, titlePreview: validated.title.substring(0, 50) });
+      generateEventEmbedding(
+        validated.title,
+        validated.description || null,
+        validated.location?.name || null,
+        categories || []
+      )
+        .then(async (embedding) => {
+          if (embedding) {
+            logger.info("[submit] Embedding generated, storing", { eventId: event.id });
+            await storeEventEmbedding(event.id, embedding).catch((error) => {
+              logger.warn(`[submit] Failed to store embedding for event ${event.id}`, error);
+            });
+          } else {
+            logger.warn("[submit] Embedding generation returned null", { eventId: event.id });
+          }
+        })
+        .catch((error) => {
+          logger.warn(`[submit] Embedding generation failed for event ${event.id}`, error);
+          // Embedding is optional, don't fail event creation
+        });
+    } else {
+      logger.info("[submit] Embedding generation skipped (SKIP_EMBEDDING_GENERATION=true)");
+    }
 
     /* ------------------------- AI MODERATION ------------------------- */
 

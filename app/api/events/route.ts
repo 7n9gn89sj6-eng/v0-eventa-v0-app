@@ -7,6 +7,9 @@ import { createSearchTextFolded } from "@/lib/search/accent-fold"
 import { createEventEditToken } from "@/lib/eventEditToken"
 import { ok, fail, validationError } from "@/lib/http"
 import { PUBLIC_EVENT_WHERE } from "@/lib/events"
+import { detectEventLanguage } from "@/lib/search/language-detection-enhanced"
+import { generateEventEmbedding, shouldSkipEmbedding } from "@/lib/embeddings/generate"
+import { storeEventEmbedding } from "@/lib/embeddings/store"
 
 const EventCreate = z
   .object({
@@ -110,6 +113,14 @@ export async function POST(request: NextRequest) {
     const searchText = searchParts.filter(Boolean).join(" ")
     const searchTextFolded = createSearchTextFolded(searchParts)
 
+    // Detect language from title + description (async, non-blocking)
+    console.log("[events] Starting language detection for new event:", { titlePreview: title.substring(0, 50) })
+    const detectedLanguage = await detectEventLanguage(title, description || null).catch((error) => {
+      console.warn("[events] Language detection failed:", error)
+      return null
+    })
+    console.log("[events] Language detection result:", { detectedLanguage, titlePreview: title.substring(0, 50) })
+
     const event = await db.event.create({
       data: {
         title,
@@ -126,6 +137,7 @@ export async function POST(request: NextRequest) {
         priceAmount: body.priceAmount ? Number.parseInt(body.priceAmount) : null,
         websiteUrl: data.url || body.websiteUrl,
         languages: body.languages || ["en"],
+        language: detectedLanguage, // Store detected language
         imageUrls: data.images || body.imageUrls || [],
         searchText,
         searchTextFolded,
@@ -140,6 +152,28 @@ export async function POST(request: NextRequest) {
         },
       },
     })
+
+    // Generate and store embedding (async, non-blocking, errors don't fail event creation)
+    if (!shouldSkipEmbedding()) {
+      console.log("[events] Starting embedding generation for event:", { eventId: event.id, titlePreview: title.substring(0, 50) })
+      generateEventEmbedding(title, description || null, body.venueName, categories || [])
+        .then(async (embedding) => {
+          if (embedding) {
+            console.log("[events] Embedding generated, storing for event:", { eventId: event.id })
+            await storeEventEmbedding(event.id, embedding).catch((error) => {
+              console.warn(`[events] Failed to store embedding for event ${event.id}:`, error)
+            })
+          } else {
+            console.warn("[events] Embedding generation returned null for event:", { eventId: event.id })
+          }
+        })
+        .catch((error) => {
+          console.warn(`[events] Embedding generation failed for event ${event.id}:`, error)
+          // Embedding is optional, don't fail event creation
+        })
+    } else {
+      console.log("[events] Embedding generation skipped (SKIP_EMBEDDING_GENERATION=true)")
+    }
 
     let emailedEditLink = false
     try {
