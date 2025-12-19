@@ -27,10 +27,29 @@ export async function POST(request: NextRequest) {
     // Ensure query exists for search
     if (!query || typeof query !== "string" || query.trim().length === 0) {
       console.log("[v0] No query provided, returning empty results")
+      const latency = Date.now() - startTime
+      
+      console.log(
+        JSON.stringify({
+          phase: "2",
+          intent: "SEARCH",
+          entities: {},
+          input_mode: "text",
+          search: {
+            source: "internal",
+            query_string: "",
+            results_count: 0,
+            latency_ms: latency,
+          },
+          error_code: "ERR_EMPTY_QUERY",
+        }),
+      )
+      
       return NextResponse.json({
         results: [],
         count: 0,
-        latency_ms: Date.now() - startTime,
+        latency_ms: latency,
+        error_code: "ERR_EMPTY_QUERY",
       })
     }
 
