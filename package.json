@@ -10,6 +10,7 @@
     "check:env": "tsx scripts/check-env-strict.ts",
     "db:bootstrap": "tsx scripts/run-database-setup.ts",
     "db:check": "tsx scripts/db-check.ts",
+    "db:verify-language": "tsx scripts/verify-language-migration.ts",
     "db:dev-setup": "tsx scripts/run-all-setup.ts",
     "db:fix-event-schema": "tsx scripts/fix-event-schema.ts",
     "db:setup": "tsx scripts/run-all-setup.ts",
