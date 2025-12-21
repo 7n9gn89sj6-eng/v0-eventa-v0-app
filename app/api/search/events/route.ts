@@ -91,15 +91,32 @@ export async function GET(req: NextRequest) {
         where.country = { contains: country, mode: "insensitive" }
       }
 
-      const [events, count] = await Promise.all([
-        prisma.event.findMany({
-          where,
-          orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
+      let events, count
+      try {
+        [events, count] = await Promise.all([
+          withLanguageColumnGuard(() => prisma.event.findMany({
+            where,
+            orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
+            take,
+            skip,
+          })),
+          prisma.event.count({ where }),
+        ])
+      } catch (error: any) {
+        // If language column is missing, Prisma will fail
+        // Return empty results rather than 500 error
+        // The warning has already been logged by withLanguageColumnGuard
+        console.error("[SEARCH FALLBACK] Query failed, returning empty results:", error?.message)
+        return NextResponse.json({
+          events: [],
+          count: 0,
+          page: 1,
           take,
-          skip,
-        }),
-        prisma.event.count({ where }),
-      ])
+          internal: [],
+          external: [],
+          total: 0,
+        })
+      }
       return NextResponse.json({
         events,
         count,
@@ -218,15 +235,32 @@ export async function GET(req: NextRequest) {
 
     console.log("[v0] Final where clause:", JSON.stringify(where, null, 2))
 
-    const [events, count] = await Promise.all([
-      prisma.event.findMany({
-        where,
-        orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
+    let events, count
+    try {
+      [events, count] = await Promise.all([
+        withLanguageColumnGuard(() => prisma.event.findMany({
+          where,
+          orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
+          take,
+          skip,
+        })),
+        prisma.event.count({ where }),
+      ])
+    } catch (error: any) {
+      // If language column is missing, Prisma will fail
+      // Return empty results rather than 500 error
+      // The warning has already been logged by withLanguageColumnGuard
+      console.error("[SEARCH FALLBACK] Query failed, returning empty results:", error?.message)
+      return NextResponse.json({
+        events: [],
+        count: 0,
+        page,
         take,
-        skip,
-      }),
-      prisma.event.count({ where }),
-    ])
+        internal: [],
+        external: [],
+        total: 0,
+      })
+    }
 
     console.log("[v0] Search query:", q, "filters:", { city, category, dateFrom, dateTo }, "found:", count, "events")
 

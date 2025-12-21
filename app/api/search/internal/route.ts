@@ -5,6 +5,7 @@ import { PUBLIC_EVENT_WHERE } from "@/lib/events"
 import { searchDatabase } from "@/lib/search/database-search"
 import { normalizeQuery } from "@/lib/search/query-normalization"
 import { detectLanguage } from "@/lib/search/language-detection"
+import { withLanguageColumnGuard } from "@/lib/db-runtime-guard"
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
@@ -315,11 +316,19 @@ export async function POST(request: NextRequest) {
     console.log(`[v0] Searching with: query="${query}", eventIds=${eventIds.length}, entities=`, entities)
 
     // Execute search - fetch full event objects
-    let events = await db.event.findMany({
-      where,
-      orderBy: [{ startAt: "asc" }],
-      take: 50, // Get more results initially
-    })
+    let events
+    try {
+      events = await withLanguageColumnGuard(() => db.event.findMany({
+        where,
+        orderBy: [{ startAt: "asc" }],
+        take: 50, // Get more results initially
+      }))
+    } catch (error: any) {
+      // If language column is missing, return empty results
+      // The warning has already been logged by withLanguageColumnGuard
+      console.error("[SEARCH FALLBACK] Query failed, returning empty results:", error?.message)
+      events = []
+    }
 
     console.log(`[v0] Found ${events.length} events after initial filtering`)
 
@@ -330,11 +339,16 @@ export async function POST(request: NextRequest) {
       delete fallbackWhere.startAt
       fallbackWhere.startAt = { gte: new Date() } // Only future events
       
-      events = await db.event.findMany({
-        where: fallbackWhere,
-        orderBy: [{ startAt: "asc" }],
-        take: 50,
-      })
+      try {
+        events = await withLanguageColumnGuard(() => db.event.findMany({
+          where: fallbackWhere,
+          orderBy: [{ startAt: "asc" }],
+          take: 50,
+        }))
+      } catch (error: any) {
+        console.error("[SEARCH FALLBACK] Fallback query failed:", error?.message)
+        events = []
+      }
       console.log(`[v0] Fallback search found ${events.length} events`)
     }
 
@@ -402,11 +416,17 @@ export async function POST(request: NextRequest) {
         ]
       }
 
-      const fallbackEvents = await db.event.findMany({
-        where: fallbackWhere,
-        orderBy: [{ startAt: "asc" }],
-        take: 20,
-      })
+      let fallbackEvents
+      try {
+        fallbackEvents = await withLanguageColumnGuard(() => db.event.findMany({
+          where: fallbackWhere,
+          orderBy: [{ startAt: "asc" }],
+          take: 20,
+        }))
+      } catch (error: any) {
+        console.error("[SEARCH FALLBACK] Fallback query failed:", error?.message)
+        fallbackEvents = []
+      }
       
       if (fallbackEvents.length > 0) {
         events = fallbackEvents
