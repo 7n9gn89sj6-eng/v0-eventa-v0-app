@@ -3,6 +3,7 @@ import prisma from "@/lib/db"
 import { PUBLIC_EVENT_WHERE } from "@/lib/events"
 import type { EventCategory } from "@prisma/client"
 import { searchWeb } from "@/lib/search/web-search"
+import { withLanguageColumnGuard, getEventSelectWithoutLanguage, isLanguageFilteringAvailable } from "@/lib/db-runtime-guard"
 
 const EXTERNAL_STUB_EVENTS = [
   {
@@ -103,19 +104,35 @@ export async function GET(req: NextRequest) {
           prisma.event.count({ where }),
         ])
       } catch (error: any) {
-        // If language column is missing, Prisma will fail
-        // Return empty results rather than 500 error
-        // The warning has already been logged by withLanguageColumnGuard
-        console.error("[SEARCH FALLBACK] Query failed, returning empty results:", error?.message)
-        return NextResponse.json({
-          events: [],
-          count: 0,
-          page: 1,
-          take,
-          internal: [],
-          external: [],
-          total: 0,
-        })
+        // If language column is missing, retry with explicit select excluding language
+        if (!isLanguageFilteringAvailable()) {
+          try {
+            [events, count] = await Promise.all([
+              prisma.event.findMany({
+                where,
+                select: getEventSelectWithoutLanguage(),
+                orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
+                take,
+                skip,
+              }),
+              prisma.event.count({ where }),
+            ])
+          } catch (retryError: any) {
+            console.error("[SEARCH FALLBACK] Retry query also failed:", retryError?.message)
+            return NextResponse.json({
+              events: [],
+              count: 0,
+              page: 1,
+              take,
+              internal: [],
+              external: [],
+              total: 0,
+            })
+          }
+        } else {
+          // Some other error - rethrow
+          throw error
+        }
       }
       return NextResponse.json({
         events,
@@ -247,19 +264,35 @@ export async function GET(req: NextRequest) {
         prisma.event.count({ where }),
       ])
     } catch (error: any) {
-      // If language column is missing, Prisma will fail
-      // Return empty results rather than 500 error
-      // The warning has already been logged by withLanguageColumnGuard
-      console.error("[SEARCH FALLBACK] Query failed, returning empty results:", error?.message)
-      return NextResponse.json({
-        events: [],
-        count: 0,
-        page,
-        take,
-        internal: [],
-        external: [],
-        total: 0,
-      })
+      // If language column is missing, retry with explicit select excluding language
+      if (!isLanguageFilteringAvailable()) {
+        try {
+          [events, count] = await Promise.all([
+            prisma.event.findMany({
+              where,
+              select: getEventSelectWithoutLanguage(),
+              orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
+              take,
+              skip,
+            }),
+            prisma.event.count({ where }),
+          ])
+        } catch (retryError: any) {
+          console.error("[SEARCH FALLBACK] Retry query also failed:", retryError?.message)
+          return NextResponse.json({
+            events: [],
+            count: 0,
+            page,
+            take,
+            internal: [],
+            external: [],
+            total: 0,
+          })
+        }
+      } else {
+        // Some other error - rethrow
+        throw error
+      }
     }
 
     console.log("[v0] Search query:", q, "filters:", { city, category, dateFrom, dateTo }, "found:", count, "events")

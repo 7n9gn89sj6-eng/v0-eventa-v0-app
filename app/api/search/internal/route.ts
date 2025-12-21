@@ -5,7 +5,7 @@ import { PUBLIC_EVENT_WHERE } from "@/lib/events"
 import { searchDatabase } from "@/lib/search/database-search"
 import { normalizeQuery } from "@/lib/search/query-normalization"
 import { detectLanguage } from "@/lib/search/language-detection"
-import { withLanguageColumnGuard } from "@/lib/db-runtime-guard"
+import { withLanguageColumnGuard, getEventSelectWithoutLanguage, isLanguageFilteringAvailable } from "@/lib/db-runtime-guard"
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
@@ -324,10 +324,23 @@ export async function POST(request: NextRequest) {
         take: 50, // Get more results initially
       }))
     } catch (error: any) {
-      // If language column is missing, return empty results
-      // The warning has already been logged by withLanguageColumnGuard
-      console.error("[SEARCH FALLBACK] Query failed, returning empty results:", error?.message)
-      events = []
+      // If language column is missing, retry with explicit select excluding language
+      if (!isLanguageFilteringAvailable()) {
+        try {
+          events = await db.event.findMany({
+            where,
+            select: getEventSelectWithoutLanguage(),
+            orderBy: [{ startAt: "asc" }],
+            take: 50,
+          })
+        } catch (retryError: any) {
+          console.error("[SEARCH FALLBACK] Retry query also failed:", retryError?.message)
+          events = []
+        }
+      } else {
+        // Some other error - rethrow
+        throw error
+      }
     }
 
     console.log(`[v0] Found ${events.length} events after initial filtering`)
@@ -346,8 +359,21 @@ export async function POST(request: NextRequest) {
           take: 50,
         }))
       } catch (error: any) {
-        console.error("[SEARCH FALLBACK] Fallback query failed:", error?.message)
-        events = []
+        if (!isLanguageFilteringAvailable()) {
+          try {
+            events = await db.event.findMany({
+              where: fallbackWhere,
+              select: getEventSelectWithoutLanguage(),
+              orderBy: [{ startAt: "asc" }],
+              take: 50,
+            })
+          } catch (retryError: any) {
+            console.error("[SEARCH FALLBACK] Fallback retry query failed:", retryError?.message)
+            events = []
+          }
+        } else {
+          throw error
+        }
       }
       console.log(`[v0] Fallback search found ${events.length} events`)
     }
@@ -424,8 +450,21 @@ export async function POST(request: NextRequest) {
           take: 20,
         }))
       } catch (error: any) {
-        console.error("[SEARCH FALLBACK] Fallback query failed:", error?.message)
-        fallbackEvents = []
+        if (!isLanguageFilteringAvailable()) {
+          try {
+            fallbackEvents = await db.event.findMany({
+              where: fallbackWhere,
+              select: getEventSelectWithoutLanguage(),
+              orderBy: [{ startAt: "asc" }],
+              take: 20,
+            })
+          } catch (retryError: any) {
+            console.error("[SEARCH FALLBACK] Fallback retry query failed:", retryError?.message)
+            fallbackEvents = []
+          }
+        } else {
+          throw error
+        }
       }
       
       if (fallbackEvents.length > 0) {
