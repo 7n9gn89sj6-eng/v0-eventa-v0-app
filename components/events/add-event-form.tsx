@@ -14,6 +14,7 @@ import { Loader2, CheckCircle2, Sparkles, AlertCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useI18n } from "@/lib/i18n/context"
 import type { EventSubmitResponse } from "@/lib/types"
+import { PlacesAutocomplete } from "@/components/forms/places-autocomplete"
 
 const API_URL = "/api/events/submit"
 
@@ -447,12 +448,36 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                   <FormItem>
                     <FormLabel>{tForm("fields.address")}</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder={tForm("fields.addressPlaceholder")}
-                        {...field}
+                      <PlacesAutocomplete
+                        value={field.value}
+                        onChange={field.onChange}
+                        onPlaceSelect={(place) => {
+                          // Auto-fill city, country, and postcode from selected place
+                          if (place.city) {
+                            form.setValue("city", place.city, { shouldValidate: true })
+                          }
+                          if (place.country) {
+                            form.setValue("country", place.country, { shouldValidate: true })
+                          }
+                          if (place.postcode) {
+                            form.setValue("postcode", place.postcode, { shouldValidate: true })
+                          }
+                          // Store lat/lng for future use (could be added to form schema if needed)
+                          console.log("[AddEventForm] Place selected:", {
+                            address: place.address,
+                            city: place.city,
+                            country: place.country,
+                            lat: place.lat,
+                            lng: place.lng,
+                          })
+                        }}
+                        placeholder={tForm("fields.addressPlaceholder") || "Enter an address"}
                         disabled={isSubmitting}
                       />
                     </FormControl>
+                    <FormDescription>
+                      Start typing an address and select from suggestions. City and country will be filled automatically.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

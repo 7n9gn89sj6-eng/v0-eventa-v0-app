@@ -4,6 +4,7 @@ import { useSearch } from "@/lib/search/use-search"
 import { ResultCard } from "./result-card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
 import { Loader2, Globe } from "lucide-react"
 import type { SearchFilters } from "@/lib/types"
 
@@ -78,20 +79,59 @@ export function SearchResults({ query, filters, includeWeb, onIncludeWebChange, 
         )}
       </div>
 
-      {usedWeb && (
-        <Alert>
-          <AlertDescription>
-            Showing results from Eventa and the web. Web results are labeled with "Source: Web".
-          </AlertDescription>
-        </Alert>
-      )}
+      {/* Separate internal and external results with clear labels */}
+      {(() => {
+        const internalResults = results.filter((r) => r.source === "internal" || r.source === "eventa")
+        const externalResults = results.filter((r) => r.source === "external" || r.source === "web" || (r as any).isWebResult)
 
-      {/* Results grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-        {results.map((result, index) => (
-          <ResultCard key={`${result.source}-${result.id || index}`} result={result} />
-        ))}
-      </div>
+        return (
+          <>
+            {/* Eventa Events Section */}
+            {internalResults.length > 0 && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-semibold">Eventa Events</h3>
+                  <Badge variant="default">{internalResults.length}</Badge>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                  {internalResults.map((result, index) => (
+                    <ResultCard key={`${result.source}-${result.id || index}`} result={result} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Web Results Section */}
+            {externalResults.length > 0 && (
+              <div className="space-y-4 pt-6 border-t">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-semibold">Related information from the web</h3>
+                  <Badge variant="secondary">{externalResults.length}</Badge>
+                </div>
+                <Alert>
+                  <AlertDescription>
+                    These are informational web results. They may not be current events or may require verification.
+                  </AlertDescription>
+                </Alert>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                  {externalResults.map((result, index) => (
+                    <ResultCard key={`${result.source}-${result.id || index}`} result={result} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Fallback: If no separation possible, show all results */}
+            {internalResults.length === 0 && externalResults.length === 0 && results.length > 0 && (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                {results.map((result, index) => (
+                  <ResultCard key={`${result.source}-${result.id || index}`} result={result} />
+                ))}
+              </div>
+            )}
+          </>
+        )
+      })()}
     </div>
   )
 }

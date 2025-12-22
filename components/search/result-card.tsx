@@ -38,7 +38,9 @@ export function ResultCard({ result }: ResultCardProps) {
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
             <div className="mb-2 flex items-center gap-2">
-              <Badge variant={isEventa ? "default" : "secondary"}>Source: {isEventa ? "Eventa" : "Web"}</Badge>
+              <Badge variant={isEventa ? "default" : "secondary"}>
+                {isEventa ? "Eventa Event" : "Web"}
+              </Badge>
               {result.priceFree && <Badge variant="outline">Free</Badge>}
             </div>
             <h3 className="text-xl font-semibold leading-tight text-balance">

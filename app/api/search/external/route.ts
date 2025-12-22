@@ -309,10 +309,31 @@ export async function POST(request: NextRequest) {
       console.log(`[v0] No date filter for external search (date_iso: ${date_iso}, date: ${date})`)
     }
 
-    // Filter results by city if provided (exclude ambiguous matches like "Berlin Maryland" when searching for "Berlin")
+    // LOCATION DISAMBIGUATION: Filter results by city with country-aware disambiguation
     if (city) {
       const cityLower = city.toLowerCase().trim()
+      const countryLower = country ? country.toLowerCase().trim() : null
       const beforeCityFilter = filteredResults.length
+      
+      // Known ambiguous cities that need country disambiguation
+      const ambiguousCities: Record<string, string[]> = {
+        "melbourne": ["australia", "florida", "usa"],
+        "ithaca": ["greece", "new york", "usa"],
+        "ithaki": ["greece"],
+        "cambridge": ["united kingdom", "uk", "massachusetts", "usa"],
+        "naples": ["italy", "florida", "usa"],
+        "berlin": ["germany", "maryland", "usa"],
+        "paris": ["france", "texas", "usa"],
+        "london": ["united kingdom", "uk", "ontario", "canada"],
+        "rome": ["italy", "georgia", "usa"],
+        "athens": ["greece", "georgia", "usa"],
+        "milan": ["italy", "tennessee", "usa"],
+        "vienna": ["austria", "virginia", "usa"],
+        "madrid": ["spain", "new mexico", "usa"],
+      }
+      
+      const isAmbiguous = ambiguousCities[cityLower] !== undefined
+      const expectedCountries = isAmbiguous ? ambiguousCities[cityLower] : []
       
       filteredResults = filteredResults.filter((result) => {
         const resultCity = (result.city || "").toLowerCase().trim()
@@ -320,36 +341,66 @@ export async function POST(request: NextRequest) {
         const resultAddress = (result.address || "").toLowerCase()
         const resultTitle = (result.title || "").toLowerCase()
         const resultDescription = (result.description || "").toLowerCase()
+        const resultCountry = (result.country || "").toLowerCase().trim()
         
         // Check if city appears as a standalone word (not part of a compound name)
-        // This helps avoid "Berlin Maryland" matching "Berlin"
         const cityRegex = new RegExp(`\\b${cityLower}\\b`, "i")
         
         // Must match city in city field or location
         const matchesCity = cityRegex.test(resultCity) || cityRegex.test(resultLocation)
         
-        // If city matches, check for disambiguation words that indicate wrong location
-        // Common patterns: "City, State" or "City State" (e.g., "Berlin Maryland")
-        if (matchesCity) {
-          // Check if there's a state/country mentioned that doesn't match
-          const hasStateAfter = /\b(maryland|md|california|ca|texas|tx|new york|ny|florida|fl)\b/i.test(resultCity + " " + resultLocation + " " + resultAddress)
-          const hasCountryAfter = /\b(usa|united states|us)\b/i.test(resultCity + " " + resultLocation + " " + resultAddress)
-          
-          // If searching for a major city like "Berlin", exclude US state matches unless explicitly mentioned
-          const majorCities = ["berlin", "paris", "london", "rome", "madrid", "athens", "milan", "vienna"]
-          if (majorCities.includes(cityLower) && hasStateAfter && !hasCountryAfter) {
-            // Likely a US city with same name, exclude it
-            return false
-          }
-          
-          return true
+        if (!matchesCity) {
+          // Also check title/description for city mentions, but be more lenient
+          return cityRegex.test(resultTitle) || cityRegex.test(resultDescription)
         }
         
-        // Also check title/description for city mentions, but be more lenient
-        return cityRegex.test(resultTitle) || cityRegex.test(resultDescription)
+        // If city matches, apply disambiguation logic
+        if (isAmbiguous) {
+          // If country was specified in query, use it to filter
+          if (countryLower) {
+            // Check if result mentions the expected country
+            const resultText = `${resultCity} ${resultLocation} ${resultAddress} ${resultTitle} ${resultDescription} ${resultCountry}`.toLowerCase()
+            const countryMatches = expectedCountries.some((expectedCountry) => {
+              const expectedLower = expectedCountry.toLowerCase()
+              // Check if result text contains the expected country
+              return resultText.includes(expectedLower) || 
+                     (expectedLower.includes("usa") && /\b(usa|united states|us|america)\b/i.test(resultText)) ||
+                     (expectedLower.includes("uk") && /\b(uk|united kingdom|britain|british)\b/i.test(resultText))
+            })
+            
+            // If we're searching for a specific country, only include results that match
+            if (countryLower && !countryMatches) {
+              // Check if the specified country matches any expected country
+              const specifiedMatchesExpected = expectedCountries.some((expectedCountry) => {
+                const expectedLower = expectedCountry.toLowerCase()
+                return countryLower.includes(expectedLower) || expectedLower.includes(countryLower)
+              })
+              
+              if (specifiedMatchesExpected && !countryMatches) {
+                return false // Exclude if country was specified but doesn't match
+              }
+            }
+          } else {
+            // No country specified - exclude US state matches for major international cities
+            const hasUSState = /\b(maryland|md|california|ca|texas|tx|new york|ny|florida|fl|georgia|ga|tennessee|tn|virginia|va|new mexico|nm|massachusetts|ma|ontario)\b/i.test(
+              resultCity + " " + resultLocation + " " + resultAddress
+            )
+            const hasUSCountry = /\b(usa|united states|us|america)\b/i.test(
+              resultCity + " " + resultLocation + " " + resultAddress + " " + resultCountry
+            )
+            
+            // For ambiguous cities, prefer international matches unless US is explicitly mentioned
+            if (hasUSState && !hasUSCountry) {
+              // Likely a US city with same name, exclude it for ambiguous international cities
+              return false
+            }
+          }
+        }
+        
+        return true
       })
       
-      console.log(`[v0] Filtered external results by city "${city}": ${beforeCityFilter} -> ${filteredResults.length}`)
+      console.log(`[v0] Filtered external results by city "${city}"${country ? `, country "${country}"` : ""}: ${beforeCityFilter} -> ${filteredResults.length}`)
     }
 
     const totalLatency = Date.now() - startTime

@@ -117,12 +117,79 @@ export async function POST(request: NextRequest) {
   const externalError = externalData?.error || (externalResponse.status === "rejected" ? "ERR_EXT_CONNECT" : null)
 
   const internalResults = internalData?.results || []
-  const externalResults = externalData?.results || []
+  let externalResults = externalData?.results || []
+
+  // TIME RELEVANCE: Filter stale web results when time intent is present
+  const hasTimeIntent = entities.date || entities.date_iso || entities.time || 
+    (query && /(this|next|tonight|today|tomorrow|weekend|over|during)\s+(weekend|week|month|christmas|xmas|easter|holiday)/i.test(query))
+  
+  if (hasTimeIntent && externalResults.length > 0) {
+    const { DateTime } = await import("luxon")
+    const now = DateTime.now()
+    
+    // Determine the target date range from entities
+    let targetStart: DateTime | null = null
+    let targetEnd: DateTime | null = null
+    
+    if (entities.date_iso) {
+      targetStart = DateTime.fromISO(entities.date_iso).startOf("day")
+      // Default to 7 days duration if not specified
+      targetEnd = targetStart.plus({ days: 7 }).endOf("day")
+    } else if (entities.date) {
+      const dateLower = entities.date.toLowerCase()
+      
+      if (dateLower.includes("tonight") || dateLower.includes("today")) {
+        targetStart = now.startOf("day")
+        targetEnd = now.endOf("day")
+      } else if (dateLower.includes("tomorrow")) {
+        targetStart = now.plus({ days: 1 }).startOf("day")
+        targetEnd = targetStart.endOf("day")
+      } else if (dateLower.includes("this weekend") || dateLower.includes("weekend")) {
+        const daysUntilSaturday = (6 - now.weekday + 7) % 7
+        targetStart = now.plus({ days: daysUntilSaturday || 7 }).startOf("day")
+        targetEnd = targetStart.plus({ days: 1 }).endOf("day")
+      } else if (dateLower.includes("next weekend")) {
+        const daysUntilSaturday = (6 - now.weekday + 7) % 7
+        targetStart = now.plus({ days: (daysUntilSaturday || 7) + 7 }).startOf("day")
+        targetEnd = targetStart.plus({ days: 1 }).endOf("day")
+      }
+    }
+    
+    // Filter external results by date relevance
+    if (targetStart && targetEnd) {
+      const beforeFilter = externalResults.length
+      externalResults = externalResults.filter((result) => {
+        if (!result.startAt) {
+          // If no date, mark as informational (not current event)
+          return true // Keep but will be labeled as informational
+        }
+        
+        try {
+          const eventDate = DateTime.fromISO(result.startAt)
+          // Keep results within 30 days of target range (more lenient for web results)
+          const daysDiff = Math.abs(eventDate.diff(targetStart, "days").days)
+          return daysDiff <= 30
+        } catch {
+          // Invalid date, keep but mark as informational
+          return true
+        }
+      })
+      
+      if (beforeFilter !== externalResults.length) {
+        console.log(`[v0] Filtered stale web results by time intent: ${beforeFilter} -> ${externalResults.length}`)
+      }
+    }
+  }
 
   const deduped = deduplicateResults(internalResults, externalResults)
 
-  // Internal first, then external (sorted by whitelist order)
-  const mergedResults = [...deduped.internal, ...deduped.external]
+  // EVENTS-FIRST: Always prioritize Eventa events
+  // Internal results come first, then external (web) results
+  // External results are clearly marked as "Related information from the web"
+  const mergedResults = [
+    ...deduped.internal.map((r) => ({ ...r, source: "internal" as const })),
+    ...deduped.external.map((r) => ({ ...r, source: "external" as const, isWebResult: true })),
+  ]
 
   const totalLatency = Date.now() - startTime
 
