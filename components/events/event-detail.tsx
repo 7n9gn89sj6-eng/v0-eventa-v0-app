@@ -32,8 +32,13 @@ export function EventDetail({
   const [showBanner, setShowBanner] = useState(showSuccessBanner)
   const [showEditBanner, setShowEditBanner] = useState(showEditedBanner) // Add state for edit banner
 
+  // Use fixed locale to prevent hydration mismatches between server and client
   const startDate = DateTime.fromJSDate(new Date(event.startAt)).setZone(event.timezone)
   const endDate = DateTime.fromJSDate(new Date(event.endAt)).setZone(event.timezone)
+  
+  // Format dates consistently for server and client rendering
+  const startDateFormatted = startDate.toFormat("d MMMM yyyy 'at' HH:mm z")
+  const endDateFormatted = endDate.toFormat("d MMMM yyyy 'at' HH:mm z")
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
@@ -104,8 +109,8 @@ export function EventDetail({
           <div className="flex items-start gap-3">
             <Calendar className="mt-0.5 h-5 w-5 text-muted-foreground" />
             <div>
-              <p className="font-medium">{startDate.toLocaleString(DateTime.DATETIME_FULL)}</p>
-              <p className="text-sm text-muted-foreground">to {endDate.toLocaleString(DateTime.DATETIME_FULL)}</p>
+              <p className="font-medium">{startDateFormatted}</p>
+              <p className="text-sm text-muted-foreground">to {endDateFormatted}</p>
             </div>
           </div>
 

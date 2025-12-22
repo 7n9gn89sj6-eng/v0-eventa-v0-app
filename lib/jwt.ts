@@ -109,7 +109,7 @@ export async function createSession(userId: string) {
  */
 export async function getSession() {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const token = cookieStore.get("session")?.value;
     if (!token) return null;
 

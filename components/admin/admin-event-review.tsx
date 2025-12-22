@@ -81,6 +81,9 @@ export function AdminEventReview({
         <div className="flex flex-wrap gap-2 items-center">
           <Badge variant="outline">Status: {event.status}</Badge>
           <Badge variant="outline">AI: {event.aiStatus ?? "PENDING"}</Badge>
+          <Badge variant={event.moderationStatus === "APPROVED" ? "default" : "destructive"}>
+            Moderation: {event.moderationStatus ?? "NULL"}
+          </Badge>
           {event.publishedAt && (
             <span className="text-xs text-muted-foreground">
               Published: {new Date(event.publishedAt).toLocaleString()}
@@ -133,6 +136,44 @@ export function AdminEventReview({
           {event.description || "No description provided."}
         </p>
       </section>
+
+      {/* MODERATION STATUS FIX */}
+      {event.status === "PUBLISHED" && event.aiStatus === "SAFE" && event.moderationStatus !== "APPROVED" && (
+        <section className="space-y-2 border rounded-md p-4 bg-yellow-50 dark:bg-yellow-900/20">
+          <h2 className="font-semibold text-lg text-yellow-800 dark:text-yellow-200">
+            ⚠️ Event Not Visible in Search
+          </h2>
+          <p className="text-sm text-yellow-700 dark:text-yellow-300">
+            This event is PUBLISHED and SAFE, but <strong>moderationStatus</strong> is not "APPROVED". 
+            It will not appear in search results until this is fixed.
+          </p>
+          <Button
+            onClick={async () => {
+              if (!confirm("Fix moderationStatus to APPROVED?")) return;
+              setLoadingAction("fix-status");
+              try {
+                const res = await fetch(`/api/events/${event.id}/fix-status`, {
+                  method: "POST",
+                });
+                if (!res.ok) {
+                  alert("Failed to fix moderation status");
+                } else {
+                  startTransition(() => router.refresh());
+                }
+              } catch (err) {
+                console.error("[ADMIN] Fix status error:", err);
+                alert("Error fixing moderation status");
+              } finally {
+                setLoadingAction(null);
+              }
+            }}
+            disabled={isBusy}
+            className="bg-yellow-600 hover:bg-yellow-700"
+          >
+            {loadingAction === "fix-status" ? "Fixing..." : "Fix Moderation Status"}
+          </Button>
+        </section>
+      )}
 
       {/* AI INFO */}
       {(event.aiStatus || event.aiReason) && (

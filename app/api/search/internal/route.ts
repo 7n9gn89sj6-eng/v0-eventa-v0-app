@@ -6,6 +6,7 @@ import { searchDatabase } from "@/lib/search/database-search"
 import { normalizeQuery } from "@/lib/search/query-normalization"
 import { detectLanguage } from "@/lib/search/language-detection"
 import { withLanguageColumnGuard, getEventSelectWithoutLanguage, isLanguageFilteringAvailable } from "@/lib/db-runtime-guard"
+import { buildDateOverlapWhere, buildDateRangeOverlapWhere } from "@/lib/search/date-overlap"
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
@@ -180,16 +181,49 @@ export async function POST(request: NextRequest) {
     }
 
     // PRIORITY 1: LOCATION FILTERS (city/country) - applied first
+    // Handle city name variations (e.g., Brussels/Bruxelles, Athens/Αθήνα)
     if (entities?.city) {
       const cityName = entities.city.trim()
       const cityLower = cityName.toLowerCase()
       
-      // Use contains to handle variations in city name formatting
-      where.city = {
-        contains: cityName,
-        mode: "insensitive",
+      // City name variations map (English -> other language variants)
+      const cityVariations: Record<string, string[]> = {
+        "brussels": ["bruxelles", "brussel", "bruselas"],
+        "athens": ["αθήνα", "athina", "athen"],
+        "rome": ["roma", "rom"],
+        "paris": ["paris"],
+        "milan": ["milano"],
+        "florence": ["firenze"],
+        "naples": ["napoli"],
+        "venice": ["venezia"],
+        "vienna": ["wien"],
+        "copenhagen": ["københavn", "kobenhavn"],
+        "prague": ["praha"],
+        "warsaw": ["warszawa"],
+        "budapest": ["budapest"],
+        "bucharest": ["bucurești", "bucuresti"],
       }
-      console.log(`[v0] Filtering by city: ${cityName} (using contains for flexibility)`)
+      
+      // Check if we have variations for this city
+      const variations = cityVariations[cityLower] || []
+      const allCityNames = [cityLower, ...variations]
+      
+      // Build OR conditions for city matching (any variation OR city in title/description)
+      const cityConditions: any[] = [
+        // Match city field with any variation
+        ...allCityNames.map(cityVar => ({
+          city: { contains: cityVar, mode: "insensitive" },
+        })),
+        // Also match if city appears in title or description
+        { title: { contains: cityLower, mode: "insensitive" } },
+        { description: { contains: cityLower, mode: "insensitive" } },
+      ]
+      
+      // Add city conditions to AND (we'll combine with other filters)
+      where.AND = where.AND || []
+      where.AND.push({ OR: cityConditions })
+      
+      console.log(`[v0] PRIORITY 1 - Filtering by city with variations: ${cityName} → [${allCityNames.join(", ")}]`)
       
       // If country is also specified, filter by country to disambiguate cities with the same name
       if (entities?.country) {
@@ -292,9 +326,17 @@ export async function POST(request: NextRequest) {
     // PRIORITY 3: TEXT SEARCH RESULTS, CATEGORY, VENUE - applied after location and date
     // If we have full-text search results, filter by those IDs
     // This ensures we only get events that matched the full-text search
+    // BUT: If we have location filters but no text search results, still search by location
+    // This allows finding events by city even if text search didn't match (e.g., synonym issues)
     if (eventIds.length > 0) {
       where.id = { in: eventIds }
       console.log(`[v0] PRIORITY 3 - Filtering by text search results: ${eventIds.length} event IDs`)
+    } else if (query && query.trim().length > 0) {
+      // No text search results but we have a query - this might mean:
+      // 1. Text search didn't match (synonyms not working, etc.)
+      // 2. We should still try to find events by location/date if provided
+      console.log(`[v0] PRIORITY 3 - No text search results for query "${query}", but will still search by location/date filters`)
+      // Don't add text search filter - let location/date filters work
     }
 
     // Build OR conditions for venue and category
@@ -360,13 +402,33 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`[v0] Found ${events.length} events after initial filtering`)
+    if (events.length === 0 && query) {
+      console.log(`[v0] ⚠️ DEBUG: No events found. Checking filters:`)
+      console.log(`  - Query: "${query}"`)
+      console.log(`  - City filter: ${entities?.city || "none"}`)
+      console.log(`  - Country filter: ${entities?.country || "none"}`)
+      console.log(`  - Date filter: ${dateFilter ? JSON.stringify(dateFilter) : "none"}`)
+      console.log(`  - Text search eventIds: ${eventIds.length} events`)
+      console.log(`  - Where clause:`, JSON.stringify(where, null, 2))
+      
+      // Try a simple query to see if ANY events exist matching basic criteria
+      const testWhere = { ...PUBLIC_EVENT_WHERE }
+      if (entities?.city) {
+        testWhere.city = { contains: entities.city, mode: "insensitive" }
+      }
+      const testCount = await db.event.count({ where: testWhere })
+      console.log(`  - Test: Found ${testCount} events matching PUBLIC_EVENT_WHERE + city filter`)
+    }
 
     // If no results with strict filtering and we have a date filter, try without date filter
     if (events.length === 0 && dateFilter && eventIds.length === 0) {
       console.log("[v0] No results with date filter, trying without date filter")
       const fallbackWhere = { ...where }
       delete fallbackWhere.startAt
-      fallbackWhere.startAt = { gte: new Date() } // Only future events
+      delete fallbackWhere.endAt
+      // Use overlap logic: events must end after now
+      const dateOverlap = buildDateOverlapWhere(new Date(), null)
+      Object.assign(fallbackWhere, dateOverlap)
       
       try {
         events = await withLanguageColumnGuard(() => db.event.findMany({

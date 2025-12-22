@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
         priceAmount: body.priceAmount ? Number.parseInt(body.priceAmount) : null,
         websiteUrl: data.url || body.websiteUrl,
         languages: body.languages || ["en"],
-        language: detectedLanguage, // Store detected language
+        ...(detectedLanguage ? { language: detectedLanguage } : {}), // Store detected language (only if detected)
         imageUrls: data.images || body.imageUrls || [],
         searchText,
         searchTextFolded,

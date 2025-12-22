@@ -5,6 +5,7 @@ import { DateTime } from "luxon"
 import { foldAccents } from "@/lib/search/accent-fold"
 import { logger } from "@/lib/logger"
 import { generateQueryEmbedding, embeddingToPGVector } from "@/lib/embeddings/query"
+import { buildDateOverlapWhere, buildDateRangeOverlapWhere } from "@/lib/search/date-overlap"
 
 // Type for raw database query result
 interface DatabaseEventRow {
@@ -79,37 +80,39 @@ export async function searchDatabase(options: DatabaseSearchOptions): Promise<Se
       logger.info("[searchDatabase] Semantic search disabled, using full-text search only")
     }
 
-  // Build where-clause
-  const where: any = {
-    startAt: {
-      gte: new Date(),
-    },
-  }
-
-  // Date range filter
+  // Build where-clause with date overlap logic for multi-day events
+  // Overlap rule: event.startAt <= searchEnd AND event.endAt >= searchStart
+  const where: any = {}
+  
+  // Date range filter using overlap logic
   if (filters?.dateRange) {
     const now = DateTime.now()
     switch (filters.dateRange) {
       case "today":
-        where.startAt = {
-          gte: now.startOf("day").toJSDate(),
-          lte: now.endOf("day").toJSDate(),
-        }
+        // Events that overlap today: startAt <= endOfDay AND endAt >= startOfDay
+        const todayStart = now.startOf("day").toJSDate()
+        const todayEnd = now.endOf("day").toJSDate()
+        const todayOverlap = buildDateRangeOverlapWhere(todayStart, todayEnd)
+        Object.assign(where, todayOverlap)
         break
       case "weekend":
         const nextSaturday = now.plus({ days: (6 - now.weekday) % 7 })
-        where.startAt = {
-          gte: nextSaturday.startOf("day").toJSDate(),
-          lte: nextSaturday.plus({ days: 1 }).endOf("day").toJSDate(),
-        }
+        const weekendStart = nextSaturday.startOf("day").toJSDate()
+        const weekendEnd = nextSaturday.plus({ days: 1 }).endOf("day").toJSDate()
+        const weekendOverlap = buildDateRangeOverlapWhere(weekendStart, weekendEnd)
+        Object.assign(where, weekendOverlap)
         break
       case "month":
-        where.startAt = {
-          gte: now.startOf("day").toJSDate(),
-          lte: now.plus({ months: 1 }).toJSDate(),
-        }
+        const monthStart = now.startOf("day").toJSDate()
+        const monthEnd = now.plus({ months: 1 }).toJSDate()
+        const monthOverlap = buildDateRangeOverlapWhere(monthStart, monthEnd)
+        Object.assign(where, monthOverlap)
         break
     }
+  } else {
+    // Default: events must end after now (ongoing or future events)
+    const defaultOverlap = buildDateOverlapWhere(new Date(), null)
+    Object.assign(where, defaultOverlap)
   }
 
   // Category filter
@@ -169,13 +172,28 @@ export async function searchDatabase(options: DatabaseSearchOptions): Promise<Se
     `
   }
 
-  // Build WHERE clause conditions
+  // Build WHERE clause conditions using date overlap logic
+  // Overlap rule: event.startAt <= searchEnd AND event.endAt >= searchStart
   let whereConditions: Prisma.Sql[] = [
-    Prisma.sql`e."startAt" >= ${where.startAt.gte || new Date()}`,
     publicEventFilter,
     categorySQL,
     requiresFree,
   ]
+  
+  // Add date overlap conditions
+  if (where.startAt?.lte && where.endAt?.gte) {
+    // Both start and end bounds: event.startAt <= searchEnd AND event.endAt >= searchStart
+    whereConditions.push(
+      Prisma.sql`e."startAt" <= ${where.startAt.lte}`,
+      Prisma.sql`e."endAt" >= ${where.endAt.gte}`
+    )
+  } else if (where.endAt?.gte) {
+    // Only end bound: event.endAt >= searchStart (events must not have ended)
+    whereConditions.push(Prisma.sql`e."endAt" >= ${where.endAt.gte}`)
+  } else {
+    // Fallback: events must end after now
+    whereConditions.push(Prisma.sql`e."endAt" >= ${new Date()}`)
+  }
 
   // Add full-text search condition
   whereConditions.push(Prisma.sql`

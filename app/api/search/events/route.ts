@@ -4,6 +4,7 @@ import { PUBLIC_EVENT_WHERE } from "@/lib/events"
 import type { EventCategory } from "@prisma/client"
 import { searchWeb } from "@/lib/search/web-search"
 import { withLanguageColumnGuard, getEventSelectWithoutLanguage, isLanguageFilteringAvailable } from "@/lib/db-runtime-guard"
+import { buildDateOverlapWhere, buildDateRangeOverlapWhere } from "@/lib/search/date-overlap"
 
 const EXTERNAL_STUB_EVENTS = [
   {
@@ -94,19 +95,31 @@ export async function GET(req: NextRequest) {
         where.country = { contains: country, mode: "insensitive" }
       }
 
-      // PRIORITY 2: DATE FILTER - always forward of today (default: future events only)
-      where.startAt = {
-        gte: now, // Default: only show future events
-      }
-
-      // Apply date filters if provided, but ensure they're forward of today
-      if (dateFrom) {
+      // PRIORITY 2: DATE FILTER - use overlap logic for multi-day events
+      // Overlap rule: event.startAt <= searchEnd AND event.endAt >= searchStart
+      if (dateFrom && dateTo) {
         const dateFromDate = new Date(dateFrom)
-        // If dateFrom is in the past, use "now" instead to avoid showing past events
-        where.startAt.gte = dateFromDate > now ? dateFromDate : now
-      }
-      if (dateTo) {
-        where.startAt.lte = new Date(dateTo)
+        const dateToDate = new Date(dateTo)
+        const searchStart = dateFromDate > now ? dateFromDate : now
+        const dateOverlap = buildDateRangeOverlapWhere(searchStart, dateToDate)
+        Object.assign(where, dateOverlap)
+        console.log(`[v0] Date filter (range overlap): searchStart=${searchStart.toISOString()}, searchEnd=${dateToDate.toISOString()}`)
+      } else if (dateFrom) {
+        const dateFromDate = new Date(dateFrom)
+        const searchStart = dateFromDate > now ? dateFromDate : now
+        const dateOverlap = buildDateOverlapWhere(searchStart, null)
+        Object.assign(where, dateOverlap)
+        console.log(`[v0] Date filter (start overlap): searchStart=${searchStart.toISOString()}`)
+      } else if (dateTo) {
+        const dateToDate = new Date(dateTo)
+        const dateOverlap = buildDateOverlapWhere(now, dateToDate)
+        Object.assign(where, dateOverlap)
+        console.log(`[v0] Date filter (end overlap): searchEnd=${dateToDate.toISOString()}`)
+      } else {
+        // Default: events must end after now (ongoing or future events)
+        const dateOverlap = buildDateOverlapWhere(now, null)
+        Object.assign(where, dateOverlap)
+        console.log(`[v0] Date filter (default overlap): events ending after ${now.toISOString()}`)
       }
 
       // PRIORITY 3: CATEGORY - applied after location and date
@@ -196,26 +209,86 @@ export async function GET(req: NextRequest) {
     }
 
     // PRIORITY 1: LOCATION FILTERS (city/country) - applied first
+    // Handle city name variations (e.g., Brussels/Bruxelles, Athens/Αθήνα)
     if (city) {
-      where.city = { contains: city, mode: "insensitive" }
+      const cityLower = city.toLowerCase().trim()
+      
+      // City name variations map (English -> other language variants)
+      const cityVariations: Record<string, string[]> = {
+        "brussels": ["bruxelles", "brussel", "bruselas"],
+        "athens": ["αθήνα", "athina", "athen"],
+        "rome": ["roma", "rom"],
+        "paris": ["paris"],
+        "milan": ["milano"],
+        "florence": ["firenze"],
+        "naples": ["napoli"],
+        "venice": ["venezia"],
+        "vienna": ["wien"],
+        "copenhagen": ["københavn", "kobenhavn"],
+        "prague": ["praha"],
+        "warsaw": ["warszawa"],
+        "budapest": ["budapest"],
+        "bucharest": ["bucurești", "bucuresti"],
+      }
+      
+      // Check if we have variations for this city
+      const variations = cityVariations[cityLower] || []
+      const allCityNames = [cityLower, ...variations]
+      
+      // Build OR conditions for city matching (any variation OR city in title/description)
+      const cityConditions: any[] = [
+        // Match city field with any variation
+        ...allCityNames.map(cityName => ({
+          city: { contains: cityName, mode: "insensitive" },
+        })),
+        // Also match if city appears in title or description
+        { title: { contains: cityLower, mode: "insensitive" } },
+        { description: { contains: cityLower, mode: "insensitive" } },
+      ]
+      
+      // Add city conditions to AND (we'll combine with other filters)
+      where.AND = where.AND || []
+      where.AND.push({ OR: cityConditions })
+      
+      console.log(`[v0] City filter with variations: ${city} → [${allCityNames.join(", ")}]`)
     }
+    
     if (country) {
       where.country = { contains: country, mode: "insensitive" }
     }
 
-    // PRIORITY 2: DATE FILTER - always forward of today (default: future events only)
-    where.startAt = {
-      gte: now, // Default: only show future events
-    }
-
-    // Apply date filters if provided, but ensure they're forward of today
-    if (dateFrom) {
+    // PRIORITY 2: DATE FILTER - use overlap logic for multi-day events
+    // Overlap rule: event.startAt <= searchEnd AND event.endAt >= searchStart
+    // This ensures:
+    // - Ongoing events (started in past, still running) are included
+    // - Finished events (ended before search window) are excluded
+    // - Future events are included if they overlap the search window
+    if (dateFrom && dateTo) {
+      // Specific date range: use overlap logic for the range
       const dateFromDate = new Date(dateFrom)
-      // If dateFrom is in the past, use "now" instead to avoid showing past events
-      where.startAt.gte = dateFromDate > now ? dateFromDate : now
-    }
-    if (dateTo) {
-      where.startAt.lte = new Date(dateTo)
+      const dateToDate = new Date(dateTo)
+      const searchStart = dateFromDate > now ? dateFromDate : now
+      const dateOverlap = buildDateRangeOverlapWhere(searchStart, dateToDate)
+      Object.assign(where, dateOverlap)
+      console.log(`[v0] Date filter (range overlap): searchStart=${searchStart.toISOString()}, searchEnd=${dateToDate.toISOString()}`)
+    } else if (dateFrom) {
+      // Start date only: events must end after search start
+      const dateFromDate = new Date(dateFrom)
+      const searchStart = dateFromDate > now ? dateFromDate : now
+      const dateOverlap = buildDateOverlapWhere(searchStart, null)
+      Object.assign(where, dateOverlap)
+      console.log(`[v0] Date filter (start overlap): searchStart=${searchStart.toISOString()}`)
+    } else if (dateTo) {
+      // End date only: events must start before search end and end after now
+      const dateToDate = new Date(dateTo)
+      const dateOverlap = buildDateOverlapWhere(now, dateToDate)
+      Object.assign(where, dateOverlap)
+      console.log(`[v0] Date filter (end overlap): searchEnd=${dateToDate.toISOString()}`)
+    } else {
+      // Default: events must end after now (ongoing or future events)
+      const dateOverlap = buildDateOverlapWhere(now, null)
+      Object.assign(where, dateOverlap)
+      console.log(`[v0] Date filter (default overlap): events ending after ${now.toISOString()}`)
     }
 
     // PRIORITY 3: TEXT SEARCH AND CATEGORY - applied after location and date
@@ -233,15 +306,34 @@ export async function GET(req: NextRequest) {
       const textSearchConditions: any[] = []
       
       if (queryWords.length > 0) {
+        // Synonym mapping for common terms
+        const synonymMap: Record<string, string[]> = {
+          "xmas": ["christmas", "x-mas", "noel", "navidad", "natal"],
+          "christmas": ["xmas", "x-mas", "noel", "navidad", "natal"],
+          "market": ["markets", "flea market", "bazaar", "fair", "fiesta"],
+          "markets": ["market", "flea market", "bazaar", "fair", "fiesta"],
+        }
+        
         // For each word, check if it appears in title, description, or venueName
-        // Using OR within each word, AND across words (all words should match somewhere)
+        // Include synonyms for better matching (e.g., "Xmas" matches "Christmas")
         queryWords.forEach(word => {
+          const wordLower = word.toLowerCase()
+          const synonyms = synonymMap[wordLower] || []
+          const allTerms = [wordLower, ...synonyms]
+          
+          // Build OR conditions for this word and its synonyms
+          const wordConditions: any[] = []
+          allTerms.forEach(term => {
+            wordConditions.push(
+              { title: { contains: term, mode: "insensitive" } },
+              { description: { contains: term, mode: "insensitive" } },
+              { venueName: { contains: term, mode: "insensitive" } },
+            )
+          })
+          
+          // Each word must match somewhere (AND across words, OR within each word+synonyms)
           textSearchConditions.push({
-            OR: [
-              { title: { contains: word, mode: "insensitive" } },
-              { description: { contains: word, mode: "insensitive" } },
-              { venueName: { contains: word, mode: "insensitive" } },
-            ]
+            OR: wordConditions,
           })
         })
       }
@@ -252,18 +344,23 @@ export async function GET(req: NextRequest) {
         where.AND.push(...textSearchConditions)
       } else {
         // Fallback: if no words extracted, use original full phrase search
-        where.OR = [
+        // Use AND structure to be compatible with city filter
+        const fallbackConditions: any[] = [
           { title: { contains: cleanedQuery, mode: "insensitive" } },
           { description: { contains: cleanedQuery, mode: "insensitive" } },
           { venueName: { contains: cleanedQuery, mode: "insensitive" } },
         ]
         // Only include city/country in OR if not already filtering by them
         if (!city) {
-          where.OR.push({ city: { contains: cleanedQuery, mode: "insensitive" } })
+          fallbackConditions.push({ city: { contains: cleanedQuery, mode: "insensitive" } })
         }
         if (!country) {
-          where.OR.push({ country: { contains: cleanedQuery, mode: "insensitive" } })
+          fallbackConditions.push({ country: { contains: cleanedQuery, mode: "insensitive" } })
         }
+        
+        // Add as OR condition inside AND structure
+        where.AND = where.AND || []
+        where.AND.push({ OR: fallbackConditions })
       }
     }
 
@@ -290,9 +387,13 @@ export async function GET(req: NextRequest) {
         { categories: { hasSome: [category, normalizedCategory, categoryEnum] } },
       ]
       
-      // If we have an OR clause for text search, combine with AND
-      if (where.OR && where.OR.length > 0) {
-        // We have both text search and category filter - combine with AND
+      // Combine category filter with existing conditions
+      // Since we're using AND structure for text search, add category to AND as well
+      if (where.AND && Array.isArray(where.AND) && where.AND.length > 0) {
+        // We already have AND conditions (city filter and/or text search), add category
+        where.AND.push({ OR: categoryConditions })
+      } else if (where.OR && Array.isArray(where.OR) && where.OR.length > 0) {
+        // Legacy: if we somehow have OR conditions, convert to AND structure
         const textSearchOR = where.OR
         delete where.OR
         where.AND = [
@@ -300,8 +401,9 @@ export async function GET(req: NextRequest) {
           { OR: categoryConditions },
         ]
       } else {
-        // No text search, just filter by category
-        where.OR = categoryConditions
+        // No text search or city filter, just filter by category
+        where.AND = where.AND || []
+        where.AND.push({ OR: categoryConditions })
       }
     }
 
@@ -315,7 +417,20 @@ export async function GET(req: NextRequest) {
       categoryFilter: category,
       dateFrom,
       dateTo,
+      publicEventWhere: PUBLIC_EVENT_WHERE,
     })
+    
+    // Debug: Check if we're filtering by city and what variations we're using
+    if (city) {
+      const cityLower = city.toLowerCase().trim()
+      const cityVariations: Record<string, string[]> = {
+        "brussels": ["bruxelles", "brussel", "bruselas"],
+        "athens": ["αθήνα", "athina", "athen"],
+        "rome": ["roma", "rom"],
+      }
+      const variations = cityVariations[cityLower] || []
+      console.log(`[v0] City filter will match: ${city} and variations: [${variations.join(", ")}]`)
+    }
 
     let events, count
     try {

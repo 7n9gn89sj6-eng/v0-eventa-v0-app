@@ -154,9 +154,9 @@ export async function POST(request: NextRequest) {
 
         categories,
         languages,
-        language: detectedLanguage, // Store detected language
+        ...(detectedLanguage ? { language: detectedLanguage } : {}), // Store detected language (only if detected)
 
-        searchText: `${validated.title} ${validated.description} ${city} ${state ? state + " " : ""}${country}`.toLowerCase(),
+        searchText: `${validated.title} ${validated.description} ${city} ${state ? state + " " : ""}${postcode ? postcode + " " : ""}${country}`.toLowerCase(),
 
         createdById: user.id,
 
