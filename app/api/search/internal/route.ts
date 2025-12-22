@@ -281,46 +281,36 @@ export async function POST(request: NextRequest) {
       console.log(`[v0] PRIORITY 1 - Filtering by country: ${countryName}`)
     }
 
-    // PRIORITY 2: DATE FILTER - always forward of today (default: future events only)
+    // PRIORITY 2: DATE FILTER - use overlap logic for multi-day events
+    // Overlap rule: event.startAt <= searchEnd AND event.endAt >= searchStart
+    // This ensures:
+    // - Ongoing events (started in past, still running) are included
+    // - Finished events (ended before search window) are excluded
+    // - Future events are included if they overlap the search window
     const now = new Date()
     if (dateFilter) {
       const rangeStart = dateFilter.gte ? DateTime.fromJSDate(dateFilter.gte) : null
       const rangeEnd = dateFilter.lte ? DateTime.fromJSDate(dateFilter.lte) : null
       
       if (rangeStart && rangeEnd) {
-        // Expand range by 7 days on each side for better coverage, but ensure it's forward of today
-        const expandedStart = rangeStart.minus({ days: 7 }).startOf("day")
-        const expandedEnd = rangeEnd.plus({ days: 7 }).endOf("day")
-        
-        // Ensure start date is not in the past
-        const finalStart = expandedStart.toJSDate() > now ? expandedStart.toJSDate() : now
-        
-        where.startAt = {
-          gte: finalStart,
-          lte: expandedEnd.toJSDate(),
-        }
-        console.log(`[v0] PRIORITY 2 - Applying date filter (expanded):`, {
-          requested: {
-            gte: rangeStart.toISOString(),
-            lte: rangeEnd.toISOString(),
-          },
-          expanded: {
-            gte: finalStart.toISOString(),
-            lte: expandedEnd.toISOString(),
-          },
+        // Use overlap logic helper
+        const effectiveStart = rangeStart.toJSDate() > now ? rangeStart.toJSDate() : now
+        const effectiveEnd = rangeEnd.toJSDate()
+        Object.assign(where, buildDateRangeOverlapWhere(effectiveStart, effectiveEnd))
+        console.log(`[v0] PRIORITY 2 - Applying date filter (overlap):`, {
+          searchStart: effectiveStart.toISOString(),
+          searchEnd: effectiveEnd.toISOString(),
         })
       } else if (rangeStart) {
-        // Ensure start date is not in the past
-        const finalStart = rangeStart.minus({ days: 7 }).toJSDate() > now 
-          ? rangeStart.minus({ days: 7 }).toJSDate() 
-          : now
-        where.startAt = { gte: finalStart }
-        console.log(`[v0] PRIORITY 2 - Applying date filter (start only): ${finalStart.toISOString()}`)
+        // Start date only: event must end after search start (ongoing or future)
+        const effectiveStart = rangeStart.toJSDate() > now ? rangeStart.toJSDate() : now
+        Object.assign(where, buildDateOverlapWhere(effectiveStart, null))
+        console.log(`[v0] PRIORITY 2 - Applying date filter (start overlap): searchStart=${effectiveStart.toISOString()}`)
       }
     } else {
-      // Default: only show future events (forward of today)
-      where.startAt = { gte: now }
-      console.log(`[v0] PRIORITY 2 - Default date filter: future events only (from ${now.toISOString()})`)
+      // Default: only show events that haven't ended yet (overlap with "now")
+      Object.assign(where, buildDateOverlapWhere(now, null))
+      console.log(`[v0] PRIORITY 2 - Default date filter: events ending after ${now.toISOString()}`)
     }
 
     // PRIORITY 3: TEXT SEARCH RESULTS, CATEGORY, VENUE - applied after location and date

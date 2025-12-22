@@ -242,11 +242,13 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
               <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
+                inputMode="search"
+                autoComplete="off"
                 value={query}
                 onChange={(e) => handleInputChange(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder={guidanceText}
-                className="w-full rounded-lg border bg-background px-10 py-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+                className="w-full rounded-lg border bg-background px-10 py-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 min-h-[44px]"
                 disabled={isProcessing}
                 autoFocus
               />
@@ -258,8 +260,10 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
               size="lg"
               onClick={handleLocationRequest}
               disabled={isLoadingLocation || isProcessing}
-              className="shrink-0 bg-transparent"
+              className="shrink-0 bg-transparent min-h-[44px] min-w-[44px] active:scale-95"
               title="Use my location"
+              aria-label="Detect my current location"
+              style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
             >
               {isLoadingLocation ? <Loader2 className="h-5 w-5 animate-spin" /> : <MapPin className="h-5 w-5" />}
             </Button>

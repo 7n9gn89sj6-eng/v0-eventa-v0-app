@@ -68,7 +68,7 @@ export function SearchFiltersComponent({ onFiltersChange }: SearchFiltersProps) 
   return (
     <div className="w-full">
       <div className="flex items-center gap-2 flex-wrap">
-        <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} className="gap-2">
+        <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} className="gap-2 min-h-[44px] active:scale-95" style={{ touchAction: 'manipulation' }}>
           <Filter className="h-4 w-4" />
           Filters
           {hasActiveFilters && (
@@ -79,7 +79,7 @@ export function SearchFiltersComponent({ onFiltersChange }: SearchFiltersProps) 
         </Button>
 
         {hasActiveFilters && (
-          <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1">
+          <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1 min-h-[44px] active:scale-95" style={{ touchAction: 'manipulation' }}>
             <X className="h-3 w-3" />
             Clear
           </Button>

@@ -268,20 +268,24 @@ export const AISearchBar = forwardRef<AISearchBarRef, AISearchBarProps>(({ onSea
           <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
+            inputMode="search"
+            autoComplete="off"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyPress={handleKeyPress}
             placeholder="Search for events or create a new one..."
-            className="w-full rounded-lg border bg-background px-10 py-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+            className="w-full rounded-lg border bg-background px-10 py-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 min-h-[44px]"
             disabled={isProcessing || isListening}
           />
           <Button
             type="button"
             size="icon"
             variant={isListening ? "default" : "ghost"}
-            className="absolute right-2 top-1/2 h-8 w-8 -translate-y-1/2"
+            className="absolute right-2 top-1/2 h-10 w-10 -translate-y-1/2 min-h-[44px] min-w-[44px] active:scale-95"
             onClick={toggleVoiceInput}
             disabled={isProcessing}
+            aria-label={isListening ? "Stop voice input" : "Start voice input"}
+            style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
           >
             {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
           </Button>

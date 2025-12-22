@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useToast } from "@/hooks/use-toast"
+import { PlacesAutocomplete } from "@/components/forms/places-autocomplete"
 
 const editEventSchema = z
   .object({
@@ -20,6 +21,7 @@ const editEventSchema = z
     locationAddress: z.string().min(1, "Address is required"),
     postcode: z.string().optional(),
     city: z.string().min(1, "City is required"),
+    state: z.string().optional(),
     country: z.string().min(1, "Country is required"),
     startAt: z.string().min(1, "Start date/time is required"),
     endAt: z.string().min(1, "End date/time is required"),
@@ -49,6 +51,7 @@ interface EditEventFormProps {
     locationAddress: string | null
     postcode: string | null
     city: string | null
+    state: string | null
     country: string | null
     startAt: Date
     endAt: Date | null
@@ -67,6 +70,8 @@ export function EditEventForm({ event, token }: EditEventFormProps) {
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<EditEventFormData>({
     resolver: zodResolver(editEventSchema),
@@ -76,6 +81,7 @@ export function EditEventForm({ event, token }: EditEventFormProps) {
       locationAddress: event.locationAddress || "",
       postcode: event.postcode || "",
       city: event.city || "",
+      state: event.state || "",
       country: event.country || "",
       startAt: new Date(event.startAt).toISOString().slice(0, 16),
       endAt: event.endAt ? new Date(event.endAt).toISOString().slice(0, 16) : "",
@@ -156,7 +162,30 @@ export function EditEventForm({ event, token }: EditEventFormProps) {
 
           <div className="space-y-2">
             <Label htmlFor="locationAddress">Address *</Label>
-            <Input id="locationAddress" {...register("locationAddress")} />
+            <PlacesAutocomplete
+              value={watch("locationAddress")}
+              onChange={(value) => setValue("locationAddress", value, { shouldValidate: true })}
+              onPlaceSelect={(place) => {
+                // Auto-fill all address fields from selected place
+                if (place.address) {
+                  setValue("locationAddress", place.address, { shouldValidate: true })
+                }
+                if (place.city || place.suburb) {
+                  setValue("city", place.city || place.suburb || "", { shouldValidate: true })
+                }
+                if (place.state) {
+                  setValue("state", place.state, { shouldValidate: true })
+                }
+                if (place.country) {
+                  setValue("country", place.country, { shouldValidate: true })
+                }
+                if (place.postcode) {
+                  setValue("postcode", place.postcode, { shouldValidate: true })
+                }
+              }}
+              placeholder="Enter an address"
+              disabled={isSubmitting}
+            />
             {errors.locationAddress && <p className="text-sm text-red-600">{errors.locationAddress.message}</p>}
           </div>
 
@@ -175,10 +204,17 @@ export function EditEventForm({ event, token }: EditEventFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="country">Country *</Label>
-              <Input id="country" {...register("country")} />
-              {errors.country && <p className="text-sm text-red-600">{errors.country.message}</p>}
+              <Label htmlFor="state">State / Province</Label>
+              <Input id="state" {...register("state")} />
+              <p className="text-xs text-muted-foreground">Optional</p>
+              {errors.state && <p className="text-sm text-red-600">{errors.state.message}</p>}
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="country">Country *</Label>
+            <Input id="country" {...register("country")} />
+            {errors.country && <p className="text-sm text-red-600">{errors.country.message}</p>}
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">

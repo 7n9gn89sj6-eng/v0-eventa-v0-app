@@ -33,7 +33,19 @@ async function handleUpdate(
   }
 
   const body = await req.json();
-  const { title, description } = body;
+  const { 
+    title, 
+    description, 
+    locationAddress, 
+    city, 
+    state, 
+    country, 
+    postcode, 
+    startAt, 
+    endAt, 
+    imageUrl, 
+    externalUrl 
+  } = body;
 
   if (!title) {
     return NextResponse.json(
@@ -83,14 +95,32 @@ async function handleUpdate(
       });
     }
 
-    // Update event with new title/description and detected language
+    // Build update data object with all provided fields
+    const updateData: any = {
+      title,
+      description: description || "",
+      ...(shouldRegenerate && detectedLanguage !== null ? { language: detectedLanguage } : {}),
+    };
+
+    // Update location fields if provided
+    if (locationAddress !== undefined) updateData.address = locationAddress;
+    if (city !== undefined) updateData.city = city;
+    if (state !== undefined) updateData.state = state;
+    if (country !== undefined) updateData.country = country;
+    if (postcode !== undefined) updateData.postcode = postcode;
+    
+    // Update dates if provided
+    if (startAt) updateData.startAt = new Date(startAt).toISOString();
+    if (endAt) updateData.endAt = new Date(endAt).toISOString();
+    
+    // Update URLs if provided
+    if (imageUrl !== undefined) updateData.imageUrls = imageUrl ? [imageUrl] : [];
+    if (externalUrl !== undefined) updateData.externalUrl = externalUrl || null;
+
+    // Update event with all provided fields
     const event = await db.event.update({
       where: { id: eventId },
-      data: {
-        title,
-        description: description || "",
-        ...(shouldRegenerate && detectedLanguage !== null ? { language: detectedLanguage } : {}),
-      },
+      data: updateData,
     });
 
     // Regenerate embedding if title/description changed (async, non-blocking)
