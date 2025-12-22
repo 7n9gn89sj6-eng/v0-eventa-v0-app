@@ -109,9 +109,9 @@ async function handleUpdate(
     if (country !== undefined) updateData.country = country;
     if (postcode !== undefined) updateData.postcode = postcode;
     
-    // Update dates if provided
-    if (startAt) updateData.startAt = new Date(startAt).toISOString();
-    if (endAt) updateData.endAt = new Date(endAt).toISOString();
+    // Update dates if provided - parse as Date objects (Prisma expects Date, not ISO string)
+    if (startAt) updateData.startAt = new Date(startAt);
+    if (endAt) updateData.endAt = new Date(endAt);
     
     // Update URLs if provided
     if (imageUrl !== undefined) updateData.imageUrls = imageUrl ? [imageUrl] : [];

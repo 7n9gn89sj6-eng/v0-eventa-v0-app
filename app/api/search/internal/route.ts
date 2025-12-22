@@ -639,21 +639,39 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Date relevance scoring - critical for date-filtered searches
+      // Date relevance scoring - overlap-aware scoring for multi-day events
+      // For long-running events (e.g., Nov 25 - Dec 24), when searching mid-period (Dec 20),
+      // we use an "effective event date" based on overlap, not event.startAt.
+      // This prevents penalizing ongoing events that are currently relevant.
       if (dateFilter) {
-        const eventDate = DateTime.fromJSDate(event.startAt)
-        const eventStart = eventDate.startOf("day")
-        
+        const eventStartDate = DateTime.fromJSDate(event.startAt)
+        const eventEndDate = DateTime.fromJSDate(event.endAt)
         const rangeStart = dateFilter.gte ? DateTime.fromJSDate(dateFilter.gte).startOf("day") : null
         const rangeEnd = dateFilter.lte ? DateTime.fromJSDate(dateFilter.lte).endOf("day") : null
         
         if (rangeStart && rangeEnd) {
-          if (eventStart >= rangeStart && eventStart <= rangeEnd) {
-            score += 12 // Strong boost for events in the requested range
+          // Calculate effective event date: the date within the search window when the event is most relevant
+          // For overlapping events, this is the start of the overlap period (max of event.startAt and searchStart)
+          // For events starting in the future, use event.startAt
+          // For ongoing events, use searchStart (they're happening "now" in the search context)
+          let effectiveEventDate: DateTime
+          if (eventStartDate <= rangeEnd && eventEndDate >= rangeStart) {
+            // Event overlaps search window - use the start of the overlap as effective date
+            effectiveEventDate = eventStartDate > rangeStart ? eventStartDate : rangeStart
           } else {
-            const daysOutside = eventStart < rangeStart 
-              ? rangeStart.diff(eventStart, "days").days
-              : eventStart.diff(rangeEnd, "days").days
+            // Event doesn't overlap (shouldn't happen due to WHERE clause, but handle gracefully)
+            effectiveEventDate = eventStartDate
+          }
+          
+          const effectiveStart = effectiveEventDate.startOf("day")
+          
+          if (effectiveStart >= rangeStart && effectiveStart <= rangeEnd) {
+            score += 12 // Strong boost for events active during the requested range
+          } else {
+            // Event overlaps but effective date is outside range (edge case)
+            const daysOutside = effectiveStart < rangeStart 
+              ? rangeStart.diff(effectiveStart, "days").days
+              : effectiveStart.diff(rangeEnd, "days").days
             
             // Reduced penalties - still prioritize in-range but don't eliminate close matches
             if (daysOutside <= 3) {
@@ -667,29 +685,45 @@ export async function POST(request: NextRequest) {
             }
           }
         } else if (rangeStart) {
-          if (eventStart >= rangeStart) {
+          // Start date only: use effective date (max of event.startAt and searchStart for ongoing events)
+          const effectiveEventDate = eventStartDate > rangeStart ? eventStartDate : rangeStart
+          const effectiveStart = effectiveEventDate.startOf("day")
+          
+          if (effectiveStart >= rangeStart) {
             score += 6
           } else {
-            const daysBefore = rangeStart.diff(eventStart, "days").days
+            // Shouldn't happen due to WHERE clause, but handle gracefully
+            const daysBefore = rangeStart.diff(effectiveStart, "days").days
             score -= Math.min(daysBefore * 1.5, 15) // Reduced penalty
           }
         }
       } else {
-        // No date filter - use proximity-based scoring
-        const eventDate = DateTime.fromJSDate(event.startAt)
+        // No date filter - use proximity-based scoring with overlap awareness
+        // For ongoing events, treat them as happening "now" (score boost)
+        const eventStartDate = DateTime.fromJSDate(event.startAt)
+        const eventEndDate = DateTime.fromJSDate(event.endAt)
         const now = DateTime.now()
-        const daysDiff = eventDate.diff(now, "days").days
-        if (daysDiff >= 0 && daysDiff <= 7) score += 3
-        else if (daysDiff > 7 && daysDiff <= 30) score += 2
-        else if (daysDiff > 30 && daysDiff <= 90) score += 1
-        // Don't penalize far future events when no date filter is specified
+        
+        // Check if event is currently ongoing
+        if (eventStartDate <= now && eventEndDate >= now) {
+          score += 5 // Boost for events happening right now
+        } else {
+          // Future event - use start date for proximity scoring
+          const eventDate = eventStartDate
+          const daysDiff = eventDate.diff(now, "days").days
+          if (daysDiff >= 0 && daysDiff <= 7) score += 3
+          else if (daysDiff > 7 && daysDiff <= 30) score += 2
+          else if (daysDiff > 30 && daysDiff <= 90) score += 1
+          // Don't penalize far future events when no date filter is specified
+        }
       }
 
       return { ...event, score }
     })
 
-    // Note: Date filtering is already applied in the WHERE clause, so all events here should be within range
-    // This additional filter is just a safety net for edge cases
+    // Note: Date filtering is already applied in the WHERE clause using overlap logic,
+    // so all events here should overlap the search window.
+    // This additional filter uses overlap logic (not startAt) to ensure correctness.
     let filteredEvents = rankedEvents
     if (dateFilter && dateFilter.gte && dateFilter.lte) {
       const rangeStart = DateTime.fromJSDate(dateFilter.gte).startOf("day")
@@ -699,12 +733,25 @@ export async function POST(request: NextRequest) {
       if (rangeStart.isValid && rangeEnd.isValid) {
         const beforeFilter = filteredEvents.length
         filteredEvents = rankedEvents.filter((event) => {
-          const eventDate = DateTime.fromJSDate(event.startAt).startOf("day")
-          // Keep events within range or slightly outside (within 14 days for better UX)
-          return eventDate >= rangeStart.minus({ days: 14 }) && eventDate <= rangeEnd.plus({ days: 14 })
+          // Use overlap logic: event.startAt <= searchEnd AND event.endAt >= searchStart
+          // This ensures ongoing events (started before search window) are not excluded
+          const eventStart = DateTime.fromJSDate(event.startAt).startOf("day")
+          const eventEnd = DateTime.fromJSDate(event.endAt).startOf("day")
+          
+          // Event overlaps if it starts before search ends AND ends after search starts
+          const overlaps = eventStart <= rangeEnd && eventEnd >= rangeStart
+          
+          if (!overlaps) {
+            // If no overlap, check if it's close enough (within 14 days) for better UX
+            const daysBefore = rangeStart.diff(eventStart, "days").days
+            const daysAfter = eventStart.diff(rangeEnd, "days").days
+            return daysBefore <= 14 || daysAfter <= 14
+          }
+          
+          return true
         })
         if (beforeFilter !== filteredEvents.length) {
-          console.log(`[v0] Post-filtered events by date range: ${beforeFilter} -> ${filteredEvents.length}`)
+          console.log(`[v0] Post-filtered events by date range (overlap-aware): ${beforeFilter} -> ${filteredEvents.length}`)
         }
       }
     }
