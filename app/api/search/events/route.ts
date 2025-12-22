@@ -55,7 +55,12 @@ export async function GET(req: NextRequest) {
   // Define 'now' once at the top level for reuse throughout the function
   const now = new Date()
 
-  console.log("[v0] Search params:", { q, city, category, dateFrom, dateTo })
+    console.log("[v0] Search params:", { q, city, country, category, dateFrom, dateTo })
+    if (city) {
+      console.log(`[v0] ⚠️ FILTERING BY CITY: "${city}"${country ? `, COUNTRY: "${country}"` : ""}`)
+    } else {
+      console.log(`[v0] ⚠️ NO CITY FILTER - search will be broad`)
+    }
 
   try {
     // If no query and no filters, return empty
@@ -216,17 +221,49 @@ export async function GET(req: NextRequest) {
     // PRIORITY 3: TEXT SEARCH AND CATEGORY - applied after location and date
     // Build OR clause for text search (only if we have a cleaned query)
     if (cleanedQuery) {
-      where.OR = [
-        { title: { contains: cleanedQuery, mode: "insensitive" } },
-        { description: { contains: cleanedQuery, mode: "insensitive" } },
-        { venueName: { contains: cleanedQuery, mode: "insensitive" } },
-      ]
-      // Only include city/country in OR if not already filtering by them
-      if (!city) {
-        where.OR.push({ city: { contains: cleanedQuery, mode: "insensitive" } })
+      // Split query into individual words for more flexible matching
+      // This allows matching "Xmas market" even if the event has "Christmas Market"
+      const queryWords = cleanedQuery
+        .split(/\s+/)
+        .filter(word => word.length > 0)
+        .map(word => word.toLowerCase().trim())
+      
+      // Build text search conditions - match if ANY word from the query appears
+      // This is more flexible than requiring the entire phrase
+      const textSearchConditions: any[] = []
+      
+      if (queryWords.length > 0) {
+        // For each word, check if it appears in title, description, or venueName
+        // Using OR within each word, AND across words (all words should match somewhere)
+        queryWords.forEach(word => {
+          textSearchConditions.push({
+            OR: [
+              { title: { contains: word, mode: "insensitive" } },
+              { description: { contains: word, mode: "insensitive" } },
+              { venueName: { contains: word, mode: "insensitive" } },
+            ]
+          })
+        })
       }
-      if (!country) {
-        where.OR.push({ country: { contains: cleanedQuery, mode: "insensitive" } })
+      
+      // If we have conditions, use AND to require all words match
+      if (textSearchConditions.length > 0) {
+        where.AND = where.AND || []
+        where.AND.push(...textSearchConditions)
+      } else {
+        // Fallback: if no words extracted, use original full phrase search
+        where.OR = [
+          { title: { contains: cleanedQuery, mode: "insensitive" } },
+          { description: { contains: cleanedQuery, mode: "insensitive" } },
+          { venueName: { contains: cleanedQuery, mode: "insensitive" } },
+        ]
+        // Only include city/country in OR if not already filtering by them
+        if (!city) {
+          where.OR.push({ city: { contains: cleanedQuery, mode: "insensitive" } })
+        }
+        if (!country) {
+          where.OR.push({ country: { contains: cleanedQuery, mode: "insensitive" } })
+        }
       }
     }
 
@@ -269,6 +306,16 @@ export async function GET(req: NextRequest) {
     }
 
     console.log("[v0] Final where clause:", JSON.stringify(where, null, 2))
+    console.log("[v0] Search query breakdown:", {
+      originalQuery: q,
+      cleanedQuery,
+      queryWords: cleanedQuery ? cleanedQuery.split(/\s+/).filter(w => w.length > 0) : [],
+      cityFilter: city,
+      countryFilter: country,
+      categoryFilter: category,
+      dateFrom,
+      dateTo,
+    })
 
     let events, count
     try {
@@ -313,7 +360,16 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    console.log("[v0] Search query:", q, "filters:", { city, category, dateFrom, dateTo }, "found:", count, "events")
+    console.log("[v0] Search query:", q, "filters:", { city, country, category, dateFrom, dateTo }, "found:", count, "internal events")
+    if (count === 0 && q) {
+      console.log("[v0] ⚠️ No internal events found for query. Possible reasons:")
+      console.log("  - Event doesn't match text search terms (title/description)")
+      console.log("  - Event moderationStatus is not APPROVED")
+      console.log("  - Event status is not PUBLISHED")
+      console.log("  - Event date is in the past")
+      if (city) console.log(`  - Event city doesn't match filter: "${city}"`)
+      if (country) console.log(`  - Event country doesn't match filter: "${country}"`)
+    }
 
     // Always search web if we have a query (not just when results are low)
     let webResults: any[] = []
@@ -652,7 +708,25 @@ export async function GET(req: NextRequest) {
       total: allEvents.length,
     })
   } catch (e: any) {
-    console.error("[v0] search/events error:", e)
+    const errorMessage = e?.message || String(e)
+    const errorStack = e?.stack
+    console.error("[v0] search/events error:", errorMessage)
+    if (errorStack) {
+      console.error("[v0] search/events error stack:", errorStack.substring(0, 500)) // Limit stack trace length
+    }
+    
+    // Check for database/Prisma errors
+    if (errorMessage.includes("column") || errorMessage.includes("does not exist") || errorMessage.includes("prisma") || errorMessage.includes("database")) {
+      console.error("[v0] ⚠️ Database schema error detected - this might be a migration issue")
+      console.error("[v0] Error details:", {
+        message: errorMessage,
+        query: q,
+        city,
+        country,
+      })
+    }
+    
+    // Return error response with details in development
     return NextResponse.json(
       {
         events: [],
@@ -660,7 +734,8 @@ export async function GET(req: NextRequest) {
         internal: [],
         external: [],
         total: 0,
-        error: String(e?.message || e),
+        error: process.env.NODE_ENV === "development" ? errorMessage : "Search failed",
+        ...(process.env.NODE_ENV === "development" && { errorDetails: errorStack?.substring(0, 500) }),
       },
       { status: 500 },
     )

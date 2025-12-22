@@ -171,7 +171,12 @@ Only return "unclear" if the query is completely ambiguous and contains no locat
 ENTITY EXTRACTION (normalize to English):
 - title: event name/title (translate to English if needed)
 - type: category like jazz, yoga, workshop, concert, open mic (translate to English)
-- city: city name - EXTRACT according to LOCATION PRIORITY RULES above. MUST normalize to English for major cities:
+- city: city name - EXTRACT according to LOCATION PRIORITY RULES above. CRITICAL: Extract city names even when they appear after words like "location", "in", "at", "near", "around". Examples:
+  * "jazz this weekend location melbourne" → city: "Melbourne"
+  * "events in sydney" → city: "Sydney"
+  * "concerts at paris" → city: "Paris"
+  * "music near london" → city: "London"
+  MUST normalize to English for major cities:
   * Greek: "Αθήνα" → "Athens", "Ρώμη" → "Rome", "Παρίσι" → "Paris", "Μελίν" → "Melbourne"
   * Italian: "Roma" → "Rome", "Milano" → "Milan", "Firenze" → "Florence", "Napoli" → "Naples"
   * Spanish: "Madrid" → "Madrid", "Barcelona" → "Barcelona", "Roma" → "Rome", "París" → "Paris"
@@ -348,7 +353,34 @@ User input: "${query}"`,
     const extractedWithLocation = { ...object.extracted }
     
     // Check if city is missing or empty (AI might return empty string instead of undefined)
-    const hasCity = extractedWithLocation.city && extractedWithLocation.city.trim().length > 0
+    let hasCity = extractedWithLocation.city && extractedWithLocation.city.trim().length > 0
+    
+    // FALLBACK: If AI didn't extract city but query contains "location [city]" pattern, try to extract it
+    if (!hasCity && object.intent === "search" && query) {
+      // Pattern: "location melbourne", "location sydney", etc.
+      const locationCityMatch = query.match(/\blocation\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/i)
+      if (locationCityMatch) {
+        const extractedCity = locationCityMatch[1].trim()
+        extractedWithLocation.city = extractedCity
+        hasCity = true
+        console.log(`[v0] FALLBACK: Extracted city "${extractedCity}" from "location [city]" pattern in query`)
+      }
+      
+      // Also try other patterns: "in [city]", "at [city]", "near [city]"
+      if (!hasCity) {
+        const inCityMatch = query.match(/\b(in|at|near|around)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/i)
+        if (inCityMatch) {
+          const extractedCity = inCityMatch[2].trim()
+          // Basic validation: check if it's a reasonable city name (not a common word)
+          const commonWords = ["this", "that", "the", "a", "an", "weekend", "week", "month", "year", "today", "tomorrow"]
+          if (!commonWords.includes(extractedCity.toLowerCase())) {
+            extractedWithLocation.city = extractedCity
+            hasCity = true
+            console.log(`[v0] FALLBACK: Extracted city "${extractedCity}" from "${inCityMatch[1]} [city]" pattern`)
+          }
+        }
+      }
+    }
     
     if (!hasCity && userLocation?.city && object.intent === "search") {
       extractedWithLocation.city = userLocation.city
