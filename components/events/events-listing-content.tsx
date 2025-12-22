@@ -119,8 +119,17 @@ export function EventsListingContent({
         sampleExternal: data.external?.[0],
       })
 
+      // PRIORITY: Internal events (user-created, curated) ALWAYS come FIRST
+      // External web results come AFTER and are clearly marked
+      // This ensures user satisfaction with accurate, curated events
       const allEvents = [
-        ...(data.internal || []),
+        // Internal events first (user-created, curated, accurate)
+        ...(data.internal || []).map((int: any) => ({
+          ...int,
+          source: int.source || "internal" as const,
+          isEventaEvent: true, // Mark as Eventa event for UI
+        })),
+        // External web results second (informational, may need verification)
         ...(data.external || []).map((ext: any) => ({
           id: ext.id,
           title: ext.title,
@@ -136,7 +145,8 @@ export function EventsListingContent({
           imageUrls: ext.imageUrl ? [ext.imageUrl] : (ext.imageUrls || []),
           status: "PUBLISHED",
           aiStatus: "SAFE",
-          source: ext.source || "web",
+          source: ext.source || "web" as const,
+          isWebResult: true, // Mark as web result for UI
           imageUrl: ext.imageUrl,
           externalUrl: ext.externalUrl || ext.url,
         })),
@@ -441,7 +451,17 @@ export function EventsListingContent({
                         {tEvents("card.free")}
                       </Badge>
                     )}
-                    {event.source && (
+                    {event.isEventaEvent && (
+                      <Badge variant="default" className="text-xs bg-primary">
+                        Eventa Event
+                      </Badge>
+                    )}
+                    {event.isWebResult && (
+                      <Badge variant="secondary" className="text-xs">
+                        Web Result
+                      </Badge>
+                    )}
+                    {event.source && !event.isEventaEvent && !event.isWebResult && (
                       <Badge variant="outline" className="text-xs">
                         {event.source}
                       </Badge>

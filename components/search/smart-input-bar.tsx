@@ -11,6 +11,7 @@ import { useI18n } from "@/lib/i18n/context"
 import { reverseGeocodeDebounced } from "@/lib/geocoding"
 import { intentToURLParams } from "@/lib/search/query-parser"
 import { useRouter } from "next/navigation"
+import { getUserLocation, storeUserLocation, type UserLocation } from "@/lib/user-location"
 
 interface SmartInputBarProps {
   onSearch?: (query: string) => Promise<void>
@@ -35,12 +36,16 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
     const [showExamples, setShowExamples] = useState(!initialQuery || alwaysShowSuggestions)
     const [error, setError] = useState<string | null>(null)
 
-    const [userLocation, setUserLocation] = useState<{
-      lat: number
-      lng: number
-      city: string
-    } | null>(null)
+    const [userLocation, setUserLocation] = useState<UserLocation | null>(null)
     const [isLoadingLocation, setIsLoadingLocation] = useState(false)
+
+    // Load stored location on mount
+    useEffect(() => {
+      const stored = getUserLocation()
+      if (stored) {
+        setUserLocation(stored)
+      }
+    }, [])
 
     useEffect(() => {
       if (initialQuery) {
@@ -71,16 +76,43 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
 
           console.log("[v0] Got coordinates:", lat, lng)
 
-          // Reverse geocode to get city name
-          const city = await reverseGeocodeDebounced(lat, lng)
+          // Reverse geocode to get city name and country
+          try {
+            const response = await fetch(`/api/geocode/reverse?lat=${lat}&lng=${lng}`)
+            if (response.ok) {
+              const data = await response.json()
+              const city = data.city
+              const country = data.country
 
-          console.log("[v0] Reverse geocoded city:", city)
+              console.log("[v0] Reverse geocoded:", { city, country })
 
-          if (city) {
-            setUserLocation({ lat, lng, city })
-          } else {
-            // Fallback to coordinates without city name
-            setUserLocation({ lat, lng, city: "Unknown location" })
+              if (city) {
+                const location = { lat, lng, city, country, timestamp: Date.now() }
+                storeUserLocation({ lat, lng, city, country })
+                setUserLocation(location)
+              } else {
+                // Fallback to coordinates without city name
+                const location = { lat, lng, city: "Unknown location", timestamp: Date.now() }
+                setUserLocation(location)
+              }
+            } else {
+              // Fallback to old method if API fails
+              const city = await reverseGeocodeDebounced(lat, lng)
+              if (city) {
+                const location = { lat, lng, city, timestamp: Date.now() }
+                storeUserLocation({ lat, lng, city })
+                setUserLocation(location)
+              }
+            }
+          } catch (error) {
+            console.error("[v0] Reverse geocoding error:", error)
+            // Fallback to old method
+            const city = await reverseGeocodeDebounced(lat, lng)
+            if (city) {
+              const location = { lat, lng, city, timestamp: Date.now() }
+              storeUserLocation({ lat, lng, city })
+              setUserLocation(location)
+            }
           }
 
           setIsLoadingLocation(false)
@@ -115,10 +147,21 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
       setShowExamples(alwaysShowSuggestions)
 
       try {
+        // Include user location in the request so the API can use it as default
+        const requestBody: any = { query }
+        if (userLocation && userLocation.city !== "Unknown location") {
+          requestBody.userLocation = {
+            lat: userLocation.lat,
+            lng: userLocation.lng,
+            city: userLocation.city,
+            country: userLocation.country,
+          }
+        }
+
         const intentResponse = await fetch("/api/search/intent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query }),
+          body: JSON.stringify(requestBody),
         })
 
         if (intentResponse.ok) {
@@ -134,10 +177,18 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
           }
 
           // Add location if available (but don't override extracted city)
-          if (userLocation && userLocation.city !== "Unknown location" && !params.has("city")) {
+          // This is a fallback in case the intent API didn't include the location
+          const cityParam = params.get("city")
+          const hasCityParam = cityParam && cityParam.trim().length > 0
+          
+          if (!hasCityParam && userLocation && userLocation.city !== "Unknown location") {
+            console.log(`[v0] Adding detected location to URL params as fallback: ${userLocation.city}`)
             params.set("city", userLocation.city)
             params.set("lat", userLocation.lat.toString())
             params.set("lng", userLocation.lng.toString())
+            if (userLocation.country && !params.has("country")) {
+              params.set("country", userLocation.country)
+            }
           }
 
           console.log("[v0] Navigating with params:", params.toString())

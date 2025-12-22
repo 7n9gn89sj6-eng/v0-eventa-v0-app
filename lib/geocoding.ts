@@ -54,7 +54,7 @@ interface NominatimResponse {
 
 /**
  * Convert latitude/longitude coordinates to city name
- * Uses OpenStreetMap Nominatim reverse geocoding API
+ * Uses our server-side API route which proxies to Nominatim (to avoid CORS issues)
  *
  * @param lat - Latitude coordinate
  * @param lng - Longitude coordinate
@@ -62,37 +62,24 @@ interface NominatimResponse {
  */
 export async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
   try {
-    // Nominatim terms require User-Agent header
+    // Use our server-side API route to avoid CORS issues
     const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`,
-      {
-        headers: {
-          "User-Agent": "Eventa-App/1.0",
-        },
-      },
+      `/api/geocode/reverse?lat=${lat}&lng=${lng}`,
     )
 
     if (!response.ok) {
-      console.error("[v0] Nominatim API error:", response.status)
+      console.error("[v0] Reverse geocoding API error:", response.status)
       return null
     }
 
-    const data: NominatimResponse = await response.json()
+    const data = await response.json()
 
     if (data.error) {
-      console.error("[v0] Nominatim returned error:", data.error)
+      console.error("[v0] Reverse geocoding returned error:", data.error)
       return null
     }
 
-    // Try to extract city name from address hierarchy
-    const city =
-      data.address?.city ||
-      data.address?.town ||
-      data.address?.village ||
-      data.address?.municipality ||
-      data.address?.county
-
-    return city || null
+    return data.city || null
   } catch (error) {
     console.error("[v0] Reverse geocoding failed:", error)
     return null

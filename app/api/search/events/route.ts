@@ -52,6 +52,9 @@ export async function GET(req: NextRequest) {
   const dateFrom = url.searchParams.get("date_from")
   const dateTo = url.searchParams.get("date_to")
 
+  // Define 'now' once at the top level for reuse throughout the function
+  const now = new Date()
+
   console.log("[v0] Search params:", { q, city, category, dateFrom, dateTo })
 
   try {
@@ -69,22 +72,16 @@ export async function GET(req: NextRequest) {
     }
 
     if (!q) {
+      // BUILD WHERE CLAUSE IN PRIORITY ORDER:
+      // 1. Location (city/country) - FIRST PRIORITY
+      // 2. Date (always forward of today) - SECOND PRIORITY
+      // 3. Category - LOWER PRIORITY
+
       const where: any = {
         ...PUBLIC_EVENT_WHERE,
       }
 
-      if (category && category !== "all") {
-        const categoryEnum = category.toUpperCase() as EventCategory
-        where.category = categoryEnum
-      }
-
-      if (dateFrom) {
-        where.startAt = { ...where.startAt, gte: new Date(dateFrom) }
-      }
-      if (dateTo) {
-        where.startAt = { ...where.startAt, lte: new Date(dateTo) }
-      }
-
+      // PRIORITY 1: LOCATION FILTERS (city/country) - applied first
       if (city) {
         where.city = { contains: city, mode: "insensitive" }
       }
@@ -92,11 +89,32 @@ export async function GET(req: NextRequest) {
         where.country = { contains: country, mode: "insensitive" }
       }
 
+      // PRIORITY 2: DATE FILTER - always forward of today (default: future events only)
+      where.startAt = {
+        gte: now, // Default: only show future events
+      }
+
+      // Apply date filters if provided, but ensure they're forward of today
+      if (dateFrom) {
+        const dateFromDate = new Date(dateFrom)
+        // If dateFrom is in the past, use "now" instead to avoid showing past events
+        where.startAt.gte = dateFromDate > now ? dateFromDate : now
+      }
+      if (dateTo) {
+        where.startAt.lte = new Date(dateTo)
+      }
+
+      // PRIORITY 3: CATEGORY - applied after location and date
+      if (category && category !== "all") {
+        const categoryEnum = category.toUpperCase() as EventCategory
+        where.category = categoryEnum
+      }
+
       let events, count
       try {
         [events, count] = await Promise.all([
           withLanguageColumnGuard(() => prisma.event.findMany({
-            where,
+          where,
             orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
             take,
             skip,
@@ -111,12 +129,12 @@ export async function GET(req: NextRequest) {
               prisma.event.findMany({
                 where,
                 select: getEventSelectWithoutLanguage(),
-                orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
-                take,
-                skip,
-              }),
-              prisma.event.count({ where }),
-            ])
+          orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
+          take,
+          skip,
+        }),
+        prisma.event.count({ where }),
+      ])
           } catch (retryError: any) {
             console.error("[SEARCH FALLBACK] Retry query also failed:", retryError?.message)
             return NextResponse.json({
@@ -163,19 +181,47 @@ export async function GET(req: NextRequest) {
 
     console.log("[v0] Cleaned query:", cleanedQuery, "from original:", q, "city:", city, "category:", category)
 
+    // BUILD WHERE CLAUSE IN PRIORITY ORDER:
+    // 1. Location (city/country) - FIRST PRIORITY
+    // 2. Date (always forward of today) - SECOND PRIORITY
+    // 3. Text search, category, etc. - LOWER PRIORITY
+
     const where: any = {
       ...PUBLIC_EVENT_WHERE,
     }
 
+    // PRIORITY 1: LOCATION FILTERS (city/country) - applied first
+    if (city) {
+      where.city = { contains: city, mode: "insensitive" }
+    }
+    if (country) {
+      where.country = { contains: country, mode: "insensitive" }
+    }
+
+    // PRIORITY 2: DATE FILTER - always forward of today (default: future events only)
+    where.startAt = {
+      gte: now, // Default: only show future events
+    }
+
+    // Apply date filters if provided, but ensure they're forward of today
+    if (dateFrom) {
+      const dateFromDate = new Date(dateFrom)
+      // If dateFrom is in the past, use "now" instead to avoid showing past events
+      where.startAt.gte = dateFromDate > now ? dateFromDate : now
+    }
+    if (dateTo) {
+      where.startAt.lte = new Date(dateTo)
+    }
+
+    // PRIORITY 3: TEXT SEARCH AND CATEGORY - applied after location and date
     // Build OR clause for text search (only if we have a cleaned query)
-    // If cleaned query is empty but we have filters, we'll search by filters only
     if (cleanedQuery) {
       where.OR = [
         { title: { contains: cleanedQuery, mode: "insensitive" } },
         { description: { contains: cleanedQuery, mode: "insensitive" } },
         { venueName: { contains: cleanedQuery, mode: "insensitive" } },
       ]
-      // Only include city/country in OR if not filtering by them
+      // Only include city/country in OR if not already filtering by them
       if (!city) {
         where.OR.push({ city: { contains: cleanedQuery, mode: "insensitive" } })
       }
@@ -183,8 +229,6 @@ export async function GET(req: NextRequest) {
         where.OR.push({ country: { contains: cleanedQuery, mode: "insensitive" } })
       }
     }
-    // If cleaned query is empty but we have city/category filters, search by those filters only
-    // (no OR clause needed - filters will be applied below)
 
     // Apply category filter
     if (category && category !== "all") {
@@ -224,39 +268,13 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (dateFrom) {
-      where.startAt = { ...where.startAt, gte: new Date(dateFrom) }
-    }
-    if (dateTo) {
-      where.startAt = { ...where.startAt, lte: new Date(dateTo) }
-    }
-
-    // City filter: must match exactly (case-insensitive)
-    // If we have an AND array, add city to it; otherwise add as top-level property
-    if (city) {
-      const cityFilter = { city: { contains: city, mode: "insensitive" } }
-      if (where.AND && Array.isArray(where.AND)) {
-        where.AND.push(cityFilter)
-      } else {
-        where.city = cityFilter.city
-      }
-    }
-    if (country) {
-      const countryFilter = { country: { contains: country, mode: "insensitive" } }
-      if (where.AND && Array.isArray(where.AND)) {
-        where.AND.push(countryFilter)
-      } else {
-        where.country = countryFilter.country
-      }
-    }
-
     console.log("[v0] Final where clause:", JSON.stringify(where, null, 2))
 
     let events, count
     try {
       [events, count] = await Promise.all([
         withLanguageColumnGuard(() => prisma.event.findMany({
-          where,
+        where,
           orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
           take,
           skip,
@@ -271,12 +289,12 @@ export async function GET(req: NextRequest) {
             prisma.event.findMany({
               where,
               select: getEventSelectWithoutLanguage(),
-              orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
-              take,
-              skip,
-            }),
-            prisma.event.count({ where }),
-          ])
+        orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
+        take,
+        skip,
+      }),
+      prisma.event.count({ where }),
+    ])
         } catch (retryError: any) {
           console.error("[SEARCH FALLBACK] Retry query also failed:", retryError?.message)
           return NextResponse.json({
@@ -311,10 +329,40 @@ export async function GET(req: NextRequest) {
       
       try {
         // Build web search query from original query, city, and category
+        // For ambiguous cities, add country to improve disambiguation
         let webQuery = q
-        if (city && !webQuery.toLowerCase().includes(city.toLowerCase())) {
+        if (city) {
+          const cityLower = city.toLowerCase().trim()
+          const ambiguousCities: Record<string, string> = {
+            "melbourne": "Australia",
+            "ithaca": country || "",
+            "ithaki": "Greece",
+            "cambridge": country || "",
+            "naples": country || "Italy",
+            "berlin": country || "Germany",
+            "paris": country || "France",
+            "london": country || "UK",
+            "rome": country || "Italy",
+            "athens": country || "Greece",
+            "milan": country || "Italy",
+            "vienna": country || "Austria",
+            "madrid": country || "Spain",
+          }
+          
+          if (!webQuery.toLowerCase().includes(cityLower)) {
           webQuery = `${webQuery} ${city}`
+            
+            // Add country for ambiguous cities to improve Google search accuracy
+            if (ambiguousCities[cityLower] && !country) {
+              webQuery = `${webQuery} ${ambiguousCities[cityLower]}`
+            } else if (country && !webQuery.toLowerCase().includes(country.toLowerCase())) {
+              webQuery = `${webQuery} ${country}`
+            }
+          }
+        } else if (country && !webQuery.toLowerCase().includes(country.toLowerCase())) {
+          webQuery = `${webQuery} ${country}`
         }
+        
         if (category && category !== "all" && !webQuery.toLowerCase().includes(category.toLowerCase())) {
           webQuery = `${webQuery} ${category}`
         }
@@ -331,14 +379,24 @@ export async function GET(req: NextRequest) {
         })
         
         // Transform web results to match expected format (both internal and external formats)
-        webResults = webSearchResults.map((result, index) => {
+        let transformedWebResults = webSearchResults.map((result, index) => {
           // Try to extract city from snippet if not provided
           let extractedCity = city || ""
+          let extractedCountry = country || ""
+          
           if (!extractedCity && result.snippet) {
             // Simple extraction: look for common city patterns in snippet
             const cityMatch = result.snippet.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/)
             if (cityMatch) {
               extractedCity = cityMatch[1]
+            }
+          }
+          
+          // Try to extract country from snippet/URL
+          if (!extractedCountry && result.snippet) {
+            const countryMatch = result.snippet.match(/\b(Australia|USA|United States|UK|United Kingdom|Greece|Italy|Spain|France|Germany)\b/i)
+            if (countryMatch) {
+              extractedCountry = countryMatch[1]
             }
           }
           
@@ -349,7 +407,7 @@ export async function GET(req: NextRequest) {
             startAt: result.startAt,
             endAt: result.startAt, // Use same as start if no end date
             city: extractedCity,
-            country: "",
+            country: extractedCountry,
             address: "",
             venueName: "",
             categories: category && category !== "all" ? [category] : [],
@@ -363,13 +421,97 @@ export async function GET(req: NextRequest) {
             // Also include location object for compatibility with external format
             location: {
               city: extractedCity,
-              country: "",
+              country: extractedCountry,
               address: "",
             },
           }
         })
         
-        console.log("[v0] Web search found:", webResults.length, "events")
+        // Filter web results by city if specified
+        if (city) {
+          const cityLower = city.toLowerCase().trim()
+          const beforeCityFilter = transformedWebResults.length
+          
+          // Known ambiguous cities that need country disambiguation
+          const ambiguousCities: Record<string, string[]> = {
+            "melbourne": ["australia", "florida", "usa"],
+            "ithaca": ["greece", "new york", "usa"],
+            "ithaki": ["greece"],
+            "cambridge": ["united kingdom", "uk", "massachusetts", "usa"],
+            "naples": ["italy", "florida", "usa"],
+            "berlin": ["germany", "maryland", "usa"],
+            "paris": ["france", "texas", "usa"],
+            "london": ["united kingdom", "uk", "ontario", "canada"],
+            "rome": ["italy", "georgia", "usa"],
+            "athens": ["greece", "georgia", "usa"],
+            "milan": ["italy", "tennessee", "usa"],
+            "vienna": ["austria", "virginia", "usa"],
+            "madrid": ["spain", "new mexico", "usa"],
+          }
+          
+          const isAmbiguous = ambiguousCities[cityLower] !== undefined
+          const expectedCountries = isAmbiguous ? ambiguousCities[cityLower] : []
+          const countryLower = country ? country.toLowerCase().trim() : null
+          
+          transformedWebResults = transformedWebResults.filter((result) => {
+            const resultText = `${result.title} ${result.description} ${result.city} ${result.country} ${result.location?.city || ""} ${result.location?.country || ""}`.toLowerCase()
+            const cityRegex = new RegExp(`\\b${cityLower}\\b`, "i")
+            const matchesCity = cityRegex.test(resultText)
+            
+            if (!matchesCity) {
+              return false
+            }
+            
+            // Apply disambiguation for ambiguous cities
+            if (isAmbiguous) {
+              if (countryLower) {
+                // Country specified - check if result matches expected country
+                const countryMatches = expectedCountries.some((expectedCountry) => {
+                  const expectedLower = expectedCountry.toLowerCase()
+                  return resultText.includes(expectedLower) || 
+                         (expectedLower.includes("usa") && /\b(usa|united states|us|america)\b/i.test(resultText)) ||
+                         (expectedLower.includes("uk") && /\b(uk|united kingdom|britain|british)\b/i.test(resultText))
+                })
+                
+                if (countryLower) {
+                  const specifiedMatchesExpected = expectedCountries.some((expectedCountry) => {
+                    const expectedLower = expectedCountry.toLowerCase()
+                    return countryLower.includes(expectedLower) || expectedLower.includes(countryLower)
+                  })
+                  
+                  if (specifiedMatchesExpected && !countryMatches) {
+                    return false // Exclude if country was specified but doesn't match
+                  }
+                }
+              } else {
+                // No country specified - exclude US state matches for major international cities
+                const hasUSState = /\b(maryland|md|california|ca|texas|tx|new york|ny|florida|fl|georgia|ga|tennessee|tn|virginia|va|new mexico|nm|massachusetts|ma|ontario)\b/i.test(resultText)
+                const hasUSCountry = /\b(usa|united states|us|america)\b/i.test(resultText)
+                const hasAustralia = /\b(australia|australian)\b/i.test(resultText)
+                
+                // For Melbourne, prefer Australia over US
+                if (cityLower === "melbourne") {
+                  if (hasUSState && !hasAustralia) {
+                    return false // Exclude US Melbourne if no Australia mention
+                  }
+                } else if (hasUSState && !hasUSCountry) {
+                  // For other ambiguous cities, exclude US state matches unless US is mentioned
+                  return false
+                }
+              }
+            }
+            
+            return true
+          })
+          
+          if (beforeCityFilter !== transformedWebResults.length) {
+            console.log(`[v0] Filtered web results by city "${city}": ${beforeCityFilter} -> ${transformedWebResults.length}`)
+          }
+        }
+
+        webResults = transformedWebResults
+        
+        console.log("[v0] Web search found:", webResults.length, "events after filtering")
       } catch (error: any) {
         console.error("[v0] Web search error:", error?.message || error)
         console.error("[v0] Web search error details:", {
@@ -384,7 +526,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Legacy stub events (can be removed if web search is working)
-    const externalEvents = EXTERNAL_STUB_EVENTS.filter((event) => {
+    const stubExternalEvents = EXTERNAL_STUB_EVENTS.filter((event) => {
       const matchesQuery =
         event.title.toLowerCase().includes(q.toLowerCase()) ||
         event.description.toLowerCase().includes(q.toLowerCase()) ||
@@ -396,24 +538,57 @@ export async function GET(req: NextRequest) {
       return matchesQuery && matchesCity && matchesCountry
     })
 
-    // Filter web results by city if city filter is specified
-    let filteredWebResults = webResults
+    // Filter web results: exclude past events and apply city filter if specified
+    let filteredWebResults = webResults.filter((result) => {
+      // Exclude past events - only show future events
+      if (result.startAt) {
+        try {
+          const eventDate = new Date(result.startAt)
+          if (eventDate < now) {
+            return false // Exclude past events
+          }
+        } catch {
+          // Invalid date, keep it but it will be labeled as informational
+        }
+      }
+      return true
+    })
+    
+    // Apply city filter if specified
     if (city) {
       const cityLower = city.toLowerCase()
-      filteredWebResults = webResults.filter((result) => {
+      const beforeCityFilter = filteredWebResults.length
+      filteredWebResults = filteredWebResults.filter((result) => {
         const resultCity = (result.city || result.location?.city || "").toLowerCase()
         return resultCity.includes(cityLower) || cityLower.includes(resultCity)
       })
-      console.log(`[v0] Filtered web results by city "${city}": ${webResults.length} → ${filteredWebResults.length}`)
+      console.log(`[v0] Filtered web results by city "${city}": ${beforeCityFilter} → ${filteredWebResults.length}`)
     }
-
-    // Combine internal and web results
-    const allEvents = [...events, ...filteredWebResults]
     
-    // Sort results: prioritize city matches, then by date
+    console.log(`[v0] Filtered web results (past events excluded): ${webResults.length} → ${filteredWebResults.length}`)
+
+    // PRIORITY: Internal events (user-created, curated) ALWAYS come FIRST
+    // External web results come AFTER, regardless of date or city match
+    // This ensures user satisfaction with accurate, curated events
+    
+    // Mark internal events with source
+    const internalEvents = events.map((e: any) => ({
+      ...e,
+      source: "internal" as const,
+      isEventaEvent: true,
+    }))
+    
+    // Mark external events with source
+    const externalEvents = filteredWebResults.map((e: any) => ({
+      ...e,
+      source: "web" as const,
+      isWebResult: true,
+    }))
+    
+    // Sort internal events: prioritize city matches, then by date
     if (city) {
       const cityLower = city.toLowerCase()
-      allEvents.sort((a, b) => {
+      internalEvents.sort((a, b) => {
         const aCity = (a.city || "").toLowerCase()
         const bCity = (b.city || "").toLowerCase()
         const aMatchesCity = aCity.includes(cityLower) || cityLower.includes(aCity)
@@ -430,14 +605,41 @@ export async function GET(req: NextRequest) {
       })
     } else {
       // No city filter: just sort by date
-      allEvents.sort((a, b) => {
+      internalEvents.sort((a, b) => {
         const aDate = new Date(a.startAt).getTime()
         const bDate = new Date(b.startAt).getTime()
         return aDate - bDate
       })
     }
     
-    const allExternal = [...filteredWebResults, ...externalEvents]
+    // Sort external events similarly (but they'll appear after internal)
+    if (city) {
+      const cityLower = city.toLowerCase()
+      externalEvents.sort((a, b) => {
+        const aCity = (a.city || "").toLowerCase()
+        const bCity = (b.city || "").toLowerCase()
+        const aMatchesCity = aCity.includes(cityLower) || cityLower.includes(aCity)
+        const bMatchesCity = bCity.includes(cityLower) || cityLower.includes(bCity)
+        
+        if (aMatchesCity && !bMatchesCity) return -1
+        if (!aMatchesCity && bMatchesCity) return 1
+        
+        const aDate = new Date(a.startAt).getTime()
+        const bDate = new Date(b.startAt).getTime()
+        return aDate - bDate
+      })
+    } else {
+      externalEvents.sort((a, b) => {
+        const aDate = new Date(a.startAt).getTime()
+        const bDate = new Date(b.startAt).getTime()
+        return aDate - bDate
+      })
+    }
+    
+    // Combine: Internal events FIRST, then external events
+    const allEvents = [...internalEvents, ...externalEvents]
+    
+    const allExternal = [...externalEvents, ...stubExternalEvents]
 
     return NextResponse.json({
       events: allEvents,

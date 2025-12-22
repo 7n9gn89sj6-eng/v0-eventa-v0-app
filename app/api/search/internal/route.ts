@@ -169,82 +169,17 @@ export async function POST(request: NextRequest) {
       console.log("[v0] No query provided, will search by entities only if provided")
     }
 
-    // Build where clause for fetching full event objects
+    // BUILD WHERE CLAUSE IN PRIORITY ORDER:
+    // 1. Location (city/country) - FIRST PRIORITY
+    // 2. Date (always forward of today) - SECOND PRIORITY
+    // 3. Text search, category, venue - LOWER PRIORITY
+
     const where: any = {
       ...PUBLIC_EVENT_WHERE,
       moderationStatus: "APPROVED", // Keep for backward compatibility
     }
-    
-    // Apply date filter - use wider range for better results
-    if (dateFilter) {
-      // Expand the date range slightly to catch events near the requested range
-      const rangeStart = dateFilter.gte ? DateTime.fromJSDate(dateFilter.gte) : null
-      const rangeEnd = dateFilter.lte ? DateTime.fromJSDate(dateFilter.lte) : null
-      
-      if (rangeStart && rangeEnd) {
-        // Expand range by 7 days on each side for better coverage
-        const expandedStart = rangeStart.minus({ days: 7 }).startOf("day")
-        const expandedEnd = rangeEnd.plus({ days: 7 }).endOf("day")
-        
-        where.startAt = {
-          gte: expandedStart.toJSDate(),
-          lte: expandedEnd.toJSDate(),
-        }
-        console.log(`[v0] Applying expanded date filter:`, {
-          requested: {
-            gte: rangeStart.toISOString(),
-            lte: rangeEnd.toISOString(),
-          },
-          expanded: {
-            gte: expandedStart.toISOString(),
-            lte: expandedEnd.toISOString(),
-          },
-        })
-      } else if (rangeStart) {
-        where.startAt = { gte: rangeStart.minus({ days: 7 }).toJSDate() }
-      }
-    } else {
-      // Default: only show future events
-      where.startAt = { gte: new Date() }
-    }
 
-    // If we have full-text search results, filter by those IDs
-    // This ensures we only get events that matched the full-text search
-    if (eventIds.length > 0) {
-      where.id = { in: eventIds }
-    }
-
-    // Build OR conditions for venue and category
-    const orConditions: any[] = []
-
-    // Venue filter
-    if (entities?.venue) {
-      orConditions.push(
-        { venueName: { contains: entities.venue, mode: "insensitive" } },
-        { locationAddress: { contains: entities.venue, mode: "insensitive" } }
-      )
-    }
-
-    // Category filter
-    if (entities?.type || entities?.category) {
-      const searchCategory = entities.type || entities.category
-      const categoryEnum = mapToEventCategory(searchCategory)
-
-      if (categoryEnum) {
-        orConditions.push({ category: categoryEnum })
-      }
-      if (searchCategory) {
-        orConditions.push({ categories: { hasSome: [searchCategory, categoryEnum].filter(Boolean) } })
-      }
-    }
-
-    // Add OR conditions if any exist
-    if (orConditions.length > 0) {
-      where.OR = orConditions
-    }
-
-    // City filter (applied separately as it's not part of OR)
-    // Use contains for flexibility but add post-filtering to exclude ambiguous matches
+    // PRIORITY 1: LOCATION FILTERS (city/country) - applied first
     if (entities?.city) {
       const cityName = entities.city.trim()
       const cityLower = cityName.toLowerCase()
@@ -299,17 +234,98 @@ export async function POST(request: NextRequest) {
       // Note: We'll do additional filtering after fetching to exclude ambiguous matches
       // like "Berlin Maryland" when searching for "Berlin"
     } else {
-      console.log(`[v0] No city filter applied (entities.city: ${entities?.city})`)
+      console.log(`[v0] PRIORITY 1 - No city filter applied (entities.city: ${entities?.city})`)
     }
 
-    // Log date filter application
+    // Country filter (if specified but city not specified)
+    if (entities?.country && !entities?.city) {
+      const countryName = entities.country.trim()
+      where.country = {
+        contains: countryName,
+        mode: "insensitive",
+      }
+      console.log(`[v0] PRIORITY 1 - Filtering by country: ${countryName}`)
+    }
+
+    // PRIORITY 2: DATE FILTER - always forward of today (default: future events only)
+    const now = new Date()
     if (dateFilter) {
-      console.log(`[v0] Applying date filter to WHERE clause:`, {
-        gte: dateFilter.gte?.toISOString(),
-        lte: dateFilter.lte?.toISOString(),
-      })
+      const rangeStart = dateFilter.gte ? DateTime.fromJSDate(dateFilter.gte) : null
+      const rangeEnd = dateFilter.lte ? DateTime.fromJSDate(dateFilter.lte) : null
+      
+      if (rangeStart && rangeEnd) {
+        // Expand range by 7 days on each side for better coverage, but ensure it's forward of today
+        const expandedStart = rangeStart.minus({ days: 7 }).startOf("day")
+        const expandedEnd = rangeEnd.plus({ days: 7 }).endOf("day")
+        
+        // Ensure start date is not in the past
+        const finalStart = expandedStart.toJSDate() > now ? expandedStart.toJSDate() : now
+        
+        where.startAt = {
+          gte: finalStart,
+          lte: expandedEnd.toJSDate(),
+        }
+        console.log(`[v0] PRIORITY 2 - Applying date filter (expanded):`, {
+          requested: {
+            gte: rangeStart.toISOString(),
+            lte: rangeEnd.toISOString(),
+          },
+          expanded: {
+            gte: finalStart.toISOString(),
+            lte: expandedEnd.toISOString(),
+          },
+        })
+      } else if (rangeStart) {
+        // Ensure start date is not in the past
+        const finalStart = rangeStart.minus({ days: 7 }).toJSDate() > now 
+          ? rangeStart.minus({ days: 7 }).toJSDate() 
+          : now
+        where.startAt = { gte: finalStart }
+        console.log(`[v0] PRIORITY 2 - Applying date filter (start only): ${finalStart.toISOString()}`)
+      }
     } else {
-      console.log(`[v0] No date filter applied (dateFilter is null/undefined)`)
+      // Default: only show future events (forward of today)
+      where.startAt = { gte: now }
+      console.log(`[v0] PRIORITY 2 - Default date filter: future events only (from ${now.toISOString()})`)
+    }
+
+    // PRIORITY 3: TEXT SEARCH RESULTS, CATEGORY, VENUE - applied after location and date
+    // If we have full-text search results, filter by those IDs
+    // This ensures we only get events that matched the full-text search
+    if (eventIds.length > 0) {
+      where.id = { in: eventIds }
+      console.log(`[v0] PRIORITY 3 - Filtering by text search results: ${eventIds.length} event IDs`)
+    }
+
+    // Build OR conditions for venue and category
+    const orConditions: any[] = []
+
+    // Venue filter
+    if (entities?.venue) {
+      orConditions.push(
+        { venueName: { contains: entities.venue, mode: "insensitive" } },
+        { locationAddress: { contains: entities.venue, mode: "insensitive" } }
+      )
+      console.log(`[v0] PRIORITY 3 - Adding venue filter: ${entities.venue}`)
+    }
+
+    // Category filter
+    if (entities?.type || entities?.category) {
+      const searchCategory = entities.type || entities.category
+      const categoryEnum = mapToEventCategory(searchCategory)
+
+      if (categoryEnum) {
+        orConditions.push({ category: categoryEnum })
+      }
+      if (searchCategory) {
+        orConditions.push({ categories: { hasSome: [searchCategory, categoryEnum].filter(Boolean) } })
+      }
+      console.log(`[v0] PRIORITY 3 - Adding category filter: ${searchCategory}`)
+    }
+
+    // Add OR conditions if any exist
+    if (orConditions.length > 0) {
+      where.OR = orConditions
     }
 
     console.log("[v0] Search query where clause:", JSON.stringify(where, null, 2))

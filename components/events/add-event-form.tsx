@@ -33,6 +33,7 @@ const addEventSchema = z
     address: z.string().min(5, "Address is required"),
     postcode: z.string().optional(),
     city: z.string().min(2, "City is required"),
+    state: z.string().optional(),
     country: z.string().min(2, "Country is required"),
     startAt: z.string().min(1, "Start date and time is required"),
     endAt: z.string().min(1, "End date and time is required"),
@@ -88,6 +89,7 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
       address: "",
       postcode: "",
       city: "",
+      state: "",
       country: "",
       startAt: "",
       endAt: "",
@@ -168,8 +170,14 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
         end: new Date(data.endAt).toISOString(),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         location: {
-          address: `${data.address}, ${data.city}, ${data.country}`,
+          // Include all address components: street, suburb, state, postcode, country
+          address: `${data.address}${data.city ? `, ${data.city}` : ""}${data.state ? `, ${data.state}` : ""}${data.postcode ? ` ${data.postcode}` : ""}, ${data.country}`,
           name: data.address,
+          // Also send individual fields for better parsing
+          city: data.city,
+          state: data.state || undefined,
+          country: data.country,
+          postcode: data.postcode || undefined,
         },
         imageUrl: data.imageUrl || "",
         externalUrl: data.externalUrl || "",
@@ -452,9 +460,13 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                         value={field.value}
                         onChange={field.onChange}
                         onPlaceSelect={(place) => {
-                          // Auto-fill city, country, and postcode from selected place
-                          if (place.city) {
-                            form.setValue("city", place.city, { shouldValidate: true })
+                          // Auto-fill all address fields from selected place
+                          // Address (street) is already set by onChange
+                          if (place.city || place.suburb) {
+                            form.setValue("city", place.city || place.suburb || "", { shouldValidate: true })
+                          }
+                          if (place.state) {
+                            form.setValue("state", place.state, { shouldValidate: true })
                           }
                           if (place.country) {
                             form.setValue("country", place.country, { shouldValidate: true })
@@ -465,8 +477,11 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                           // Store lat/lng for future use (could be added to form schema if needed)
                           console.log("[AddEventForm] Place selected:", {
                             address: place.address,
+                            suburb: place.suburb,
                             city: place.city,
+                            state: place.state,
                             country: place.country,
+                            postcode: place.postcode,
                             lat: place.lat,
                             lng: place.lng,
                           })
@@ -511,7 +526,7 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                       <FormLabel>{tForm("fields.city")}</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder={tForm("fields.cityPlaceholder")}
+                          placeholder={tForm("fields.cityPlaceholder") || "Suburb"}
                           {...field}
                           disabled={isSubmitting}
                         />
@@ -523,22 +538,41 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
 
                 <FormField
                   control={form.control}
-                  name="country"
+                  name="state"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{tForm("fields.country")}</FormLabel>
+                      <FormLabel>State / Province</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder={tForm("fields.countryPlaceholder")}
+                          placeholder="State or Province"
                           {...field}
                           disabled={isSubmitting}
                         />
                       </FormControl>
+                      <FormDescription>Optional</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
+
+              <FormField
+                control={form.control}
+                name="country"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{tForm("fields.country")}</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder={tForm("fields.countryPlaceholder")}
+                        {...field}
+                        disabled={isSubmitting}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
             {/* Date & Time */}

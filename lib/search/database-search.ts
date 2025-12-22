@@ -201,7 +201,7 @@ export async function searchDatabase(options: DatabaseSearchOptions): Promise<Se
     })
 
     const startTime = Date.now()
-    const events = await db.$queryRaw<DatabaseEventRow[]>(Prisma.sql`
+  const events = await db.$queryRaw<DatabaseEventRow[]>(Prisma.sql`
     SELECT 
       e.id, e.title, e.description, e."startAt", e."endAt", e.city, e.country,
       e."venueName", e.address, e.lat, e.lng, e.categories, e."priceFree", e."imageUrls",

@@ -1,22 +1,70 @@
 import { NextResponse } from "next/server"
 
-export const dynamic = "force-dynamic"
-
+/**
+ * Health check and configuration status endpoint
+ * Useful for debugging environment variable issues
+ */
 export async function GET() {
-  const authEnabled = process.env.NEXT_PUBLIC_AUTH_ENABLED === "true"
-  const hasSecret = !!process.env.NEXTAUTH_SECRET
-  const hasDb = !!process.env.DATABASE_URL
-  const hasOpenAI = !!process.env.OPENAI_API_KEY
-  const hasGoogle = !!process.env.GOOGLE_API_KEY && !!process.env.GOOGLE_PSE_ID
-  const hasRedis = !!process.env.UPSTASH_REDIS_REST_URL && !!process.env.UPSTASH_REDIS_REST_TOKEN
+  // In production, don't expose sensitive details
+  const isProduction = process.env.NODE_ENV === "production"
 
-  return NextResponse.json({
-    ok: true,
-    auth: { enabled: authEnabled, hasSecret },
-    db: { configured: hasDb },
-    openai: { configured: hasOpenAI },
-    google: { configured: hasGoogle },
-    redis: { configured: hasRedis },
-    node: process.versions.node,
-  })
+  const status = {
+    environment: process.env.NODE_ENV,
+    timestamp: new Date().toISOString(),
+    services: {
+      database: {
+        configured: !!process.env.DATABASE_URL,
+        // Don't expose full connection string
+        hasUrl: !!process.env.DATABASE_URL,
+      },
+      openai: {
+        configured: !!process.env.OPENAI_API_KEY,
+        hasApiKey: !!process.env.OPENAI_API_KEY,
+      },
+      google: {
+        searchApiKey: !!process.env.GOOGLE_API_KEY,
+        pseId: !!process.env.GOOGLE_PSE_ID,
+        mapsApiKey: {
+          configured: !!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY,
+          // Only show if API key exists (don't show full key, just first few chars)
+          preview: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+            ? `${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY.substring(0, 10)}...`
+            : "NOT SET",
+          note: "Used for Places Autocomplete in address fields",
+        },
+      },
+      redis: {
+        configured: !!process.env.UPSTASH_KV_REST_API_URL && !!process.env.UPSTASH_KV_REST_API_TOKEN,
+        hasUrl: !!process.env.UPSTASH_KV_REST_API_URL,
+        hasToken: !!process.env.UPSTASH_KV_REST_API_TOKEN,
+      },
+      mapbox: {
+        configured: !!process.env.MAPBOX_TOKEN,
+        hasToken: !!process.env.MAPBOX_TOKEN,
+      },
+    },
+  }
+
+  // In production, hide sensitive information
+  if (isProduction) {
+    // Only return basic status
+    return NextResponse.json({
+      ok: true,
+      environment: status.environment,
+      timestamp: status.timestamp,
+      services: {
+        database: { configured: status.services.database.configured },
+        openai: { configured: status.services.openai.configured },
+        google: {
+          searchConfigured: status.services.google.searchApiKey && status.services.google.pseId,
+          mapsConfigured: status.services.google.mapsApiKey.configured,
+        },
+        redis: { configured: status.services.redis.configured },
+        mapbox: { configured: status.services.mapbox.configured },
+      },
+    })
+  }
+
+  // In development, show more details
+  return NextResponse.json(status)
 }

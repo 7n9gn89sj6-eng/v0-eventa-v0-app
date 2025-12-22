@@ -19,9 +19,14 @@ export function intentToURLParams(intentResponse: any): URLSearchParams {
     params.set("q", intentResponse.description)
   }
 
-  // Add city if extracted
-  if (extracted.city) {
-    params.set("city", extracted.city)
+  // Add city if extracted (check for empty strings too)
+  if (extracted.city && extracted.city.trim().length > 0) {
+    params.set("city", extracted.city.trim())
+  }
+
+  // Add country if extracted (helps with location disambiguation)
+  if (extracted.country && extracted.country.trim().length > 0) {
+    params.set("country", extracted.country.trim())
   }
 
   // Add category if extracted (check both type and category fields)

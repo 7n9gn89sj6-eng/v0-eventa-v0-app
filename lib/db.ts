@@ -56,18 +56,18 @@ if (process.env.NODE_ENV !== "production" && globalForPrisma.prisma) {
 let db: PrismaClient
 try {
   db =
-    globalForPrisma.prisma ??
-    new PrismaClient({
-      log:
-        process.env.NODE_ENV === "development"
-          ? ["query", "error", "warn"]
-          : ["error"],
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    log:
+      process.env.NODE_ENV === "development"
+        ? ["query", "error", "warn"]
+        : ["error"],
       datasources: {
         db: {
           url: databaseUrl,
         },
       },
-    })
+  })
 } catch (error) {
   console.error("[db] Failed to create Prisma Client:", error)
   throw error

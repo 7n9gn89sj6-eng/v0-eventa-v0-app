@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { query, mode, step = 2, uiLang = "en" } = body
+    const { query, mode, step = 2, uiLang = "en", userLocation } = body
 
     if (mode) {
       inputMode = mode
@@ -107,10 +107,34 @@ export async function POST(request: NextRequest) {
       apiKey: process.env.OPENAI_API_KEY,
     })
 
+    // Build prompt with user location context if available
+    const locationContext = userLocation?.city 
+      ? `\n\nCRITICAL LOCATION PRIORITY RULES:
+The user's detected location is ${userLocation.city}${userLocation.country ? `, ${userLocation.country}` : ""} (coordinates: ${userLocation.lat}, ${userLocation.lng}).
+
+LOCATION PRIORITY (in order):
+1. EXPLICIT LOCATION IN QUERY (HIGHEST PRIORITY): If the user explicitly mentions a city or location in their query, ALWAYS use that location. Examples:
+   - "jazz in Sydney this weekend" → extract city: "Sydney" (ignore detected location)
+   - "events in Paris" → extract city: "Paris" (ignore detected location)
+   - "concerts in Melbourne" → extract city: "Melbourne" (ignore detected location)
+
+2. "AROUND ME" / "NEAR ME" PHRASES: If the user says "around me", "near me", "nearby", or similar phrases, use the detected location:
+   - "jazz around me this weekend" → extract city: "${userLocation.city}"${userLocation.country ? `, country: "${userLocation.country}"` : ""}
+   - "events near me" → extract city: "${userLocation.city}"${userLocation.country ? `, country: "${userLocation.country}"` : ""}
+   - "what's happening nearby" → extract city: "${userLocation.city}"${userLocation.country ? `, country: "${userLocation.country}"` : ""}
+
+3. NO LOCATION MENTIONED: If the query has no location and no "around me" phrase, use the detected location as default:
+   - "jazz this weekend" → extract city: "${userLocation.city}"${userLocation.country ? `, country: "${userLocation.country}"` : ""}
+   - "find concerts" → extract city: "${userLocation.city}"${userLocation.country ? `, country: "${userLocation.country}"` : ""}
+   - "what events are happening" → extract city: "${userLocation.city}"${userLocation.country ? `, country: "${userLocation.country}"` : ""}
+
+SUMMARY: Explicit location in query > "around me" phrases > detected location default`
+      : ""
+
     const { object } = await generateObject({
       model: openai("gpt-4o-mini"),
       schema: intentSchema,
-      prompt: `You are a multilingual event assistant. The user's interface language is ${languageNames[uiLang] || "English"} (${uiLang}).
+      prompt: `You are a multilingual event assistant. The user's interface language is ${languageNames[uiLang] || "English"} (${uiLang}).${locationContext}
 
 IMPORTANT MULTILINGUAL RULES:
 1. User input may be in English (en), Greek (el), Italian (it), Spanish (es), or French (fr)
@@ -147,7 +171,7 @@ Only return "unclear" if the query is completely ambiguous and contains no locat
 ENTITY EXTRACTION (normalize to English):
 - title: event name/title (translate to English if needed)
 - type: category like jazz, yoga, workshop, concert, open mic (translate to English)
-- city: city name - MUST normalize to English for major cities:
+- city: city name - EXTRACT according to LOCATION PRIORITY RULES above. MUST normalize to English for major cities:
   * Greek: "Αθήνα" → "Athens", "Ρώμη" → "Rome", "Παρίσι" → "Paris", "Μελίν" → "Melbourne"
   * Italian: "Roma" → "Rome", "Milano" → "Milan", "Firenze" → "Florence", "Napoli" → "Naples"
   * Spanish: "Madrid" → "Madrid", "Barcelona" → "Barcelona", "Roma" → "Rome", "París" → "Paris"
@@ -318,10 +342,31 @@ User input: "${query}"`,
       }),
     )
 
+    // If no city was extracted but user has a detected location, use it as default
+    // This handles cases where the query doesn't mention a location (e.g., "jazz this weekend")
+    // The AI should have already handled "around me" phrases, but this is a safety fallback
+    const extractedWithLocation = { ...object.extracted }
+    
+    // Check if city is missing or empty (AI might return empty string instead of undefined)
+    const hasCity = extractedWithLocation.city && extractedWithLocation.city.trim().length > 0
+    
+    if (!hasCity && userLocation?.city && object.intent === "search") {
+      extractedWithLocation.city = userLocation.city
+      // Also use country if available and not already extracted
+      if (userLocation.country && !extractedWithLocation.country) {
+        extractedWithLocation.country = userLocation.country
+      }
+      console.log(`[v0] Using detected user location as default (no explicit location in query): ${userLocation.city}${userLocation.country ? `, ${userLocation.country}` : ""}`)
+    } else if (hasCity) {
+      console.log(`[v0] Using explicit location from query: ${extractedWithLocation.city}${extractedWithLocation.country ? `, ${extractedWithLocation.country}` : ""}`)
+    } else if (!hasCity && !userLocation?.city) {
+      console.log(`[v0] No location available - neither explicit location nor detected location`)
+    }
+
     return NextResponse.json({
       ...object,
       extracted: {
-        ...object.extracted,
+        ...extractedWithLocation,
         date_iso: dateISO,
         time_24h: time24h,
       },

@@ -40,6 +40,7 @@ export async function POST() {
         UPDATE "Event"
         SET status = 'PUBLISHED',
             "aiStatus" = 'SAFE',
+            "moderationStatus" = 'APPROVED',
             "aiReason" = ${moderation.reason},
             "aiAnalyzedAt" = NOW(),
             "updatedAt" = NOW()

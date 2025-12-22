@@ -29,6 +29,10 @@ const EventSubmitSchema = z
       .object({
         name: z.string().optional(),
         address: z.string().optional(),
+        city: z.string().optional(),
+        state: z.string().optional(),
+        country: z.string().optional(),
+        postcode: z.string().optional(),
       })
       .optional(),
 
@@ -96,13 +100,24 @@ export async function POST(request: NextRequest) {
 
     /* ------------------------- LOCATION PARSING ------------------------- */
 
-    const address = validated.location?.address ?? "";
-    const parts = address
-      ? address.split(",").map((p) => p.trim()).filter(Boolean)
-      : [];
-
-    const city = parts[1] || parts[0] || "Unknown";
-    const country = parts[parts.length - 1] || "Australia";
+    // Use individual fields if provided, otherwise parse from address string
+    const city = validated.location?.city || "Unknown";
+    const state = validated.location?.state || null;
+    const country = validated.location?.country || "Australia";
+    const postcode = validated.location?.postcode || null;
+    
+    // Build address string if individual components are provided
+    let address = validated.location?.address ?? "";
+    if (!address && validated.location) {
+      // Construct address from components
+      const parts: string[] = []
+      if (validated.location.name) parts.push(validated.location.name)
+      if (city && city !== "Unknown") parts.push(city)
+      if (state) parts.push(state)
+      if (postcode) parts.push(postcode)
+      if (country) parts.push(country)
+      address = parts.join(", ")
+    }
 
     /* ------------------------- DETECT LANGUAGE ------------------------- */
     
@@ -131,6 +146,7 @@ export async function POST(request: NextRequest) {
         address,
         city,
         country,
+        postcode: postcode || null,
 
         imageUrl: validated.imageUrl || null,
         imageUrls,
@@ -140,7 +156,7 @@ export async function POST(request: NextRequest) {
         languages,
         language: detectedLanguage, // Store detected language
 
-        searchText: `${validated.title} ${validated.description} ${city} ${country}`.toLowerCase(),
+        searchText: `${validated.title} ${validated.description} ${city} ${state ? state + " " : ""}${country}`.toLowerCase(),
 
         createdById: user.id,
 
@@ -201,6 +217,7 @@ export async function POST(request: NextRequest) {
           data: {
             status: "PUBLISHED",
             aiStatus: "SAFE",
+            moderationStatus: "APPROVED", // Required for PUBLIC_EVENT_WHERE filter in search
             aiReason: moderation.reason,
             aiAnalyzedAt: new Date(),
           },
@@ -243,6 +260,12 @@ export async function POST(request: NextRequest) {
       }
     } catch (err) {
       console.error("[AI] moderation error:", err);
+      // Log the error but don't block event creation
+      // Event will remain in DRAFT/PENDING state until manually reviewed
+      logger.error("[submit] AI moderation failed completely", {
+        eventId: event.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
 
     /* ------------------------- SEND EDIT LINK EMAIL ------------------------- */
