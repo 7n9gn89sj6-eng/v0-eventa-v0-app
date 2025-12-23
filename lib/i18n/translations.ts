@@ -62,15 +62,21 @@ export const translations = {
         undo: "Undo",
       },
       chips: {
-        jazzWeekend: "jazz this weekend",
-        athensFood: "Athens food",
-        kidsSaturday: "kids Saturday",
-        communityMarkets: "Community Markets",
-        garageSale: "Garage Sale",
-        celebrations: "Celebrations",
-        openMicDock: "Open mic at The Dock next Saturday 8pm",
-        yogaLisbon: "yoga in Lisbon on Saturday",
-        communityPicnic: "community picnic tomorrow 2pm",
+        // Trip / Holiday oriented (primary focus)
+        berlinThisWeek: "Things on in Berlin this week",
+        romeWhileVisiting: "What's on while I'm in Rome",
+        athensFoodMusic: "Food and music in Athens",
+        parisTripEvents: "Events during my trip to Paris",
+        weekendNearMe: "What's happening near me this weekend",
+        // Local / everyday discovery
+        marketsNearby: "Community markets nearby",
+        liveMusicWeekend: "Live music this weekend",
+        familySaturday: "Family events Saturday",
+        artExhibitions: "Art exhibitions near me",
+        // Community / grassroots
+        localCelebrations: "Local celebrations",
+        neighbourhoodEvents: "Neighbourhood events",
+        garageSalesNearby: "Garage sales nearby",
       },
       drafts: {
         title: "Your Drafts",

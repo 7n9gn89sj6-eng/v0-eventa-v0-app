@@ -80,6 +80,132 @@ function deduplicateResults(internal: any[], external: any[]) {
   }
 }
 
+/**
+ * Hard location guard for trip queries.
+ * When a city is confidently extracted and trip intent is present,
+ * filter out events from different cities/countries.
+ * 
+ * This ensures trip queries NEVER show irrelevant events from other locations.
+ * 
+ * @param results - Array of events (internal or external)
+ * @param targetCity - The city name extracted from the query
+ * @param targetCountry - Optional country name for disambiguation
+ * @returns Filtered array containing only events in the target city
+ */
+function applyLocationGuard(results: any[], targetCity: string, targetCountry?: string): any[] {
+  if (!targetCity || targetCity.trim().length === 0) {
+    return results // No city specified, return all results
+  }
+
+  const cityLower = targetCity.toLowerCase().trim()
+  
+  // City name variations map (same as in internal search)
+  const cityVariations: Record<string, string[]> = {
+    "berlin": ["berlin", "berlín"],
+    "brussels": ["bruxelles", "brussel", "bruselas"],
+    "athens": ["αθήνα", "athina", "athen"],
+    "rome": ["roma", "rom"],
+    "paris": ["paris"],
+    "milan": ["milano"],
+    "florence": ["firenze"],
+    "naples": ["napoli"],
+    "venice": ["venezia"],
+    "vienna": ["wien"],
+    "copenhagen": ["københavn", "kobenhavn"],
+    "prague": ["praha"],
+    "warsaw": ["warszawa"],
+    "budapest": ["budapest"],
+    "bucharest": ["bucurești", "bucuresti"],
+    "new york": ["nyc", "new york city", "manhattan"],
+    "los angeles": ["la", "los angeles"],
+    "san francisco": ["sf", "san francisco"],
+  }
+  
+  // Get all variations for the target city
+  const variations = cityVariations[cityLower] || []
+  const allCityNames = [cityLower, ...variations]
+  
+  // Country variations for matching
+  const countryVariations: Record<string, string[]> = {
+    "united states": ["usa", "us", "united states", "america"],
+    "greece": ["greece", "greek"],
+    "italy": ["italy", "italian"],
+    "spain": ["spain", "spanish"],
+    "france": ["france", "french"],
+    "united kingdom": ["uk", "united kingdom", "britain", "british"],
+    "germany": ["germany", "german", "deutschland"],
+  }
+  
+  // Normalize target country if provided
+  let targetCountryLower: string | null = null
+  if (targetCountry) {
+    const countryLower = targetCountry.toLowerCase().trim()
+    // Find matching country variation
+    for (const [standard, variations] of Object.entries(countryVariations)) {
+      if (variations.some(v => countryLower.includes(v) || v.includes(countryLower))) {
+        targetCountryLower = standard
+        break
+      }
+    }
+    if (!targetCountryLower) {
+      targetCountryLower = countryLower
+    }
+  }
+
+  const beforeFilter = results.length
+  const filtered = results.filter((event) => {
+    // Extract city from event (handle both internal and external formats)
+    const eventCity = (event.city || event.location?.city || "").toLowerCase().trim()
+    const eventCountry = (event.country || event.location?.country || "").toLowerCase().trim()
+    
+    // Extract city from address if city field is empty
+    const eventAddress = (event.address || event.location?.address || event.venueName || "").toLowerCase().trim()
+    
+    // Check if event is explicitly marked as online/global
+    const isOnline = event.isOnline === true || 
+                     eventAddress.includes("online") || 
+                     eventAddress.includes("virtual") ||
+                     event.title?.toLowerCase().includes("online") ||
+                     event.title?.toLowerCase().includes("virtual")
+    
+    // Allow online/global events through
+    if (isOnline) {
+      return true
+    }
+    
+    // Check if city matches any variation
+    const cityMatches = allCityNames.some(cityVar => {
+      return eventCity.includes(cityVar) || 
+             cityVar.includes(eventCity) ||
+             eventAddress.includes(cityVar) ||
+             event.title?.toLowerCase().includes(cityVar)
+    })
+    
+    if (!cityMatches) {
+      return false // City doesn't match, exclude
+    }
+    
+    // If country is specified, also check country match
+    if (targetCountryLower && eventCountry) {
+      const countryMatches = countryVariations[targetCountryLower]?.some(countryVar => {
+        return eventCountry.includes(countryVar) || countryVar.includes(eventCountry)
+      }) || eventCountry.includes(targetCountryLower) || targetCountryLower.includes(eventCountry)
+      
+      if (!countryMatches) {
+        return false // Country doesn't match, exclude
+      }
+    }
+    
+    return true // City (and optionally country) matches
+  })
+  
+  if (beforeFilter !== filtered.length) {
+    console.log(`[v0] Location guard applied: ${beforeFilter} -> ${filtered.length} events for city: ${targetCity}${targetCountry ? `, ${targetCountry}` : ""}`)
+  }
+  
+  return filtered
+}
+
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
   const body = await request.json()
@@ -183,12 +309,42 @@ export async function POST(request: NextRequest) {
 
   const deduped = deduplicateResults(internalResults, externalResults)
 
+  // PART 1: HARD LOCATION GUARD for trip queries
+  // When a city is confidently extracted AND trip intent is present,
+  // apply strict location filtering to prevent irrelevant events from other cities
+  let finalInternal = deduped.internal
+  let finalExternal = deduped.external
+  
+  if (isTripIntent === true && entities?.city && entities.city.trim().length > 0) {
+    const targetCity = entities.city.trim()
+    const targetCountry = entities.country?.trim()
+    
+    console.log(`[v0] Applying location guard for trip query: city="${targetCity}"${targetCountry ? `, country="${targetCountry}"` : ""}`)
+    
+    // Apply location guard to both internal and external results
+    const beforeInternal = finalInternal.length
+    const beforeExternal = finalExternal.length
+    
+    finalInternal = applyLocationGuard(finalInternal, targetCity, targetCountry)
+    finalExternal = applyLocationGuard(finalExternal, targetCity, targetCountry)
+    
+    const droppedInternal = beforeInternal - finalInternal.length
+    const droppedExternal = beforeExternal - finalExternal.length
+    
+    if (droppedInternal > 0 || droppedExternal > 0) {
+      console.log(`[v0] Location guard filtered out ${droppedInternal} internal + ${droppedExternal} external events from different cities`)
+    }
+    
+    // CRITICAL: Do NOT widen geography if insufficient results
+    // It's better to return fewer relevant results than to show irrelevant ones
+  }
+
   // EVENTS-FIRST: Always prioritize Eventa events
   // Internal results come first, then external (web) results
   // External results are clearly marked as "Related information from the web"
   const mergedResults = [
-    ...deduped.internal.map((r) => ({ ...r, source: "internal" as const })),
-    ...deduped.external.map((r) => ({ ...r, source: "external" as const, isWebResult: true })),
+    ...finalInternal.map((r) => ({ ...r, source: "internal" as const })),
+    ...finalExternal.map((r) => ({ ...r, source: "external" as const, isWebResult: true })),
   ]
 
   const totalLatency = Date.now() - startTime
@@ -242,8 +398,8 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     results: mergedResults,
     count: mergedResults.length,
-    internal_count: deduped.internal.length,
-    external_count: deduped.external.length,
+    internal_count: finalInternal.length,
+    external_count: finalExternal.length,
     latency_ms: totalLatency,
     message,
     errors: {

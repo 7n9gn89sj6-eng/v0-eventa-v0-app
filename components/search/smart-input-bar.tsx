@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, forwardRef, useImperativeHandle, useEffect } from "react"
-import { Search, Loader2, AlertCircle, MapPin, X } from "lucide-react"
+import { Search, Loader2, AlertCircle, MapPin, X, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
@@ -11,7 +11,7 @@ import { useI18n } from "@/lib/i18n/context"
 import { reverseGeocodeDebounced } from "@/lib/geocoding"
 import { intentToURLParams } from "@/lib/search/query-parser"
 import { useRouter } from "next/navigation"
-import { getUserLocation, storeUserLocation, type UserLocation } from "@/lib/user-location"
+import { getUserLocation, storeUserLocation, clearUserLocation, type UserLocation } from "@/lib/user-location"
 
 interface SmartInputBarProps {
   onSearch?: (query: string) => Promise<void>
@@ -38,6 +38,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
 
     const [userLocation, setUserLocation] = useState<UserLocation | null>(null)
     const [isLoadingLocation, setIsLoadingLocation] = useState(false)
+    const [locationError, setLocationError] = useState<string | null>(null)
 
     // Load stored location on mount
     useEffect(() => {
@@ -59,9 +60,18 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
       },
     }))
 
-    const handleLocationRequest = async () => {
+    const handleLocationRequest = async (retryCount = 0) => {
+      // If location exists, clear it
+      if (userLocation) {
+        clearUserLocation()
+        setUserLocation(null)
+        setLocationError(null)
+        return
+      }
+
       setIsLoadingLocation(true)
       setError(null)
+      setLocationError(null)
 
       if (!navigator.geolocation) {
         // Browser doesn't support geolocation - silently fail
@@ -69,12 +79,15 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
         return
       }
 
+      // Use longer timeout: 15 seconds (increased from 10)
+      const timeoutMs = 15000
+      
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const lat = position.coords.latitude
           const lng = position.coords.longitude
 
-          console.log("[v0] Got coordinates:", lat, lng)
+          console.log(`[v0] Got coordinates (attempt ${retryCount + 1}):`, lat, lng)
 
           // Reverse geocode to get city name and country
           try {
@@ -90,10 +103,12 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
                 const location = { lat, lng, city, country, timestamp: Date.now() }
                 storeUserLocation({ lat, lng, city, country })
                 setUserLocation(location)
+                setLocationError(null) // Clear any errors on success
               } else {
                 // Fallback to coordinates without city name
                 const location = { lat, lng, city: "Unknown location", timestamp: Date.now() }
                 setUserLocation(location)
+                setLocationError(null)
               }
             } else {
               // Fallback to old method if API fails
@@ -102,6 +117,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
                 const location = { lat, lng, city, timestamp: Date.now() }
                 storeUserLocation({ lat, lng, city })
                 setUserLocation(location)
+                setLocationError(null)
               }
             }
           } catch (error) {
@@ -112,19 +128,68 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
               const location = { lat, lng, city, timestamp: Date.now() }
               storeUserLocation({ lat, lng, city })
               setUserLocation(location)
+              setLocationError(null)
             }
           }
 
           setIsLoadingLocation(false)
         },
-        (error) => {
-          console.log("[v0] Geolocation error:", error.message)
-          // User denied or error - silently fail
+        async (error) => {
+          // Log detailed error information
+          const errorDetails = {
+            code: error.code,
+            message: error.message,
+            attempt: retryCount + 1,
+            timeout: timeoutMs,
+          }
+          console.log("[v0] Geolocation error:", errorDetails)
+          
+          // Determine error type and handle accordingly
+          if (error.code === error.TIMEOUT) {
+            // Timeout: Check if we should retry (only retry once)
+            if (retryCount === 0) {
+              console.log("[v0] Timeout occurred, retrying once with longer timeout...")
+              // Retry once with same timeout
+              setTimeout(() => {
+                handleLocationRequest(1)
+              }, 500) // Small delay before retry
+              return // Don't set loading to false yet, retry is happening
+            }
+            
+            // Second attempt also timed out - check permission state
+            try {
+              const permissionStatus = await navigator.permissions.query({ name: 'geolocation' as PermissionName })
+              if (permissionStatus.state === 'granted') {
+                // Permission granted but timed out - network/positioning issue
+                setLocationError("We couldn't determine your location right now. This can happen on some networks. You can still search by city.")
+                console.log("[v0] Timeout with granted permission - likely network/positioning issue")
+              } else {
+                // Permission denied or prompt - different message
+                setLocationError("Location permission was denied. You can still search by entering a city name.")
+                console.log("[v0] Timeout with denied/prompt permission")
+              }
+            } catch (permError) {
+              // Permissions API not supported - fallback to generic timeout message
+              setLocationError("We couldn't determine your location right now. This can happen on some networks. You can still search by city.")
+              console.log("[v0] Permissions API not supported, using generic timeout message")
+            }
+          } else if (error.code === error.PERMISSION_DENIED) {
+            setLocationError("Location permission was denied. You can still search by entering a city name.")
+            console.log("[v0] Permission denied by user")
+          } else if (error.code === error.POSITION_UNAVAILABLE) {
+            setLocationError("Location information is unavailable. You can still search by entering a city name.")
+            console.log("[v0] Position unavailable - GPS/network issue")
+          } else {
+            // Unknown error - silently fail
+            setLocationError(null)
+            console.log("[v0] Unknown geolocation error:", error)
+          }
+          
           setIsLoadingLocation(false)
         },
         {
           enableHighAccuracy: false,
-          timeout: 10000,
+          timeout: timeoutMs, // Increased timeout: 15 seconds
           maximumAge: 300000, // Cache for 5 minutes
         },
       )
@@ -230,13 +295,24 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
       }
     }
 
+    // Trip-oriented examples that signal Eventa's trip discovery strengths
+    // Plain-spoken, non-marketing tone that invites exploration
     const searchExamples = [
-      tHome("chips.jazzWeekend"),
-      tHome("chips.athensFood"),
-      tHome("chips.kidsSaturday"),
-      tHome("chips.communityMarkets"),
-      tHome("chips.garageSale"),
-      tHome("chips.celebrations"),
+      // Trip / Holiday oriented (primary focus)
+      tHome("chips.berlinThisWeek"),
+      tHome("chips.romeWhileVisiting"),
+      tHome("chips.athensFoodMusic"),
+      tHome("chips.parisTripEvents"),
+      tHome("chips.weekendNearMe"),
+      // Local / everyday discovery
+      tHome("chips.marketsNearby"),
+      tHome("chips.liveMusicWeekend"),
+      tHome("chips.familySaturday"),
+      tHome("chips.artExhibitions"),
+      // Community / grassroots
+      tHome("chips.localCelebrations"),
+      tHome("chips.neighbourhoodEvents"),
+      tHome("chips.garageSalesNearby"),
     ]
 
     const guidanceText = tHome("search.searchGuidance")
@@ -267,12 +343,27 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
               size="lg"
               onClick={handleLocationRequest}
               disabled={isLoadingLocation || isProcessing}
-              className="shrink-0 bg-transparent min-h-[44px] min-w-[44px] active:scale-95"
-              title="Use my location"
-              aria-label="Detect my current location"
+              className={cn(
+                "shrink-0 min-h-[44px] active:scale-95",
+                userLocation ? "bg-primary/10 border-primary/20" : "bg-transparent"
+              )}
+              title={userLocation ? `Location: ${userLocation.city}. Click to clear.` : "Detect my current location"}
+              aria-label={userLocation ? `Clear location: ${userLocation.city}` : "Detect my current location"}
               style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
             >
-              {isLoadingLocation ? <Loader2 className="h-5 w-5 animate-spin" /> : <MapPin className="h-5 w-5" />}
+              {isLoadingLocation ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="hidden sm:inline ml-2">Finding your location…</span>
+                </>
+              ) : userLocation ? (
+                <>
+                  <Check className="h-5 w-5 text-primary" />
+                  <span className="hidden sm:inline ml-2">Near you</span>
+                </>
+              ) : (
+                <MapPin className="h-5 w-5" />
+              )}
             </Button>
           </div>
 
@@ -297,18 +388,19 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
           </Button>
         </div>
 
-        {userLocation && userLocation.city !== "Unknown location" && (
-          <div className="flex items-center gap-2 rounded-md bg-secondary px-3 py-2 text-sm">
-            <MapPin className="h-4 w-4 text-secondary-foreground" />
-            <span className="text-secondary-foreground">Near {userLocation.city}</span>
-            <button
-              onClick={() => setUserLocation(null)}
-              className="ml-auto text-secondary-foreground hover:text-foreground"
-              title="Clear location"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
+        {/* Helper text - always visible */}
+        <p className="text-xs text-muted-foreground">
+          You can search by city name if location isn't available.
+        </p>
+
+        {/* Location error message (non-intrusive) */}
+        {locationError && (
+          <Alert variant="default" className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            <AlertDescription className="text-amber-800 dark:text-amber-200 text-sm">
+              {locationError}
+            </AlertDescription>
+          </Alert>
         )}
 
         {error && (

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Calendar, MapPin, List, Loader2, X, AlertCircle } from "lucide-react";
+import { Calendar, MapPin, List, Loader2, X, AlertCircle, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -14,7 +14,7 @@ import { useI18n } from "@/lib/i18n/context";
 import { getUserLocation, storeUserLocation, clearUserLocation, type UserLocation } from "@/lib/user-location";
 import { reverseGeocodeDebounced } from "@/lib/geocoding";
 
-type GeolocationErrorCode = "PERMISSION_DENIED" | "POSITION_UNAVAILABLE" | "TIMEOUT" | "NOT_SUPPORTED" | "HTTPS_REQUIRED" | null;
+type GeolocationErrorCode = "PERMISSION_DENIED" | "POSITION_UNAVAILABLE" | "TIMEOUT" | "TIMEOUT_GRANTED" | "NOT_SUPPORTED" | "HTTPS_REQUIRED" | null;
 
 export function SiteHeader() {
   const { t } = useI18n();
@@ -38,8 +38,8 @@ export function SiteHeader() {
      window.location.hostname.startsWith("192.168.") ||
      window.location.hostname.startsWith("10."));
 
-  const handleLocationRequest = async () => {
-    console.log("[Header] Location button clicked", { userLocation, isLoadingLocation });
+  const handleLocationRequest = async (retryCount = 0) => {
+    console.log("[Header] Location button clicked", { userLocation, isLoadingLocation, retryCount });
     
     try {
       if (userLocation) {
@@ -76,10 +76,13 @@ export function SiteHeader() {
         console.log("[Header] Localhost detected - geolocation may fail (expected)");
       }
 
-      console.log("[Header] Requesting geolocation permission");
+      // Use longer timeout: 15 seconds (increased from 10)
+      const timeoutMs = 15000
+      
+      console.log(`[Header] Requesting geolocation permission (attempt ${retryCount + 1}, timeout: ${timeoutMs}ms)`);
       navigator.geolocation.getCurrentPosition(
         async (position) => {
-          console.log("[Header] Geolocation success:", position.coords);
+          console.log(`[Header] Geolocation success (attempt ${retryCount + 1}):`, position.coords);
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
 
@@ -132,28 +135,57 @@ export function SiteHeader() {
           setIsLoadingLocation(false);
           setGeolocationError(null); // Clear any previous errors on success
         },
-        (error) => {
-          // Map error codes to our error type
+        async (error) => {
+          // Map error codes to our error type with detailed logging
           let errorCode: GeolocationErrorCode = null;
+          
+          const errorDetails = {
+            code: error.code,
+            message: error.message,
+            attempt: retryCount + 1,
+            timeout: timeoutMs,
+            isLocalhost,
+          };
           
           if (error.code === error.PERMISSION_DENIED) {
             errorCode = "PERMISSION_DENIED";
+            console.warn("[Header] Permission denied by user:", errorDetails);
           } else if (error.code === error.POSITION_UNAVAILABLE) {
             errorCode = "POSITION_UNAVAILABLE";
+            console.warn("[Header] Position unavailable (GPS/network issue):", errorDetails);
           } else if (error.code === error.TIMEOUT) {
-            errorCode = "TIMEOUT";
+            // Timeout: Check if we should retry (only retry once)
+            if (retryCount === 0) {
+              console.log("[Header] Timeout occurred, retrying once with longer timeout...", errorDetails);
+              // Retry once with same timeout
+              setTimeout(() => {
+                handleLocationRequest(1);
+              }, 500); // Small delay before retry
+              return; // Don't set loading to false yet, retry is happening
+            }
+            
+            // Second attempt also timed out - check permission state
+            try {
+              const permissionStatus = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+              if (permissionStatus.state === 'granted') {
+                // Permission granted but timed out - network issue, not permission issue
+                errorCode = "TIMEOUT_GRANTED";
+                console.warn("[Header] Timeout with granted permission (likely network/positioning issue):", errorDetails);
+              } else {
+                // Permission denied or prompt - different message
+                errorCode = "TIMEOUT";
+                console.warn("[Header] Timeout with denied/prompt permission:", errorDetails);
+              }
+            } catch (permError) {
+              // Permissions API not supported - fallback to generic timeout
+              errorCode = "TIMEOUT";
+              console.warn("[Header] Permissions API not supported, using generic timeout message:", errorDetails);
+            }
           }
 
-          console.warn("[Header] Geolocation error:", {
-            code: error.code,
-            message: error.message,
-            errorCode,
-            isLocalhost,
-          });
-          
           // On localhost, this is expected - don't show error to user
           if (isLocalhost) {
-            console.log("[Header] Geolocation failed on localhost (expected behavior)");
+            console.log("[Header] Geolocation failed on localhost (expected behavior):", errorDetails);
             setIsLoadingLocation(false);
             setGeolocationError(null); // Don't show error on localhost
             return;
@@ -165,7 +197,7 @@ export function SiteHeader() {
         },
         {
           enableHighAccuracy: false,
-          timeout: 10000,
+          timeout: timeoutMs, // Increased timeout: 15 seconds
           maximumAge: 300000, // Cache for 5 minutes
         }
       );
@@ -184,6 +216,9 @@ export function SiteHeader() {
         return "Location permission was denied. You can still search by entering a city name.";
       case "POSITION_UNAVAILABLE":
         return "Location information is unavailable. You can still search by entering a city name.";
+      case "TIMEOUT_GRANTED":
+        // Permission granted but timed out - network issue, not permission issue
+        return "We couldn't determine your location right now. This can happen on some networks. You can still search by city.";
       case "TIMEOUT":
         return "Location request timed out. You can still search by entering a city name.";
       case "NOT_SUPPORTED":
@@ -228,7 +263,9 @@ export function SiteHeader() {
           <Button
             variant="outline"
             size="sm"
-            className="gap-2 bg-transparent min-h-[44px] min-w-[44px] touch-manipulation active:scale-95"
+            className={`gap-2 min-h-[44px] touch-manipulation active:scale-95 ${
+              userLocation ? "bg-primary/10 border-primary/20" : "bg-transparent"
+            }`}
             onClick={handleLocationRequest}
             disabled={isLoadingLocation}
             title={userLocation ? `Location: ${userLocation.city}. Click to clear.` : "Detect my location"}
@@ -240,15 +277,21 @@ export function SiteHeader() {
             }}
           >
             {isLoadingLocation ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="hidden sm:inline">Finding your location…</span>
+              </>
             ) : userLocation ? (
-              <X className="h-4 w-4" />
+              <>
+                <Check className="h-4 w-4 text-primary" />
+                <span className="hidden sm:inline">Near you</span>
+              </>
             ) : (
-              <MapPin className="h-4 w-4" />
+              <>
+                <MapPin className="h-4 w-4" />
+                <span className="hidden sm:inline">{tCommon("location")}</span>
+              </>
             )}
-            <span className="hidden sm:inline">
-              {userLocation ? userLocation.city : tCommon("location")}
-            </span>
           </Button>
 
           {/* Language selector */}
