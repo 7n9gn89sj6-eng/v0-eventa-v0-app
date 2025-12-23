@@ -119,6 +119,16 @@ export function EventsListingContent({
         sampleExternal: data.external?.[0],
       })
 
+      // Filter external results by city if city filter is active
+      // External web search can return results from anywhere, so we filter client-side
+      const filteredExternal = (data.external || []).filter((ext: any) => {
+        if (!cityFilter || cityFilter.trim() === "") return true // No filter = show all
+        const extCity = (ext.location?.city || ext.city || "").toLowerCase().trim()
+        const filterCity = cityFilter.toLowerCase().trim()
+        // Match if city field contains the filter city or vice versa (handles "Melbourne, Australia" vs "Melbourne")
+        return extCity.includes(filterCity) || filterCity.includes(extCity) || extCity === ""
+      })
+
       // PRIORITY: Internal events (user-created, curated) ALWAYS come FIRST
       // External web results come AFTER and are clearly marked
       // This ensures user satisfaction with accurate, curated events
@@ -129,8 +139,8 @@ export function EventsListingContent({
           source: int.source || "internal" as const,
           isEventaEvent: true, // Mark as Eventa event for UI
         })),
-        // External web results second (informational, may need verification)
-        ...(data.external || []).map((ext: any) => ({
+        // External web results second (informational, may need verification) - filtered by city
+        ...filteredExternal.map((ext: any) => ({
           id: ext.id,
           title: ext.title,
           description: ext.description,
@@ -155,7 +165,9 @@ export function EventsListingContent({
       console.log("[v0] Combined events:", {
         totalEvents: allEvents.length,
         internalEvents: data.internal?.length || 0,
-        externalEvents: data.external?.length || 0,
+        externalEventsBeforeFilter: data.external?.length || 0,
+        externalEventsAfterFilter: filteredExternal.length,
+        cityFilter: cityFilter || "none",
         firstEvent: allEvents[0],
       })
 

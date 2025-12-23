@@ -83,16 +83,16 @@ function deduplicateResults(internal: any[], external: any[]) {
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
   const body = await request.json()
-  const { entities, query, input_mode = "text", uiLang = "en" } = body
+  const { entities, query, input_mode = "text", uiLang = "en", isTripIntent, duration, interests } = body
 
-  console.log(`[v0] Dual search request - uiLang: ${uiLang}`, { entities, query })
+  console.log(`[v0] Dual search request - uiLang: ${uiLang}`, { entities, query, isTripIntent, duration, interests })
 
   // Run both searches in parallel
   const [internalResponse, externalResponse] = await Promise.allSettled([
     fetch(`${request.nextUrl.origin}/api/search/internal`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entities, query, input_mode, uiLang }),
+      body: JSON.stringify({ entities, query, input_mode, uiLang, isTripIntent, duration, interests }),
     }).then((res) => res.json()),
     fetch(`${request.nextUrl.origin}/api/search/external`, {
       method: "POST",

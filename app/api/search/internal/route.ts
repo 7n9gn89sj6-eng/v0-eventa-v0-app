@@ -14,9 +14,62 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { entities = {}, query, uiLang = "en" } = body
+    const { entities = {}, query, uiLang = "en", isTripIntent = false, duration, interests = [] } = body
 
-    console.log(`[v0] Internal search request - uiLang: ${uiLang}`, { entities, query })
+    // Helper function to detect trip intent from query (fallback if not provided explicitly)
+    const detectTripIntentFromQuery = (text: string): boolean => {
+      const lower = text.toLowerCase()
+      const tripPhrases = [
+        /i'?m\s+(?:going|travelling|traveling|visiting)/i,
+        /i'?ll\s+be\s+in/i,
+        /i'm\s+going\s+to/i,
+        /\bvisiting\b/i,
+        /\btravelling\s+to\b/i,
+        /\btraveling\s+to\b/i,
+        /things\s+(?:on|happening)\s+in.*\s+in\s+(?:april|may|june|july|august|september|october|november|december|january|february|march|next\s+month|this\s+summer)/i,
+      ]
+      return tripPhrases.some(pattern => pattern.test(lower))
+    }
+    
+    // Helper function to parse duration from query
+    const parseDuration = (text: string): number => {
+      const lower = text.toLowerCase()
+      // Match patterns like "for one week", "for 1 week", "stay for 7 days", etc.
+      const weekMatch = lower.match(/(?:for|stay\s+for|will\s+stay\s+for)\s+(?:one|1|a)\s+week/i)
+      if (weekMatch) return 7
+      
+      const daysMatch = lower.match(/(?:for|stay\s+for|will\s+stay\s+for)\s+(\d+)\s+days?/i)
+      if (daysMatch) return parseInt(daysMatch[1], 10)
+      
+      const weeksMatch = lower.match(/(?:for|stay\s+for|will\s+stay\s+for)\s+(\d+)\s+weeks?/i)
+      if (weeksMatch) return parseInt(weeksMatch[1], 10) * 7
+      
+      return 7 // Default to 1 week if no duration found
+    }
+    
+    // Extract interests from query (fallback if not provided explicitly)
+    const extractInterestsFromQuery = (text: string): string[] => {
+      const lower = text.toLowerCase()
+      const interests: string[] = []
+      
+      // Pattern: "I like X and Y", "interested in X, Y", "into X and Y"
+      const likeMatch = lower.match(/(?:i\s+like|interested\s+in|into|i'm\s+into)\s+([^.,]+)/i)
+      if (likeMatch) {
+        const interestText = likeMatch[1]
+        // Split by "and", ",", "&"
+        const parts = interestText.split(/\s*(?:and|,|&)\s+/i)
+        interests.push(...parts.map(p => p.trim()).filter(p => p.length > 0))
+      }
+      
+      return interests
+    }
+
+    // Use explicit trip intent if provided, otherwise detect from query
+    const tripIntent = isTripIntent !== undefined ? isTripIntent : (query ? detectTripIntentFromQuery(query) : false)
+    const tripDuration = duration || (tripIntent && query ? parseDuration(query) : undefined)
+    const tripInterests = (interests && interests.length > 0) ? interests : (tripIntent && query ? extractInterestsFromQuery(query) : [])
+    
+    console.log(`[v0] Internal search request - uiLang: ${uiLang}`, { entities, query, tripIntent, tripDuration, tripInterests })
     console.log(`[v0] Extracted entities:`, {
       city: entities.city,
       date: entities.date,
@@ -24,6 +77,9 @@ export async function POST(request: NextRequest) {
       type: entities.type,
       category: entities.category,
       venue: entities.venue,
+      isTripIntent: tripIntent,
+      duration: tripDuration,
+      interests: tripInterests,
     })
 
     // Ensure query exists for search
@@ -58,20 +114,24 @@ export async function POST(request: NextRequest) {
     // Parse date filter from entities
     let dateFilter: { gte?: Date; lte?: Date } | undefined
     
-    // Helper function to parse duration from query
-    const parseDuration = (text: string): number => {
+    // Helper function to check if a date_iso represents a month-only date (e.g., "April 2025")
+    // Month-only dates use first day of month as date_iso (e.g., "2025-04-01"), so we check
+    // if the original date string matches month-only pattern
+    const isMonthOnlyDate = (dateIso: string, dateStr?: string): boolean => {
+      if (!dateStr) return false
+      const monthYearPattern = /^(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{4}$/i
+      return monthYearPattern.test(dateStr.toLowerCase().trim())
+    }
+    
+    // Helper function to check if query contains explicit time context
+    // Only create date filters when user explicitly mentions time
+    const hasExplicitTimeContext = (text: string): boolean => {
+      if (!text) return false
       const lower = text.toLowerCase()
-      // Match patterns like "for one week", "for 1 week", "stay for 7 days", etc.
-      const weekMatch = lower.match(/(?:for|stay\s+for|will\s+stay\s+for)\s+(?:one|1|a)\s+week/i)
-      if (weekMatch) return 7
-      
-      const daysMatch = lower.match(/(?:for|stay\s+for|will\s+stay\s+for)\s+(\d+)\s+days?/i)
-      if (daysMatch) return parseInt(daysMatch[1], 10)
-      
-      const weeksMatch = lower.match(/(?:for|stay\s+for|will\s+stay\s+for)\s+(\d+)\s+weeks?/i)
-      if (weeksMatch) return parseInt(weeksMatch[1], 10) * 7
-      
-      return 7 // Default to 1 week if no duration found
+      // Check for time phrases: "this week", "next month", "in April", "this weekend", etc.
+      return /(this|next|coming|in)\s+(week|month|weekend|april|may|june|july|august|september|october|november|december|january|february|march)/i.test(lower) ||
+             /(today|tomorrow|tonight|this weekend|next weekend)/i.test(lower) ||
+             /\b(for|stay for)\s+\d+\s+(day|week)/i.test(lower)
     }
     
     // Priority: use date_iso if available (for specific dates like "30 April 2026")
@@ -79,18 +139,52 @@ export async function POST(request: NextRequest) {
       try {
         const startDate = DateTime.fromISO(entities.date_iso).startOf("day")
         if (startDate.isValid) {
-          // Parse duration from query if available
-          const durationDays = query ? parseDuration(query) : 7
-          const endDate = startDate.plus({ days: durationDays }).endOf("day")
-          dateFilter = {
-            gte: startDate.toJSDate(),
-            lte: endDate.toJSDate(),
+          // FIX 1: Check if this is a month-only date (e.g., "April 2025")
+          // Month-only dates should use full month range, NOT extended by duration
+          const monthOnly = isMonthOnlyDate(entities.date_iso, entities.date)
+          
+          if (monthOnly) {
+            // Month-only date: use full month range (first day to last day of month)
+            // Do NOT extend by duration - user wants all events in the month
+            const monthStart = startDate.startOf("month")
+            const monthEnd = startDate.endOf("month")
+            dateFilter = {
+              gte: monthStart.toJSDate(),
+              lte: monthEnd.toJSDate(),
+            }
+            console.log(`[v0] Month-only date detected: ${entities.date_iso}, using full month range: ${monthStart.toISODate()} to ${monthEnd.toISODate()}`)
+          } else {
+            // Single-day date: only extend by duration if explicitly provided
+            // Conservative approach: don't assume 7-day trip unless user mentioned duration
+            let endDate: DateTime
+            if (tripDuration && tripDuration > 0) {
+              // User explicitly mentioned duration ("for a week", "for 5 days")
+              endDate = startDate.plus({ days: tripDuration - 1 }).endOf("day") // -1 because start day counts as day 1
+            } else {
+              // No duration mentioned: use single day (don't extend)
+              endDate = startDate.endOf("day")
+            }
+            dateFilter = {
+              gte: startDate.toJSDate(),
+              lte: endDate.toJSDate(),
+            }
+            console.log(`[v0] Using date_iso: ${entities.date_iso}, ${tripDuration ? `duration: ${tripDuration} days` : 'single day (no duration)'} (trip intent: ${tripIntent}), range: ${startDate.toISODate()} to ${endDate.toISODate()}`)
           }
-          console.log(`[v0] Using date_iso: ${entities.date_iso}, duration: ${durationDays} days, range: ${startDate.toISODate()} to ${endDate.toISODate()}`)
         }
       } catch (error) {
         console.warn(`[v0] Failed to parse date_iso: ${entities.date_iso}`, error)
       }
+    } else if (tripIntent && tripDuration && tripDuration > 0 && query && hasExplicitTimeContext(query)) {
+      // FIX 2: Only create date filter if query has explicit time context
+      // Examples: "this week", "next month", "for a week" (already captured by tripDuration)
+      // Do NOT create filter for "I'm going to Berlin" without time context
+      const startDate = DateTime.now().startOf("day")
+      const endDate = startDate.plus({ days: tripDuration }).endOf("day")
+      dateFilter = {
+        gte: startDate.toJSDate(),
+        lte: endDate.toJSDate(),
+      }
+      console.log(`[v0] Trip intent with explicit time context and duration: ${tripDuration} days, using date range: ${startDate.toISODate()} to ${endDate.toISODate()}`)
     }
     
     // Fallback to parsing natural language date
@@ -715,6 +809,80 @@ export async function POST(request: NextRequest) {
           else if (daysDiff > 7 && daysDiff <= 30) score += 2
           else if (daysDiff > 30 && daysDiff <= 90) score += 1
           // Don't penalize far future events when no date filter is specified
+        }
+      }
+
+      // Trip intent ranking bias: boost events suitable for travelers/holiday makers
+      // Only apply when tripIntent is true - this biases ranking, doesn't filter
+      // This ensures trip queries surface events that travelers would actually attend
+      if (tripIntent) {
+        const eventCategories = [...(event.categories || []), event.category].filter(Boolean).map(c => c?.toLowerCase() || "")
+        const categoryLower = (event.category || "").toLowerCase()
+        const titleLower = event.title.toLowerCase()
+        const descLower = (event.description || "").toLowerCase()
+        
+        // Boost multi-day events (events longer than 1 day are great for travelers)
+        const eventDurationDays = DateTime.fromJSDate(event.endAt).diff(DateTime.fromJSDate(event.startAt), "days").days
+        if (eventDurationDays >= 1) {
+          score += 3 // Boost for multi-day events
+        }
+        
+        // Boost markets (always popular with travelers)
+        if (categoryLower.includes("market") || titleLower.includes("market") || descLower.includes("market") || 
+            eventCategories.some(c => c.includes("market"))) {
+          score += 2
+        }
+        
+        // Boost exhibitions (cultural attractions)
+        if (categoryLower.includes("exhibition") || titleLower.includes("exhibition") || descLower.includes("exhibition") ||
+            eventCategories.some(c => c.includes("exhibition"))) {
+          score += 2
+        }
+        
+        // Boost festivals (major attractions)
+        if (categoryLower.includes("festival") || titleLower.includes("festival") || descLower.includes("festival") ||
+            eventCategories.some(c => c.includes("festival"))) {
+          score += 2
+        }
+        
+        // Boost community/local events (authentic experiences)
+        if (categoryLower.includes("community") || titleLower.includes("community") || descLower.includes("community") ||
+            eventCategories.some(c => c.includes("community"))) {
+          score += 1.5
+        }
+        
+        // Boost arts & culture events
+        if (categoryLower.includes("art") || categoryLower.includes("culture") || 
+            eventCategories.some(c => c.includes("art") || c.includes("culture"))) {
+          score += 1.5
+        }
+        
+        // Match extracted interests - boost events that match user's stated interests
+        if (tripInterests && tripInterests.length > 0) {
+          const interestsLower = tripInterests.map(i => i.toLowerCase())
+          const hasMatchingInterest = interestsLower.some(interest => {
+            // Check if interest matches category, title, or description
+            return categoryLower.includes(interest) || 
+                   titleLower.includes(interest) || 
+                   descLower.includes(interest) ||
+                   eventCategories.some(c => c.includes(interest))
+          })
+          if (hasMatchingInterest) {
+            score += 3 // Strong boost for matching interests
+          }
+        }
+        
+        // Slightly down-rank one-night-only very niche events (unless they match interests)
+        // This is a gentle bias - we don't exclude anything, just ranking adjustment
+        if (eventDurationDays < 0.1 && !tripInterests?.some(i => 
+          titleLower.includes(i.toLowerCase()) || descLower.includes(i.toLowerCase())
+        )) {
+          // Only apply small penalty if event is very short AND doesn't match interests
+          const isNiche = titleLower.includes("workshop") || titleLower.includes("class") || 
+                          titleLower.includes("meeting") || titleLower.includes("seminar")
+          if (isNiche) {
+            score -= 0.5 // Very small penalty - ranking only, doesn't exclude
+          }
         }
       }
 

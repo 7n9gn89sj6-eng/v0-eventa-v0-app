@@ -26,6 +26,10 @@ const intentSchema = z.object({
     time: z.string().optional().describe("Time phrase (keep natural language like '8pm', '9am')"),
     description: z.string().optional().describe("Event description if creating"),
   }),
+  // Trip/holiday intent detection (request-level only, not persisted)
+  isTripIntent: z.boolean().optional().describe("Whether the query indicates a trip/holiday (e.g., 'I'm going to...', 'visiting...', 'travelling to...')"),
+  duration: z.number().optional().describe("Duration in days if mentioned (e.g., 'for a week' = 7, 'for 5 days' = 5)"),
+  interests: z.array(z.string()).optional().describe("Interests/categories mentioned (e.g., ['food', 'music'] from 'I like food and music')"),
   paraphrase: z.string().describe("Friendly confirmation of what was understood"),
   missingFields: z.array(z.string()).optional().describe("List of missing required fields for creation"),
 })
@@ -152,6 +156,36 @@ SEARCH intent: Default to SEARCH if the query contains:
   - Italian: "trova", "mostrami", "cosa c'è", "cerco", "vicino a me", "eventi"
   - Spanish: "encuentra", "muéstrame", "qué hay", "busco", "cerca de mí", "eventos"
   - French: "trouve", "montre-moi", "qu'est-ce qu'il y a", "cherche", "près de moi", "événements"
+
+TRIP/HOLIDAY INTENT DETECTION:
+Set isTripIntent = true if the query contains trip/holiday phrases:
+- "I'm going to...", "I'll be in...", "I'm visiting...", "I'm travelling to...", "I'm traveling to..."
+- "visiting...", "travelling to...", "traveling to...", "going to..."
+- "Things on in [city] in [month]" (future-oriented trip planning)
+- "What's happening in [city] in [month]"
+- Examples: "I'm going to Berlin for a week", "Things on in Rome in April", "visiting Paris next month"
+When isTripIntent = true:
+- Treat query as future-oriented (prefer ongoing + upcoming events)
+- Extract duration if mentioned: "for a week" = 7 days, "for 5 days" = 5 days, "for two weeks" = 14 days
+- Extract interests if mentioned: "I like food and music" → interests: ["food", "music"]
+- Interests map to categories: food → FOOD_DRINK, music → MUSIC_NIGHTLIFE, art → ARTS_CULTURE, markets → MARKETS_FAIRS, etc.
+
+DURATION EXTRACTION:
+Extract duration in days when mentioned:
+- "for a week" or "for one week" → 7
+- "for 5 days" → 5
+- "for two weeks" or "for 2 weeks" → 14
+- "over a weekend" → 2
+- "in April" or "next month" → infer appropriate range from date extraction
+- If no duration mentioned but trip intent detected, leave duration undefined (will default to 7 days in search)
+
+INTEREST EXTRACTION:
+Extract interests from phrases like:
+- "I like food and music" → interests: ["food", "music"]
+- "interested in art, markets" → interests: ["art", "markets"]
+- "into jazz and exhibitions" → interests: ["jazz", "exhibitions"]
+- Map to category keywords: food/food & drink → "food", music/jazz → "music", art/arts → "art", markets → "markets", exhibitions → "exhibition", festivals → "festival", etc.
+- Return as lowercase array of category keywords
 
 CREATE intent: Only if the query explicitly indicates creating/adding an event:
 - Keywords: "create", "add", "host", "make", "schedule", "publish", "organize", "plan", "set up"
@@ -319,6 +353,9 @@ User input: "${query}"`,
           time_24h: time24h,
           description: object.extracted.description || null,
         },
+        trip_intent: object.isTripIntent || false,
+        duration: object.duration || null,
+        interests: object.interests || [],
         input_mode: inputMode,
         ui_lang: uiLang,
         ...(step >= 3 && object.intent === "create"
@@ -402,6 +439,10 @@ User input: "${query}"`,
         date_iso: dateISO,
         time_24h: time24h,
       },
+      // Include trip intent fields (request-level only, not persisted)
+      isTripIntent: object.isTripIntent ?? false,
+      duration: object.duration,
+      interests: object.interests,
       validation: step >= 3 ? { pastDate, invalidDate, timeConflicts } : undefined,
       latency_ms: latency,
     })

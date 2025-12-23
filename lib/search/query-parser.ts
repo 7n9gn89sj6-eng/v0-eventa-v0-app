@@ -43,6 +43,10 @@ export function intentToURLParams(intentResponse: any): URLSearchParams {
   }
 
   // Add date range if extracted (use date_iso if available, otherwise parse date)
+  // Trip intent duration: if isTripIntent is true and duration is provided, use it to extend date range
+  const isTripIntent = intentResponse.isTripIntent === true
+  const tripDuration = intentResponse.duration
+  
   if (extracted.date_iso) {
     const date = new Date(extracted.date_iso)
     
@@ -61,23 +65,46 @@ export function intentToURLParams(intentResponse: any): URLSearchParams {
       params.set("date_from", startOfMonth.toISOString())
       params.set("date_to", endOfMonth.toISOString())
     } else {
-      // Single day: use the date as both from and to
+      // Single day: only extend by duration if explicitly provided
+      // Conservative: don't extend single-day dates unless user mentioned duration
       const startOfDay = new Date(date)
       startOfDay.setHours(0, 0, 0, 0)
-      const endOfDay = new Date(date)
-      endOfDay.setHours(23, 59, 59, 999)
+      const endDay = new Date(date)
+      // Only extend if duration was explicitly mentioned, not inferred
+      if (isTripIntent && tripDuration && tripDuration > 0) {
+        // User explicitly mentioned duration ("for a week", "for 5 days")
+        endDay.setDate(endDay.getDate() + tripDuration - 1) // -1 because start day counts as day 1
+      }
+      // If no duration, endDay remains the same day (single-day range)
+      endDay.setHours(23, 59, 59, 999)
       params.set("date_from", startOfDay.toISOString())
-      params.set("date_to", endOfDay.toISOString())
+      params.set("date_to", endDay.toISOString())
     }
   } else if (extracted.date) {
     const dateRange = parseDateExpression(extracted.date)
     if (dateRange.date_from) {
       params.set("date_from", dateRange.date_from)
+      // Only extend by duration if explicitly provided (not inferred)
+      // This preserves the natural date range from parseDateExpression
+      if (!dateRange.date_to && isTripIntent && tripDuration && tripDuration > 0) {
+        // User explicitly mentioned duration - safe to extend
+        const startDate = new Date(dateRange.date_from)
+        const endDate = new Date(startDate)
+        endDate.setDate(endDate.getDate() + tripDuration - 1)
+        endDate.setHours(23, 59, 59, 999)
+        params.set("date_to", endDate.toISOString())
+      } else if (dateRange.date_to) {
+        // Use the parsed date_to (don't extend further)
+        params.set("date_to", dateRange.date_to)
+      }
     }
     if (dateRange.date_to) {
       params.set("date_to", dateRange.date_to)
     }
   }
+  // REMOVED: Don't create date filter from trip intent + duration alone
+  // Only create date filters when explicit date or time context is present
+  // This prevents "I'm going to Berlin" (said in Dec for March trip) from excluding March events
 
   return params
 }

@@ -176,19 +176,26 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
             params.set("q", query)
           }
 
-          // Add location if available (but don't override extracted city)
-          // This is a fallback in case the intent API didn't include the location
+          // CRITICAL: Always add user location if available and no explicit city was extracted
+          // This ensures location filtering works for queries like "jazz this weekend"
+          // The intent API should extract city from userLocation, but if it doesn't, we add it here
           const cityParam = params.get("city")
-          const hasCityParam = cityParam && cityParam.trim().length > 0
+          const hasCityParam = cityParam && cityParam.trim().length > 0 && cityParam !== "Unknown location"
           
-          if (!hasCityParam && userLocation && userLocation.city !== "Unknown location") {
-            console.log(`[v0] Adding detected location to URL params as fallback: ${userLocation.city}`)
+          // If no city was extracted AND user has a detected location, use it
+          // This is the fallback that ensures location filtering always works
+          if (!hasCityParam && userLocation && userLocation.city && userLocation.city !== "Unknown location") {
+            console.log(`[v0] Adding detected location to URL params (fallback): ${userLocation.city}`)
             params.set("city", userLocation.city)
             params.set("lat", userLocation.lat.toString())
             params.set("lng", userLocation.lng.toString())
             if (userLocation.country && !params.has("country")) {
               params.set("country", userLocation.country)
             }
+          } else if (hasCityParam) {
+            console.log(`[v0] Using extracted city from query/intent: ${cityParam}`)
+          } else {
+            console.log(`[v0] No city available - search will be broad (no location filter)`)
           }
 
           console.log("[v0] Navigating with params:", params.toString())
