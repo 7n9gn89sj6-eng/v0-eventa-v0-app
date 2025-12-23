@@ -276,11 +276,16 @@ export async function POST(request: NextRequest) {
         validated.end ?? validated.start
       );
 
+      // Use request origin for email links (works in production)
+      // Falls back to NEXT_PUBLIC_APP_URL or localhost if not available
+      const baseUrl = request.nextUrl.origin;
+
       const emailResult = await sendEventEditLinkEmailAPI(
         validated.creatorEmail,
         validated.title,
         event.id,
-        token
+        token,
+        baseUrl
       );
 
       if (!emailResult.success) {

@@ -70,8 +70,13 @@ function escapeHtml(value: string): string {
 }
 
 // Safe URL builder for app links
-function buildAppUrl(path: string, query?: Record<string, string | undefined>): string {
-  const base = APP_URL; // already normalised, no trailing slash
+function buildAppUrl(
+  path: string, 
+  query?: Record<string, string | undefined>,
+  baseOverride?: string
+): string {
+  // Use override if provided, otherwise use APP_URL (already normalised, no trailing slash)
+  const base = baseOverride || APP_URL;
   const cleanedPath = path.startsWith("/") ? path : `/${path}`;
   const url = new URL(base + cleanedPath);
 
@@ -197,10 +202,13 @@ export async function sendEventEditLinkEmailAPI(
   to: string,
   eventTitle: string,
   eventId: string,
-  token: string
+  token: string,
+  baseUrl?: string
 ) {
-  // Build URL via helper to ensure proper encoding
-  const editUrl = buildAppUrl(`/edit/${eventId}`, { token });
+  // Use provided baseUrl, or fall back to APP_URL (which uses NEXT_PUBLIC_APP_URL or localhost)
+  // This allows API routes to pass request.nextUrl.origin for production
+  const urlBase = baseUrl || APP_URL;
+  const editUrl = buildAppUrl(`/edit/${eventId}`, { token }, urlBase);
 
   // Escape event title for safe HTML rendering
   const safeTitle = escapeHtml(eventTitle);

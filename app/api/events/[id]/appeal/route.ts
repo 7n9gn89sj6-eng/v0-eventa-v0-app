@@ -106,7 +106,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               <p style="margin: 8px 0 0 0;">
                 Please review this appeal in the admin dashboard.
               </p>
-              <a href="${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/admin/events/${id}" 
+              <a href="${request.nextUrl.origin}/admin/events/${id}" 
                  style="display: inline-block; margin-top: 12px; padding: 10px 20px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px;">
                 Review Appeal
               </a>
