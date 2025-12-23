@@ -205,9 +205,33 @@ export async function sendEventEditLinkEmailAPI(
   token: string,
   baseUrl?: string
 ) {
-  // Use provided baseUrl, or fall back to APP_URL (which uses NEXT_PUBLIC_APP_URL or localhost)
-  // This allows API routes to pass request.nextUrl.origin for production
-  const urlBase = baseUrl || APP_URL;
+  // Priority order:
+  // 1. NEXT_PUBLIC_APP_URL (if set - required for production)
+  // 2. Provided baseUrl parameter (from request.nextUrl.origin)
+  // 3. APP_URL (fallback to localhost)
+  let urlBase: string;
+  
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    // Normalize the env var URL (same as APP_URL normalization)
+    urlBase = resolveAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+  } else if (baseUrl) {
+    urlBase = baseUrl;
+  } else {
+    urlBase = APP_URL;
+  }
+  
+  // Log for debugging (helps identify why localhost might appear)
+  if (urlBase.includes('localhost')) {
+    console.warn("[email] Using localhost for edit URL - check NEXT_PUBLIC_APP_URL:", {
+      NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+      baseUrlParam: baseUrl,
+      finalUrlBase: urlBase,
+      NODE_ENV: process.env.NODE_ENV,
+    });
+  } else {
+    console.log("[email] Using production URL for edit link:", urlBase);
+  }
+  
   const editUrl = buildAppUrl(`/edit/${eventId}`, { token }, urlBase);
 
   // Escape event title for safe HTML rendering
