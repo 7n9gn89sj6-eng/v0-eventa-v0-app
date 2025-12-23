@@ -211,13 +211,19 @@ export async function sendEventEditLinkEmailAPI(
   // 3. APP_URL (fallback to localhost)
   let urlBase: string;
   
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    // Normalize the env var URL (same as APP_URL normalization)
-    urlBase = resolveAppUrl(process.env.NEXT_PUBLIC_APP_URL);
-  } else if (baseUrl) {
-    urlBase = baseUrl;
-  } else {
-    urlBase = APP_URL;
+  try {
+    if (process.env.NEXT_PUBLIC_APP_URL) {
+      // Normalize the env var URL (same as APP_URL normalization)
+      urlBase = resolveAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+    } else if (baseUrl) {
+      urlBase = baseUrl;
+    } else {
+      urlBase = APP_URL;
+    }
+  } catch (error) {
+    // If URL construction fails, use fallback - don't break email sending
+    console.error("[email] Error constructing URL base, using fallback:", error);
+    urlBase = baseUrl || APP_URL;
   }
   
   // Log for debugging (helps identify why localhost might appear)
@@ -232,7 +238,14 @@ export async function sendEventEditLinkEmailAPI(
     console.log("[email] Using production URL for edit link:", urlBase);
   }
   
-  const editUrl = buildAppUrl(`/edit/${eventId}`, { token }, urlBase);
+  let editUrl: string;
+  try {
+    editUrl = buildAppUrl(`/edit/${eventId}`, { token }, urlBase);
+  } catch (error) {
+    // If URL building fails, create a simple fallback URL - don't break email sending
+    console.error("[email] Error building edit URL, using fallback:", error);
+    editUrl = `${urlBase}/edit/${eventId}?token=${token}`;
+  }
 
   // Escape event title for safe HTML rendering
   const safeTitle = escapeHtml(eventTitle);
@@ -258,6 +271,15 @@ export async function sendEventEditLinkEmailAPI(
   `;
 
   const subject = `Your Event: "${safeTitle}" — Edit Link`;
+
+  // Log before sending for debugging
+  console.log("[email] Preparing to send event edit link email:", {
+    to,
+    eventId,
+    hasToken: !!token,
+    editUrl,
+    urlBase,
+  });
 
   return await coreSend(to, subject, html);
 }

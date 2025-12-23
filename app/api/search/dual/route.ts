@@ -152,6 +152,17 @@ function applyLocationGuard(results: any[], targetCity: string, targetCountry?: 
     }
   }
 
+  // List of major city names to check for false positives (exclude events that explicitly mention these)
+  const otherMajorCities = [
+    "new york", "nyc", "los angeles", "la", "chicago", "houston", "phoenix", "philadelphia",
+    "san antonio", "san diego", "dallas", "san jose", "austin", "jacksonville", "san francisco", "sf",
+    "boston", "kansas city", "seattle", "denver", "washington", "detroit", "minneapolis", "miami",
+    "atlanta", "portland", "orlando", "las vegas", "nashville", "cleveland", "tampa", "sacramento",
+    "london", "paris", "madrid", "barcelona", "amsterdam", "berlin", "milan", "vienna", "prague",
+    "lisbon", "stockholm", "copenhagen", "dublin", "edinburgh", "zurich", "brussels", "athens",
+    "tokyo", "sydney", "melbourne", "toronto", "vancouver", "montreal", "mexico city"
+  ]
+  
   const beforeFilter = results.length
   const filtered = results.filter((event) => {
     // Extract city from event (handle both internal and external formats)
@@ -160,29 +171,73 @@ function applyLocationGuard(results: any[], targetCity: string, targetCountry?: 
     
     // Extract city from address if city field is empty
     const eventAddress = (event.address || event.location?.address || event.venueName || "").toLowerCase().trim()
+    const eventTitle = (event.title || "").toLowerCase()
+    const eventDescription = (event.description || "").toLowerCase()
+    const fullText = `${eventTitle} ${eventDescription} ${eventAddress}`.toLowerCase()
     
     // Check if event is explicitly marked as online/global
     const isOnline = event.isOnline === true || 
                      eventAddress.includes("online") || 
                      eventAddress.includes("virtual") ||
-                     event.title?.toLowerCase().includes("online") ||
-                     event.title?.toLowerCase().includes("virtual")
+                     eventTitle.includes("online") ||
+                     eventTitle.includes("virtual")
     
     // Allow online/global events through
     if (isOnline) {
       return true
     }
     
-    // Check if city matches any variation
-    const cityMatches = allCityNames.some(cityVar => {
-      return eventCity.includes(cityVar) || 
-             cityVar.includes(eventCity) ||
-             eventAddress.includes(cityVar) ||
-             event.title?.toLowerCase().includes(cityVar)
+    // STRICT CHECK: City must match in the city field OR address field (not just title mentions)
+    // This prevents false positives where "Rome" appears in a title about Boston events
+    const cityMatchesStrict = allCityNames.some(cityVar => {
+      // Primary: city field must match
+      if (eventCity && (eventCity === cityVar || eventCity.includes(cityVar) || cityVar.includes(eventCity))) {
+        return true
+      }
+      // Secondary: address field must match (venue location is more reliable than title mentions)
+      if (eventAddress && (eventAddress.includes(cityVar) || eventAddress.includes(` ${cityVar},`) || eventAddress.includes(` ${cityVar} `))) {
+        return true
+      }
+      return false
     })
+    
+    // If strict check fails, do a secondary check on title/description but with negative filtering
+    let cityMatches = cityMatchesStrict
+    if (!cityMatches) {
+      // Only check title/description if city field is empty (fallback for poorly structured data)
+      if (!eventCity && allCityNames.some(cityVar => fullText.includes(cityVar))) {
+        // But first check for other major cities that would indicate wrong location
+        const mentionsOtherCity = otherMajorCities.some(otherCity => {
+          // Don't exclude if the other city is actually the target city (handles variations)
+          if (allCityNames.includes(otherCity)) return false
+          // Check if another major city is explicitly mentioned (with word boundaries)
+          const otherCityRegex = new RegExp(`\\b${otherCity}\\b`, "i")
+          return otherCityRegex.test(fullText)
+        })
+        
+        // Only allow if no other major city is mentioned
+        cityMatches = !mentionsOtherCity
+      }
+    }
     
     if (!cityMatches) {
       return false // City doesn't match, exclude
+    }
+    
+    // NEGATIVE CHECK: Exclude if another major city is explicitly mentioned (stronger signal than target city)
+    const mentionsOtherCity = otherMajorCities.some(otherCity => {
+      // Skip if this other city is actually a variation of our target city
+      if (allCityNames.includes(otherCity)) return false
+      // Check if another major city appears with word boundaries (more reliable than substring)
+      const otherCityRegex = new RegExp(`\\b${otherCity}\\b`, "i")
+      // Only exclude if it appears in a location context (city field, address, or after location keywords)
+      return otherCityRegex.test(eventCity) || 
+             otherCityRegex.test(eventAddress) ||
+             (otherCityRegex.test(fullText) && /(in|at|near|from|to)\s+/.test(fullText))
+    })
+    
+    if (mentionsOtherCity) {
+      return false // Another city is mentioned, exclude
     }
     
     // If country is specified, also check country match
@@ -309,13 +364,14 @@ export async function POST(request: NextRequest) {
 
   const deduped = deduplicateResults(internalResults, externalResults)
 
-  // PART 1: HARD LOCATION GUARD for trip queries
-  // When a city is confidently extracted AND trip intent is present,
-  // apply strict location filtering to prevent irrelevant events from other cities
+  // PART 1: HARD LOCATION GUARD for city-specific queries
+  // When a city is confidently extracted, apply strict location filtering
+  // to prevent irrelevant events from other cities
+  // Apply to ALL queries with city (not just trip intent) to ensure quality results
   let finalInternal = deduped.internal
   let finalExternal = deduped.external
   
-  if (isTripIntent === true && entities?.city && entities.city.trim().length > 0) {
+  if (entities?.city && entities.city.trim().length > 0) {
     const targetCity = entities.city.trim()
     const targetCountry = entities.country?.trim()
     
