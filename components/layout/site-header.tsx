@@ -27,7 +27,17 @@ export function SiteHeader() {
   useEffect(() => {
     const stored = getUserLocation();
     if (stored) {
-      setUserLocation(stored);
+      // Only set location if it has valid city data (not "Unknown location")
+      if (stored.city && stored.city !== "Unknown location") {
+        setUserLocation(stored);
+        setGeolocationError(null); // Clear any errors if we have stored location
+        console.log(`[Header] Loaded stored location: ${stored.city}${stored.country ? `, ${stored.country}` : ""}`);
+      } else {
+        // Clear invalid stored location
+        console.log(`[Header] Clearing invalid stored location: ${stored.city}`);
+        clearUserLocation();
+        setUserLocation(null);
+      }
     }
   }, []);
 
@@ -151,8 +161,25 @@ export function SiteHeader() {
             errorCode = "PERMISSION_DENIED";
             console.warn("[Header] Permission denied by user:", errorDetails);
           } else if (error.code === error.POSITION_UNAVAILABLE) {
-            errorCode = "POSITION_UNAVAILABLE";
-            console.warn("[Header] Position unavailable (GPS/network issue):", errorDetails);
+            // Check permission status - if granted, this might be temporary (GPS off, network issue)
+            // Only show error if permission is actually denied
+            try {
+              const permissionStatus = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+              if (permissionStatus.state === 'granted') {
+                // Permission granted but position unavailable - likely temporary (GPS disabled, network issue)
+                // Don't show error - just silently fail
+                console.log("[Header] Position unavailable despite granted permission (GPS disabled or network issue) - silently failing");
+                errorCode = null; // Don't show error
+              } else {
+                // Permission not granted - show error
+                errorCode = "POSITION_UNAVAILABLE";
+                console.warn("[Header] Position unavailable and permission not granted:", errorDetails);
+              }
+            } catch (permError) {
+              // Permissions API not supported - silently fail
+              console.log("[Header] Position unavailable (Permissions API not supported) - silently failing");
+              errorCode = null;
+            }
           } else if (error.code === error.TIMEOUT) {
             // Timeout: Check if we should retry (only retry once)
             if (retryCount === 0) {
@@ -264,12 +291,22 @@ export function SiteHeader() {
             variant="outline"
             size="sm"
             className={`gap-2 min-h-[44px] touch-manipulation active:scale-95 ${
-              userLocation ? "bg-primary/10 border-primary/20" : "bg-transparent"
+              userLocation && userLocation.city && userLocation.city !== "Unknown location"
+                ? "bg-primary/10 border-primary/20"
+                : "bg-transparent"
             }`}
             onClick={handleLocationRequest}
             disabled={isLoadingLocation}
-            title={userLocation ? `Location: ${userLocation.city}. Click to clear.` : "Detect my location"}
-            aria-label={userLocation ? `Clear location: ${userLocation.city}` : "Detect my location"}
+            title={
+              userLocation && userLocation.city && userLocation.city !== "Unknown location"
+                ? `Location: ${userLocation.city}${userLocation.country ? `, ${userLocation.country}` : ""}. Click to clear.`
+                : "Detect my location"
+            }
+            aria-label={
+              userLocation && userLocation.city && userLocation.city !== "Unknown location"
+                ? `Clear location: ${userLocation.city}`
+                : "Detect my location"
+            }
             type="button"
             style={{ 
               WebkitTapHighlightColor: 'transparent',
@@ -281,10 +318,12 @@ export function SiteHeader() {
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="hidden sm:inline">Finding your location…</span>
               </>
-            ) : userLocation ? (
+            ) : userLocation && userLocation.city && userLocation.city !== "Unknown location" ? (
               <>
                 <Check className="h-4 w-4 text-primary" />
-                <span className="hidden sm:inline">Near you</span>
+                <span className="hidden sm:inline">
+                  {userLocation.city}{userLocation.country ? `, ${userLocation.country}` : ""}
+                </span>
               </>
             ) : (
               <>

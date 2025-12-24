@@ -51,8 +51,17 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
     useEffect(() => {
       const stored = getUserLocation()
       if (stored) {
-        setUserLocation(stored)
-        setLocationError(null) // Clear any errors if we have stored location
+        // Only set location if it has valid city data (not "Unknown location")
+        if (stored.city && stored.city !== "Unknown location") {
+          setUserLocation(stored)
+          setLocationError(null)
+          console.log(`[v0] Loaded stored location: ${stored.city}${stored.country ? `, ${stored.country}` : ""}`)
+        } else {
+          // Clear invalid stored location
+          console.log(`[v0] Clearing invalid stored location: ${stored.city}`)
+          clearUserLocation()
+          setUserLocation(null)
+        }
       }
     }, [])
 
@@ -420,10 +429,20 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
               disabled={isLoadingLocation || isProcessing}
               className={cn(
                 "shrink-0 min-h-[44px] active:scale-95",
-                userLocation ? "bg-primary/10 border-primary/20" : "bg-transparent"
+                userLocation && userLocation.city && userLocation.city !== "Unknown location" 
+                  ? "bg-primary/10 border-primary/20" 
+                  : "bg-transparent"
               )}
-              title={userLocation ? `Location: ${userLocation.city}. Click to clear.` : "Detect my current location"}
-              aria-label={userLocation ? `Clear location: ${userLocation.city}` : "Detect my current location"}
+              title={
+                userLocation && userLocation.city && userLocation.city !== "Unknown location"
+                  ? `Location: ${userLocation.city}${userLocation.country ? `, ${userLocation.country}` : ""}. Click to clear.`
+                  : "Detect my current location"
+              }
+              aria-label={
+                userLocation && userLocation.city && userLocation.city !== "Unknown location"
+                  ? `Clear location: ${userLocation.city}`
+                  : "Detect my current location"
+              }
               style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
             >
               {isLoadingLocation ? (
@@ -431,10 +450,12 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
                   <Loader2 className="h-5 w-5 animate-spin" />
                   <span className="hidden sm:inline ml-2">Finding your location…</span>
                 </>
-              ) : userLocation ? (
+              ) : userLocation && userLocation.city && userLocation.city !== "Unknown location" ? (
                 <>
                   <Check className="h-5 w-5 text-primary" />
-                  <span className="hidden sm:inline ml-2">Near you</span>
+                  <span className="hidden sm:inline ml-2">
+                    {userLocation.city}{userLocation.country ? `, ${userLocation.country}` : ""}
+                  </span>
                 </>
               ) : (
                 <MapPin className="h-5 w-5" />
