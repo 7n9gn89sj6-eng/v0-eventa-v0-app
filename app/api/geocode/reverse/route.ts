@@ -4,6 +4,8 @@ interface NominatimResponse {
   address?: {
     city?: string
     town?: string
+    suburb?: string
+    locality?: string
     village?: string
     municipality?: string
     county?: string
@@ -68,16 +70,36 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Log full Nominatim response for debugging
+    console.log("[geocode/reverse] Nominatim response:", JSON.stringify(data.address, null, 2))
+
     // Try to extract city name from address hierarchy
+    // For Australia, prioritize: city, town, suburb, locality, municipality
     const city =
       data.address?.city ||
       data.address?.town ||
+      data.address?.suburb ||
+      data.address?.locality ||
       data.address?.village ||
       data.address?.municipality ||
       data.address?.county ||
       null
 
-    const country = data.address?.country || null
+    // Normalize country names
+    let country = data.address?.country || null
+    if (country) {
+      // Normalize country names to standard format
+      const countryLower = country.toLowerCase()
+      if (countryLower.includes("australia")) {
+        country = "Australia"
+      } else if (countryLower.includes("united states") || countryLower === "usa" || countryLower === "us") {
+        country = "United States"
+      } else if (countryLower.includes("united kingdom") || countryLower === "uk") {
+        country = "United Kingdom"
+      }
+    }
+
+    console.log("[geocode/reverse] Extracted:", { city, country, fullAddress: data.address })
 
     return NextResponse.json({
       city,

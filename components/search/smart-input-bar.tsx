@@ -108,13 +108,15 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
               const city = data.city
               const country = data.country
 
-              console.log("[v0] Reverse geocoded:", { city, country })
+              console.log("[v0] Reverse geocoded:", { city, country, lat, lng })
 
               if (city) {
                 const location = { lat, lng, city, country, timestamp: Date.now() }
                 storeUserLocation({ lat, lng, city, country })
                 setUserLocation(location)
                 setLocationError(null) // Clear any errors on success
+                
+                console.log("[v0] Stored location:", location)
                 
                 // Automatically navigate to search with location
                 // Include a default query to ensure events are shown
@@ -402,7 +404,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
               type="button"
               variant="outline"
               size="lg"
-              onClick={handleLocationRequest}
+              onClick={() => handleLocationRequest(0)}
               disabled={isLoadingLocation || isProcessing}
               className={cn(
                 "shrink-0 min-h-[44px] active:scale-95",
