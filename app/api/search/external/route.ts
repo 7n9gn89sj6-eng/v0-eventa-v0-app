@@ -309,11 +309,24 @@ export async function POST(request: NextRequest) {
       console.log(`[v0] No date filter for external search (date_iso: ${date_iso}, date: ${date})`)
     }
 
-    // LOCATION DISAMBIGUATION: Filter results by city with country-aware disambiguation
+    // CRITICAL: LOCATION FILTERING - Filter results by city with strict country-aware disambiguation
+    // This is a first line of defense - the dual route location guard is the second line
     if (city) {
       const cityLower = city.toLowerCase().trim()
       const countryLower = country ? country.toLowerCase().trim() : null
       const beforeCityFilter = filteredResults.length
+      
+      // US states for exclusion when searching from non-US countries
+      const usStates = [
+        "texas", "tx", "california", "ca", "florida", "fl", "new york", "ny", "pennsylvania", "pa",
+        "illinois", "il", "ohio", "oh", "georgia", "ga", "north carolina", "nc", "michigan", "mi",
+        "new jersey", "nj", "virginia", "va", "washington", "wa", "arizona", "az", "massachusetts", "ma",
+        "tennessee", "tn", "indiana", "in", "missouri", "mo", "maryland", "md", "wisconsin", "wi",
+        "colorado", "co", "minnesota", "mn", "south carolina", "sc", "alabama", "al", "louisiana", "la",
+        "kentucky", "ky", "oregon", "or", "oklahoma", "ok", "connecticut", "ct", "utah", "ut",
+        "iowa", "ia", "nevada", "nv", "arkansas", "ar", "mississippi", "ms", "kansas", "ks",
+        "new mexico", "nm", "nebraska", "ne", "west virginia", "wv", "idaho", "id", "hawaii", "hi"
+      ]
       
       // Known ambiguous cities that need country disambiguation
       const ambiguousCities: Record<string, string[]> = {
@@ -330,6 +343,9 @@ export async function POST(request: NextRequest) {
         "milan": ["italy", "tennessee", "usa"],
         "vienna": ["austria", "virginia", "usa"],
         "madrid": ["spain", "new mexico", "usa"],
+        "austin": ["texas", "usa"], // Austin is in Texas, USA
+        "fort worth": ["texas", "usa"],
+        "seneca": ["new york", "usa"], // Seneca Lakes is in NY
       }
       
       const isAmbiguous = ambiguousCities[cityLower] !== undefined
@@ -341,59 +357,92 @@ export async function POST(request: NextRequest) {
         const resultAddress = (result.address || "").toLowerCase()
         const resultTitle = (result.title || "").toLowerCase()
         const resultDescription = (result.description || "").toLowerCase()
-        const resultCountry = (result.country || "").toLowerCase().trim()
+        const resultCountry = (result.country || result.location?.country || "").toLowerCase().trim()
+        const resultFullText = `${resultCity} ${resultLocation} ${resultAddress} ${resultTitle} ${resultDescription} ${resultCountry}`.toLowerCase()
+        
+        // CRITICAL: If searching from Australia and result mentions US state, exclude immediately
+        if (countryLower && countryLower.includes("australia")) {
+          const mentionsUSState = usStates.some(state => {
+            const stateRegex = new RegExp(`\\b${state}\\b`, "i")
+            return stateRegex.test(resultFullText)
+          })
+          if (mentionsUSState) {
+            return false // Exclude US results when searching from Australia
+          }
+        }
         
         // Check if city appears as a standalone word (not part of a compound name)
         const cityRegex = new RegExp(`\\b${cityLower}\\b`, "i")
         
-        // Must match city in city field or location
-        const matchesCity = cityRegex.test(resultCity) || cityRegex.test(resultLocation)
+        // Must match city in city field or location (strict check)
+        const matchesCity = cityRegex.test(resultCity) || cityRegex.test(resultLocation) || cityRegex.test(resultAddress)
         
         if (!matchesCity) {
-          // Also check title/description for city mentions, but be more lenient
-          return cityRegex.test(resultTitle) || cityRegex.test(resultDescription)
-        }
-        
-        // If city matches, apply disambiguation logic
-        if (isAmbiguous) {
-          // If country was specified in query, use it to filter
-          if (countryLower) {
-            // Check if result mentions the expected country
-            const resultText = `${resultCity} ${resultLocation} ${resultAddress} ${resultTitle} ${resultDescription} ${resultCountry}`.toLowerCase()
-            const countryMatches = expectedCountries.some((expectedCountry) => {
-              const expectedLower = expectedCountry.toLowerCase()
-              // Check if result text contains the expected country
-              return resultText.includes(expectedLower) || 
-                     (expectedLower.includes("usa") && /\b(usa|united states|us|america)\b/i.test(resultText)) ||
-                     (expectedLower.includes("uk") && /\b(uk|united kingdom|britain|british)\b/i.test(resultText))
+          // Only check title/description if city field is empty (fallback for poorly structured data)
+          // But still apply negative filtering
+          if (!resultCity && !resultLocation) {
+            // Check for other major cities that would indicate wrong location
+            const otherMajorCities = ["fort worth", "austin", "seneca", "dallas", "houston", "boston", "kansas city"]
+            const mentionsOtherCity = otherMajorCities.some(otherCity => {
+              if (otherCity === cityLower) return false // Don't exclude if it's the target city
+              const otherCityRegex = new RegExp(`\\b${otherCity}\\b`, "i")
+              return otherCityRegex.test(resultFullText)
             })
-            
-            // If we're searching for a specific country, only include results that match
-            if (countryLower && !countryMatches) {
-              // Check if the specified country matches any expected country
-              const specifiedMatchesExpected = expectedCountries.some((expectedCountry) => {
-                const expectedLower = expectedCountry.toLowerCase()
-                return countryLower.includes(expectedLower) || expectedLower.includes(countryLower)
-              })
-              
-              if (specifiedMatchesExpected && !countryMatches) {
-                return false // Exclude if country was specified but doesn't match
-              }
-            }
-          } else {
-            // No country specified - exclude US state matches for major international cities
-            const hasUSState = /\b(maryland|md|california|ca|texas|tx|new york|ny|florida|fl|georgia|ga|tennessee|tn|virginia|va|new mexico|nm|massachusetts|ma|ontario)\b/i.test(
-              resultCity + " " + resultLocation + " " + resultAddress
-            )
-            const hasUSCountry = /\b(usa|united states|us|america)\b/i.test(
-              resultCity + " " + resultLocation + " " + resultAddress + " " + resultCountry
-            )
-            
-            // For ambiguous cities, prefer international matches unless US is explicitly mentioned
-            if (hasUSState && !hasUSCountry) {
-              // Likely a US city with same name, exclude it for ambiguous international cities
+            if (mentionsOtherCity) {
               return false
             }
+            // Only allow if city appears in title/description
+            return cityRegex.test(resultTitle) || cityRegex.test(resultDescription)
+          }
+          return false
+        }
+        
+        // CRITICAL COUNTRY CHECK: If country is specified, enforce strict matching
+        if (countryLower) {
+          // Check if result mentions the expected country
+          const countryMatches = 
+            (countryLower.includes("australia") && (resultFullText.includes("australia") || resultCountry.includes("australia"))) ||
+            (countryLower.includes("usa") && /\b(usa|united states|us|america)\b/i.test(resultFullText)) ||
+            (countryLower.includes("united kingdom") && /\b(uk|united kingdom|britain|british)\b/i.test(resultFullText)) ||
+            resultCountry.includes(countryLower) ||
+            countryLower.includes(resultCountry)
+          
+          // If country doesn't match, exclude (unless it's explicitly an online event)
+          const isOnline = resultFullText.includes("online") || resultFullText.includes("virtual")
+          if (!countryMatches && !isOnline) {
+            // Extra check: if searching from Australia and result has US indicators, exclude
+            if (countryLower.includes("australia")) {
+              const hasUSIndicators = /\b(usa|united states|us|america|texas|florida|california|new york)\b/i.test(resultFullText)
+              if (hasUSIndicators) {
+                return false
+              }
+            }
+            return false // Country doesn't match, exclude
+          }
+        } else if (isAmbiguous) {
+          // No country specified but city is ambiguous - exclude US state matches for international cities
+          const hasUSState = usStates.some(state => {
+            const stateRegex = new RegExp(`\\b${state}\\b`, "i")
+            return stateRegex.test(resultFullText)
+          })
+          const hasUSCountry = /\b(usa|united states|us|america)\b/i.test(resultFullText)
+          
+          // For ambiguous international cities, prefer international matches
+          if (hasUSState && !hasUSCountry) {
+            // Likely a US city with same name, exclude it for ambiguous international cities
+            return false
+          }
+        }
+        
+        // FINAL CHECK: Exclude if result mentions other major US cities (defense in depth)
+        const otherUSCities = ["fort worth", "austin", "seneca", "dallas", "houston", "boston", "kansas city", "phoenix", "chicago"]
+        if (cityLower !== "austin" && cityLower !== "fort worth" && cityLower !== "seneca") {
+          const mentionsOtherUSCity = otherUSCities.some(otherCity => {
+            const otherCityRegex = new RegExp(`\\b${otherCity}\\b`, "i")
+            return otherCityRegex.test(resultFullText)
+          })
+          if (mentionsOtherUSCity && countryLower && countryLower.includes("australia")) {
+            return false // Exclude US cities when searching from Australia
           }
         }
         
@@ -434,3 +483,4 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
