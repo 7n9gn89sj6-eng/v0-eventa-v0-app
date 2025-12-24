@@ -317,31 +317,29 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
             params.set("q", query)
           }
 
-          // CRITICAL: Always ensure location is in URL params if available
+          // CRITICAL: Always ensure user's detected location is in URL params if available
           // This is the final fallback to ensure location filtering ALWAYS works
+          // We add it even if AI extracted a city, because the user's detected location is authoritative
           const cityParam = params.get("city")
           const hasCityParam = cityParam && cityParam.trim().length > 0 && cityParam !== "Unknown location"
           
-          // If no city was extracted by AI AND user has a detected location, ALWAYS add it
-          // This ensures location filtering works for ALL searches when location is available
-          if (!hasCityParam && userLocation && userLocation.city && userLocation.city !== "Unknown location") {
-            console.log(`[v0] ⚠️ AI didn't extract location, adding detected location to URL params (critical fallback): ${userLocation.city}${userLocation.country ? `, ${userLocation.country}` : ""}`)
-            params.set("city", userLocation.city)
-            params.set("lat", userLocation.lat.toString())
-            params.set("lng", userLocation.lng.toString())
+          // ALWAYS add user's detected location if available (it's more reliable than AI extraction)
+          if (userLocation && userLocation.city && userLocation.city !== "Unknown location") {
+            // If AI extracted a different city, we still add the user's location
+            // The API can use both, but user's location takes precedence
+            if (!hasCityParam || cityParam.toLowerCase().trim() !== userLocation.city.toLowerCase().trim()) {
+              console.log(`[v0] 🔒 Adding user's detected location to URL params (authoritative): ${userLocation.city}${userLocation.country ? `, ${userLocation.country}` : ""}`)
+              params.set("city", userLocation.city)
+              params.set("lat", userLocation.lat.toString())
+              params.set("lng", userLocation.lng.toString())
+            }
+            // Always set country if we have it and it's not already set
             if (userLocation.country && !params.has("country")) {
               params.set("country", userLocation.country)
+              console.log(`[v0] Adding country from user location: ${userLocation.country}`)
             }
           } else if (hasCityParam) {
-            // AI extracted a city, but ensure country is set if we have it and city matches detected location
-            if (userLocation && userLocation.country && !params.has("country")) {
-              const extractedCityLower = cityParam.toLowerCase().trim()
-              const detectedCityLower = userLocation.city.toLowerCase().trim()
-              if (extractedCityLower === detectedCityLower) {
-                params.set("country", userLocation.country)
-                console.log(`[v0] Adding country to match extracted city: ${userLocation.country}`)
-              }
-            }
+            // No user location, but AI extracted one - log it
             console.log(`[v0] ✅ Using extracted city from query/intent: ${cityParam}${params.get("country") ? `, ${params.get("country")}` : ""}`)
           } else {
             console.log(`[v0] ⚠️ No city available - search will be broad (no location filter)`)
@@ -354,15 +352,39 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
         } else {
           // Fallback to simple search if intent extraction fails
           console.log("[v0] Intent API failed, using fallback")
-          router.push(`/discover?q=${encodeURIComponent(query)}`)
+          const fallbackParams = new URLSearchParams()
+          fallbackParams.set("q", query)
+          // CRITICAL: Always include location in fallback too
+          if (userLocation && userLocation.city && userLocation.city !== "Unknown location") {
+            fallbackParams.set("city", userLocation.city)
+            fallbackParams.set("lat", userLocation.lat.toString())
+            fallbackParams.set("lng", userLocation.lng.toString())
+            if (userLocation.country) {
+              fallbackParams.set("country", userLocation.country)
+            }
+            console.log(`[v0] Adding location to fallback params: ${userLocation.city}${userLocation.country ? `, ${userLocation.country}` : ""}`)
+          }
+          router.push(`/discover?${fallbackParams.toString()}`)
         }
 
         // Call parent onSearch if provided
         await onSearch?.(query)
       } catch (error: any) {
         console.error("[v0] Smart input error:", error)
-        // Fallback to simple search on error
-        router.push(`/discover?q=${encodeURIComponent(query)}`)
+        // Fallback to simple search on error - but still include location
+        const errorParams = new URLSearchParams()
+        errorParams.set("q", query)
+        // CRITICAL: Always include location even on error
+        if (userLocation && userLocation.city && userLocation.city !== "Unknown location") {
+          errorParams.set("city", userLocation.city)
+          errorParams.set("lat", userLocation.lat.toString())
+          errorParams.set("lng", userLocation.lng.toString())
+          if (userLocation.country) {
+            errorParams.set("country", userLocation.country)
+          }
+          console.log(`[v0] Adding location to error fallback params: ${userLocation.city}${userLocation.country ? `, ${userLocation.country}` : ""}`)
+        }
+        router.push(`/discover?${errorParams.toString()}`)
 
         const errorMessage = error?.message || "Something went wrong. Please try again."
         setError(errorMessage)

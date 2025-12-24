@@ -57,6 +57,7 @@ interface Event {
 interface EventsListingContentProps {
   initialQuery?: string
   initialCity?: string
+  initialCountry?: string
   initialCategory?: string
   initialDateFrom?: string
   initialDateTo?: string
@@ -67,6 +68,7 @@ interface EventsListingContentProps {
 export function EventsListingContent({
   initialQuery,
   initialCity,
+  initialCountry,
   initialCategory,
   initialDateFrom,
   initialDateTo,
@@ -84,6 +86,7 @@ export function EventsListingContent({
   const [selectedPriceFilter, setSelectedPriceFilter] = useState("all")
   const [sortBy, setSortBy] = useState("date-asc")
   const [cityFilter, setCityFilter] = useState(initialCity || "")
+  const [countryFilter, setCountryFilter] = useState(initialCountry || "")
 
   const router = useRouter()
   const { t } = useI18n()
@@ -96,6 +99,7 @@ export function EventsListingContent({
       const params = new URLSearchParams()
       if (q) params.set("query", q)
       if (cityFilter) params.set("city", cityFilter)
+      if (countryFilter) params.set("country", countryFilter)
       if (selectedCategory && selectedCategory !== "All") params.set("category", selectedCategory.toLowerCase())
       if (initialDateFrom) params.set("date_from", initialDateFrom)
       if (initialDateTo) params.set("date_to", initialDateTo)
@@ -187,7 +191,7 @@ export function EventsListingContent({
     }
   }
 
-  // Sync q state with initialQuery prop when it changes
+  // Sync state with props when they change (URL params updated)
   useEffect(() => {
     if (initialQuery !== undefined && initialQuery !== q) {
       setQ(initialQuery)
@@ -195,8 +199,20 @@ export function EventsListingContent({
   }, [initialQuery])
 
   useEffect(() => {
+    if (initialCity !== undefined && initialCity !== cityFilter) {
+      setCityFilter(initialCity)
+    }
+  }, [initialCity])
+
+  useEffect(() => {
+    if (initialCountry !== undefined && initialCountry !== countryFilter) {
+      setCountryFilter(initialCountry)
+    }
+  }, [initialCountry])
+
+  useEffect(() => {
     runSearch()
-  }, [q, cityFilter, selectedCategory, initialDateFrom, initialDateTo])
+  }, [q, cityFilter, countryFilter, selectedCategory, initialDateFrom, initialDateTo])
 
   const handleSmartSearch = async (query: string) => {
     setQ(query)
@@ -206,6 +222,7 @@ export function EventsListingContent({
       const params = new URLSearchParams()
       params.set("query", query)
       if (cityFilter) params.set("city", cityFilter)
+      if (countryFilter) params.set("country", countryFilter)
 
       const r = await fetch(`/api/search/events?${params.toString()}`, {
         method: "GET",

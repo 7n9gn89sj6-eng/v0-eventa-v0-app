@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic"
 type SearchParams = {
   q?: string
   city?: string
+  country?: string
   category?: string
   date_from?: string
   date_to?: string
@@ -36,6 +37,7 @@ export default async function DiscoverPage({
         <EventsListingContent
           initialQuery={params.q}
           initialCity={params.city}
+          initialCountry={params.country}
           initialCategory={params.category}
           initialDateFrom={params.date_from}
           initialDateTo={params.date_to}
