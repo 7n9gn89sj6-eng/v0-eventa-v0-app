@@ -153,14 +153,31 @@ function applyLocationGuard(results: any[], targetCity: string, targetCountry?: 
   }
 
   // List of major city names to check for false positives (exclude events that explicitly mention these)
+  // Expanded to include more US cities that commonly appear in web search results
   const otherMajorCities = [
+    // US cities
     "new york", "nyc", "los angeles", "la", "chicago", "houston", "phoenix", "philadelphia",
     "san antonio", "san diego", "dallas", "san jose", "austin", "jacksonville", "san francisco", "sf",
     "boston", "kansas city", "seattle", "denver", "washington", "detroit", "minneapolis", "miami",
     "atlanta", "portland", "orlando", "las vegas", "nashville", "cleveland", "tampa", "sacramento",
+    "fort worth", "fort wayne", "seneca", "seneca lakes", "indianapolis", "columbus", "charlotte",
+    "el paso", "memphis", "milwaukee", "oklahoma city", "tucson", "fresno", "mesa", "virginia beach",
+    "oakland", "omaha", "raleigh", "long beach", "miami beach", "colorado springs", "raleigh",
+    // International cities
     "london", "paris", "madrid", "barcelona", "amsterdam", "berlin", "milan", "vienna", "prague",
     "lisbon", "stockholm", "copenhagen", "dublin", "edinburgh", "zurich", "brussels", "athens",
-    "tokyo", "sydney", "melbourne", "toronto", "vancouver", "montreal", "mexico city"
+    "tokyo", "sydney", "toronto", "vancouver", "montreal", "mexico city"
+  ]
+  
+  // US states to check for (helps catch "Austin, Texas" type matches)
+  const usStates = [
+    "texas", "california", "florida", "new york", "pennsylvania", "illinois", "ohio", "georgia",
+    "north carolina", "michigan", "new jersey", "virginia", "washington", "arizona", "massachusetts",
+    "tennessee", "indiana", "missouri", "maryland", "wisconsin", "colorado", "minnesota", "south carolina",
+    "alabama", "louisiana", "kentucky", "oregon", "oklahoma", "connecticut", "utah", "iowa",
+    "nevada", "arkansas", "mississippi", "kansas", "new mexico", "nebraska", "west virginia",
+    "idaho", "hawaii", "new hampshire", "maine", "montana", "rhode island", "delaware",
+    "south dakota", "north dakota", "alaska", "vermont", "wyoming"
   ]
   
   const beforeFilter = results.length
@@ -230,24 +247,72 @@ function applyLocationGuard(results: any[], targetCity: string, targetCountry?: 
       if (allCityNames.includes(otherCity)) return false
       // Check if another major city appears with word boundaries (more reliable than substring)
       const otherCityRegex = new RegExp(`\\b${otherCity}\\b`, "i")
-      // Only exclude if it appears in a location context (city field, address, or after location keywords)
+      // Check in city field, address, or title/description with location context
       return otherCityRegex.test(eventCity) || 
              otherCityRegex.test(eventAddress) ||
-             (otherCityRegex.test(fullText) && /(in|at|near|from|to)\s+/.test(fullText))
+             (otherCityRegex.test(fullText) && /(in|at|near|from|to|at)\s+/.test(fullText))
     })
+    
+    // CRITICAL: If target country is specified and doesn't match, exclude (e.g., searching Melbourne, Australia but result is Melbourne, FL)
+    if (targetCountryLower && eventCountry) {
+      // Check if event country matches target country
+      const countryMatches = countryVariations[targetCountryLower]?.some(countryVar => {
+        return eventCountry.includes(countryVar) || countryVar.includes(eventCountry)
+      }) || eventCountry.includes(targetCountryLower) || targetCountryLower.includes(eventCountry)
+      
+      // If countries don't match, and it's not online, exclude
+      if (!countryMatches && !isOnline) {
+        // Extra check: if target is Australia and event mentions US state, definitely exclude
+        if (targetCountryLower.includes("australia") && usStates.some(state => {
+          const stateRegex = new RegExp(`\\b${state}\\b`, "i")
+          return stateRegex.test(fullText)
+        })) {
+          return false
+        }
+        // If country doesn't match, exclude
+        return false
+      }
+    }
+    
+    // If target country is Australia and result mentions US state, exclude it
+    if (targetCountryLower && targetCountryLower.includes("australia")) {
+      const mentionsUSState = usStates.some(state => {
+        const stateRegex = new RegExp(`\\b${state}\\b`, "i")
+        return stateRegex.test(fullText)
+      })
+      if (mentionsUSState) {
+        return false // Exclude US results when searching from Australia
+      }
+    }
     
     if (mentionsOtherCity) {
       return false // Another city is mentioned, exclude
     }
     
-    // If country is specified, also check country match
-    if (targetCountryLower && eventCountry) {
-      const countryMatches = countryVariations[targetCountryLower]?.some(countryVar => {
-        return eventCountry.includes(countryVar) || countryVar.includes(eventCountry)
-      }) || eventCountry.includes(targetCountryLower) || targetCountryLower.includes(eventCountry)
-      
-      if (!countryMatches) {
-        return false // Country doesn't match, exclude
+    // CRITICAL COUNTRY CHECK: If target country is specified, ensure it matches
+    // This is especially important for disambiguation (Melbourne, Australia vs Melbourne, FL)
+    if (targetCountryLower) {
+      // If event has country info, check if it matches
+      if (eventCountry) {
+        const countryMatches = countryVariations[targetCountryLower]?.some(countryVar => {
+          return eventCountry.includes(countryVar) || countryVar.includes(eventCountry)
+        }) || eventCountry.includes(targetCountryLower) || targetCountryLower.includes(eventCountry)
+        
+        if (!countryMatches && !isOnline) {
+          return false // Country doesn't match, exclude (unless online event)
+        }
+      } else {
+        // No country in event data, but we have target country
+        // If target is Australia and event mentions US state, exclude it
+        if (targetCountryLower.includes("australia")) {
+          const mentionsUSState = usStates.some(state => {
+            const stateRegex = new RegExp(`\\b${state}\\b`, "i")
+            return stateRegex.test(fullText)
+          })
+          if (mentionsUSState) {
+            return false // Exclude US results when searching from Australia
+          }
+        }
       }
     }
     
@@ -375,7 +440,7 @@ export async function POST(request: NextRequest) {
     const targetCity = entities.city.trim()
     const targetCountry = entities.country?.trim()
     
-    console.log(`[v0] Applying location guard for trip query: city="${targetCity}"${targetCountry ? `, country="${targetCountry}"` : ""}`)
+    console.log(`[v0] 🔒 Applying location guard for query with city: city="${targetCity}"${targetCountry ? `, country="${targetCountry}"` : ""}`)
     
     // Apply location guard to both internal and external results
     const beforeInternal = finalInternal.length
@@ -388,11 +453,15 @@ export async function POST(request: NextRequest) {
     const droppedExternal = beforeExternal - finalExternal.length
     
     if (droppedInternal > 0 || droppedExternal > 0) {
-      console.log(`[v0] Location guard filtered out ${droppedInternal} internal + ${droppedExternal} external events from different cities`)
+      console.log(`[v0] ✅ Location guard filtered out ${droppedInternal} internal + ${droppedExternal} external events from different cities`)
+    } else {
+      console.log(`[v0] ⚠️ Location guard applied but no events were filtered - this might indicate an issue`)
     }
     
     // CRITICAL: Do NOT widen geography if insufficient results
     // It's better to return fewer relevant results than to show irrelevant ones
+  } else {
+    console.log(`[v0] ⚠️ No city in entities - location guard NOT applied. Entities:`, entities)
   }
 
   // EVENTS-FIRST: Always prioritize Eventa events
