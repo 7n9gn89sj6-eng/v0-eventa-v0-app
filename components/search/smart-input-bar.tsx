@@ -40,6 +40,13 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
     const [isLoadingLocation, setIsLoadingLocation] = useState(false)
     const [locationError, setLocationError] = useState<string | null>(null)
 
+    // Detect if we're on localhost
+    const isLocalhost = typeof window !== "undefined" && 
+      (window.location.hostname === "localhost" || 
+       window.location.hostname === "127.0.0.1" || 
+       window.location.hostname.startsWith("192.168.") ||
+       window.location.hostname.startsWith("10."))
+
     // Load stored location on mount
     useEffect(() => {
       const stored = getUserLocation()
@@ -208,27 +215,36 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
               console.log("[v0] Permissions API not supported, using generic timeout message")
             }
           } else if (error.code === error.PERMISSION_DENIED) {
-            setLocationError("Location permission was denied. You can still search by entering a city name.")
+            if (isLocalhost) {
+              setLocationError("Geolocation doesn't work well on localhost. Please try in production or search by city name.")
+            } else {
+              setLocationError("Location permission was denied. You can still search by entering a city name.")
+            }
             console.log("[v0] Permission denied by user")
           } else if (error.code === error.POSITION_UNAVAILABLE) {
             // Check permission status - if granted, this might be temporary (GPS off, network issue)
-            // Only show error if permission is actually denied
-            try {
-              const permissionStatus = await navigator.permissions.query({ name: 'geolocation' as PermissionName })
-              if (permissionStatus.state === 'granted') {
-                // Permission granted but position unavailable - likely temporary (GPS disabled, network issue)
-                // Don't show error - just silently fail and let user search by city
-                console.log("[v0] Position unavailable despite granted permission (GPS disabled or network issue) - silently failing")
+            // On localhost, geolocation often doesn't work, so provide helpful feedback
+            if (isLocalhost) {
+              setLocationError("Geolocation doesn't work well on localhost. Please try in production or search by city name.")
+              console.log("[v0] Position unavailable on localhost (expected)")
+            } else {
+              try {
+                const permissionStatus = await navigator.permissions.query({ name: 'geolocation' as PermissionName })
+                if (permissionStatus.state === 'granted') {
+                  // Permission granted but position unavailable - likely temporary (GPS disabled, network issue)
+                  // Don't show error - just silently fail and let user search by city
+                  console.log("[v0] Position unavailable despite granted permission (GPS disabled or network issue) - silently failing")
+                  setLocationError(null)
+                } else {
+                  // Permission not granted - show helpful message
+                  setLocationError("Location information is unavailable. You can still search by entering a city name.")
+                  console.log("[v0] Position unavailable and permission not granted")
+                }
+              } catch (permError) {
+                // Permissions API not supported - show generic message but make it less alarming
+                console.log("[v0] Position unavailable (Permissions API not supported) - silently failing")
                 setLocationError(null)
-              } else {
-                // Permission not granted - show helpful message
-                setLocationError("Location information is unavailable. You can still search by entering a city name.")
-                console.log("[v0] Position unavailable and permission not granted")
               }
-            } catch (permError) {
-              // Permissions API not supported - show generic message but make it less alarming
-              console.log("[v0] Position unavailable (Permissions API not supported) - silently failing")
-              setLocationError(null)
             }
           } else {
             // Unknown error - silently fail
