@@ -331,7 +331,15 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { entities, query, input_mode = "text", uiLang = "en", isTripIntent, duration, interests } = body
 
-  console.log(`[v0] Dual search request - uiLang: ${uiLang}`, { entities, query, isTripIntent, duration, interests })
+  console.log(`[v0] Dual search request - uiLang: ${uiLang}`, { 
+    entities, 
+    query, 
+    isTripIntent, 
+    duration, 
+    interests,
+    city: entities?.city,
+    country: entities?.country,
+  })
 
   // Run both searches in parallel
   const [internalResponse, externalResponse] = await Promise.allSettled([
