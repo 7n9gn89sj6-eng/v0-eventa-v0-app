@@ -93,11 +93,15 @@ function deduplicateResults(internal: any[], external: any[]) {
  * @returns Filtered array containing only events in the target city
  */
 function applyLocationGuard(results: any[], targetCity: string, targetCountry?: string): any[] {
+  console.log(`[v0] 🔒 applyLocationGuard called with: targetCity="${targetCity}", targetCountry="${targetCountry}", results.length=${results.length}`)
+  
   if (!targetCity || targetCity.trim().length === 0) {
+    console.log(`[v0] ⚠️ No target city provided - skipping location guard`)
     return results // No city specified, return all results
   }
 
   const cityLower = targetCity.toLowerCase().trim()
+  console.log(`[v0] 🔍 Location guard filtering for city: "${cityLower}"${targetCountry ? `, country: "${targetCountry}"` : ""}`)
   
   // City name variations map (same as in internal search)
   const cityVariations: Record<string, string[]> = {
@@ -198,25 +202,34 @@ function applyLocationGuard(results: any[], targetCity: string, targetCountry?: 
     const eventCity = (event.city || event.location?.city || "").toLowerCase().trim()
     const eventCountry = (event.country || event.location?.country || "").toLowerCase().trim()
     
-    // Extract city from address if city field is empty
-    const eventAddress = (event.address || event.location?.address || event.venueName || "").toLowerCase().trim()
+    // Extract city from address if city field is empty (check multiple possible fields)
+    const eventAddress = (event.address || event.location?.address || event.venueName || event.locationName || event.venue || "").toLowerCase().trim()
     const eventTitle = (event.title || "").toLowerCase()
     const eventDescription = (event.description || "").toLowerCase()
-    const fullText = `${eventTitle} ${eventDescription} ${eventAddress} ${eventCity}`.toLowerCase()
+    // Also check URL and source fields which might contain location info
+    const eventUrl = (event.url || event.sourceUrl || "").toLowerCase()
+    const eventSource = (event.source || event.sourceName || "").toLowerCase()
+    // Build comprehensive text to search - include ALL possible fields
+    const fullText = `${eventTitle} ${eventDescription} ${eventAddress} ${eventCity} ${eventUrl} ${eventSource}`.toLowerCase()
     
     // HARD FILTER #1: If searching from Australia, exclude ANY result mentioning US cities
     // This must be FIRST before any other checks
     if (targetCountryLower && targetCountryLower.includes("australia")) {
-      // Check if result mentions any known US city in title, description, address, or city field
+      // Check if result mentions any known US city in ANY field (comprehensive check)
       const mentionsUSCity = knownUSCities.some(usCity => {
         // Don't exclude if it's the target city (handles edge cases)
         if (usCity === cityLower || allCityNames.includes(usCity)) return false
-        const usCityRegex = new RegExp(`\\b${usCity}\\b`, "i")
-        // Check everywhere - title, description, address, city field
+        // Use word boundary regex to catch "Fort Worth" as well as "fort worth"
+        // Also catch compound names like "Fort Worth Stockyards"
+        const usCityRegex = new RegExp(`\\b${usCity.replace(/\s+/g, '\\s+')}\\b`, "i")
+        // Check EVERYWHERE - title, description, address, city, URL, source
         return usCityRegex.test(eventTitle) || 
                usCityRegex.test(eventDescription) || 
                usCityRegex.test(eventAddress) ||
-               usCityRegex.test(eventCity)
+               usCityRegex.test(eventCity) ||
+               usCityRegex.test(eventUrl) ||
+               usCityRegex.test(eventSource) ||
+               usCityRegex.test(fullText) // Final catch-all
       })
       
       if (mentionsUSCity) {
