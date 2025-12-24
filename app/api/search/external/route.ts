@@ -360,14 +360,38 @@ export async function POST(request: NextRequest) {
         const resultCountry = (result.country || result.location?.country || "").toLowerCase().trim()
         const resultFullText = `${resultCity} ${resultLocation} ${resultAddress} ${resultTitle} ${resultDescription} ${resultCountry}`.toLowerCase()
         
-        // CRITICAL: If searching from Australia and result mentions US state, exclude immediately
+        // CRITICAL FIRST PASS: If searching from Australia, exclude ANY result mentioning US cities/states
+        // This is a hard filter - no exceptions (except online events)
         if (countryLower && countryLower.includes("australia")) {
+          // Check for known US cities
+          const knownUSCities = [
+            "fort worth", "austin", "seneca", "dallas", "houston", "boston", "kansas city",
+            "phoenix", "chicago", "los angeles", "new york", "san francisco", "seattle"
+          ]
+          const mentionsUSCity = knownUSCities.some(usCity => {
+            if (usCity === cityLower) return false // Don't exclude if it's the target city
+            const usCityRegex = new RegExp(`\\b${usCity}\\b`, "i")
+            return usCityRegex.test(resultFullText)
+          })
+          
+          if (mentionsUSCity) {
+            return false // Hard exclude - US city detected
+          }
+          
+          // Check for US state mentions
           const mentionsUSState = usStates.some(state => {
             const stateRegex = new RegExp(`\\b${state}\\b`, "i")
             return stateRegex.test(resultFullText)
           })
           if (mentionsUSState) {
-            return false // Exclude US results when searching from Australia
+            return false // Hard exclude - US state detected
+          }
+          
+          // Check for US country indicators
+          const hasUSIndicators = /\b(usa|united states|us|america|u\.s\.|u\.s\.a\.)\b/i.test(resultFullText)
+          const hasAustraliaIndicators = /\b(australia|au|australian)\b/i.test(resultFullText)
+          if (hasUSIndicators && !hasAustraliaIndicators) {
+            return false // Has US but not Australia indicators - exclude
           }
         }
         

@@ -101,6 +101,8 @@ function applyLocationGuard(results: any[], targetCity: string, targetCountry?: 
   
   // City name variations map (same as in internal search)
   const cityVariations: Record<string, string[]> = {
+    "melbourne": ["melbourne", "melb"],
+    "sydney": ["sydney"],
     "berlin": ["berlin", "berlín"],
     "brussels": ["bruxelles", "brussel", "bruselas"],
     "athens": ["αθήνα", "athina", "athen"],
@@ -181,6 +183,16 @@ function applyLocationGuard(results: any[], targetCity: string, targetCountry?: 
   ]
   
   const beforeFilter = results.length
+  
+  // CRITICAL FIRST PASS: If searching from Australia, immediately exclude any result that mentions US cities
+  // This is a hard filter - no exceptions (except online events)
+  const knownUSCities = [
+    "fort worth", "austin", "seneca", "dallas", "houston", "boston", "kansas city", "phoenix",
+    "chicago", "los angeles", "new york", "san francisco", "seattle", "denver", "miami",
+    "atlanta", "philadelphia", "san diego", "detroit", "minneapolis", "portland", "orlando",
+    "las vegas", "nashville", "cleveland", "tampa", "sacramento", "oakland", "omaha"
+  ]
+  
   const filtered = results.filter((event) => {
     // Extract city from event (handle both internal and external formats)
     const eventCity = (event.city || event.location?.city || "").toLowerCase().trim()
@@ -190,7 +202,63 @@ function applyLocationGuard(results: any[], targetCity: string, targetCountry?: 
     const eventAddress = (event.address || event.location?.address || event.venueName || "").toLowerCase().trim()
     const eventTitle = (event.title || "").toLowerCase()
     const eventDescription = (event.description || "").toLowerCase()
-    const fullText = `${eventTitle} ${eventDescription} ${eventAddress}`.toLowerCase()
+    const fullText = `${eventTitle} ${eventDescription} ${eventAddress} ${eventCity}`.toLowerCase()
+    
+    // HARD FILTER #1: If searching from Australia, exclude ANY result mentioning US cities
+    // This must be FIRST before any other checks
+    if (targetCountryLower && targetCountryLower.includes("australia")) {
+      // Check if result mentions any known US city in title, description, address, or city field
+      const mentionsUSCity = knownUSCities.some(usCity => {
+        // Don't exclude if it's the target city (handles edge cases)
+        if (usCity === cityLower || allCityNames.includes(usCity)) return false
+        const usCityRegex = new RegExp(`\\b${usCity}\\b`, "i")
+        // Check everywhere - title, description, address, city field
+        return usCityRegex.test(eventTitle) || 
+               usCityRegex.test(eventDescription) || 
+               usCityRegex.test(eventAddress) ||
+               usCityRegex.test(eventCity)
+      })
+      
+      if (mentionsUSCity) {
+        console.log(`[v0] 🚫 EXCLUDED: US city detected in result "${eventTitle.substring(0, 50)}" when searching from Australia`)
+        return false // Hard exclude - US city detected
+      }
+      
+      // Also check for US state mentions anywhere in the result
+      const mentionsUSState = usStates.some(state => {
+        const stateRegex = new RegExp(`\\b${state}\\b`, "i")
+        return stateRegex.test(eventTitle) ||
+               stateRegex.test(eventDescription) ||
+               stateRegex.test(eventAddress) ||
+               stateRegex.test(eventCity)
+      })
+      
+      if (mentionsUSState) {
+        console.log(`[v0] 🚫 EXCLUDED: US state detected in result "${eventTitle.substring(0, 50)}" when searching from Australia`)
+        return false // Hard exclude - US state detected
+      }
+      
+      // Check for US country indicators - if present and no Australia indicators, exclude
+      const hasUSIndicators = /\b(usa|united states|us|america|u\.s\.|u\.s\.a\.)\b/i.test(fullText)
+      const hasAustraliaIndicators = /\b(australia|au|australian|melbourne|sydney|brisbane|perth|adelaide)\b/i.test(fullText)
+      
+      if (hasUSIndicators && !hasAustraliaIndicators) {
+        console.log(`[v0] 🚫 EXCLUDED: US indicators found but no Australia indicators in "${eventTitle.substring(0, 50)}"`)
+        return false // Hard exclude - US but not Australia
+      }
+      
+      // FINAL CHECK: If result doesn't mention Melbourne/Australia anywhere, and we're searching from there, be suspicious
+      // Only allow through if city field matches OR address/description mentions Melbourne/Australia
+      if (!allCityNames.some(cityVar => {
+        return eventCity.includes(cityVar) || 
+               eventAddress.includes(cityVar) ||
+               eventDescription.toLowerCase().includes(cityVar)
+      }) && !hasAustraliaIndicators) {
+        // Result doesn't mention target city or Australia anywhere - exclude it
+        console.log(`[v0] 🚫 EXCLUDED: Result "${eventTitle.substring(0, 50)}" doesn't mention Melbourne/Australia when searching from there`)
+        return false
+      }
+    }
     
     // Check if event is explicitly marked as online/global
     const isOnline = event.isOnline === true || 
@@ -320,7 +388,9 @@ function applyLocationGuard(results: any[], targetCity: string, targetCountry?: 
   })
   
   if (beforeFilter !== filtered.length) {
-    console.log(`[v0] Location guard applied: ${beforeFilter} -> ${filtered.length} events for city: ${targetCity}${targetCountry ? `, ${targetCountry}` : ""}`)
+    console.log(`[v0] ✅ Location guard applied: ${beforeFilter} -> ${filtered.length} events for city: ${targetCity}${targetCountry ? `, ${targetCountry}` : ""}`)
+  } else {
+    console.log(`[v0] Location guard applied but no events filtered (${beforeFilter} events) for city: ${targetCity}${targetCountry ? `, ${targetCountry}` : ""}`)
   }
   
   return filtered
