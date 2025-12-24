@@ -113,26 +113,30 @@ export async function POST(request: NextRequest) {
 
     // Build prompt with user location context if available
     const locationContext = userLocation?.city 
-      ? `\n\nCRITICAL LOCATION PRIORITY RULES:
-The user's detected location is ${userLocation.city}${userLocation.country ? `, ${userLocation.country}` : ""} (coordinates: ${userLocation.lat}, ${userLocation.lng}).
+      ? `\n\n🚨 CRITICAL LOCATION FILTERING RULES - USER'S DETECTED LOCATION MUST BE USED:
+The user has clicked the location button and their detected location is: ${userLocation.city}${userLocation.country ? `, ${userLocation.country}` : ""} (coordinates: ${userLocation.lat}, ${userLocation.lng}).
 
-LOCATION PRIORITY (in order):
-1. EXPLICIT LOCATION IN QUERY (HIGHEST PRIORITY): If the user explicitly mentions a city or location in their query, ALWAYS use that location. Examples:
-   - "jazz in Sydney this weekend" → extract city: "Sydney" (ignore detected location)
-   - "events in Paris" → extract city: "Paris" (ignore detected location)
-   - "concerts in Melbourne" → extract city: "Melbourne" (ignore detected location)
+MANDATORY LOCATION PRIORITY (in strict order):
+1. EXPLICIT LOCATION IN QUERY (HIGHEST PRIORITY): Only if the user explicitly mentions a DIFFERENT city or location in their query, use that instead. Examples:
+   - "jazz in Sydney this weekend" → extract city: "Sydney" (user specified different city, ignore detected location)
+   - "events in Paris" → extract city: "Paris" (user specified different city)
+   - "concerts in Melbourne" → extract city: "Melbourne" (if detected location is NOT Melbourne)
 
-2. "AROUND ME" / "NEAR ME" PHRASES: If the user says "around me", "near me", "nearby", or similar phrases, use the detected location:
+2. "AROUND ME" / "NEAR ME" / "NEARBY" PHRASES: ALWAYS use detected location when user says:
    - "jazz around me this weekend" → extract city: "${userLocation.city}"${userLocation.country ? `, country: "${userLocation.country}"` : ""}
    - "events near me" → extract city: "${userLocation.city}"${userLocation.country ? `, country: "${userLocation.country}"` : ""}
    - "what's happening nearby" → extract city: "${userLocation.city}"${userLocation.country ? `, country: "${userLocation.country}"` : ""}
+   - "nearby events" → extract city: "${userLocation.city}"${userLocation.country ? `, country: "${userLocation.country}"` : ""}
 
-3. NO LOCATION MENTIONED: If the query has no location and no "around me" phrase, use the detected location as default:
+3. NO LOCATION MENTIONED IN QUERY: ALWAYS use detected location as default when query has no location:
    - "jazz this weekend" → extract city: "${userLocation.city}"${userLocation.country ? `, country: "${userLocation.country}"` : ""}
    - "find concerts" → extract city: "${userLocation.city}"${userLocation.country ? `, country: "${userLocation.country}"` : ""}
    - "what events are happening" → extract city: "${userLocation.city}"${userLocation.country ? `, country: "${userLocation.country}"` : ""}
+   - "events" → extract city: "${userLocation.city}"${userLocation.country ? `, country: "${userLocation.country}"` : ""}
 
-SUMMARY: Explicit location in query > "around me" phrases > detected location default`
+IMPORTANT: If the user's query mentions the same city as their detected location, still extract it explicitly. The detected location is the user's current location and MUST be used to limit search results to that location.
+
+SUMMARY: Different explicit location > "around me" phrases > detected location default. The detected location (${userLocation.city}${userLocation.country ? `, ${userLocation.country}` : ""}) MUST be used unless user explicitly mentions a different location.`
       : ""
 
     const { object } = await generateObject({
@@ -419,17 +423,37 @@ User input: "${query}"`,
       }
     }
     
+    // CRITICAL: Always ensure location is set when userLocation is available
     if (!hasCity && userLocation?.city && object.intent === "search") {
       extractedWithLocation.city = userLocation.city
-      // Also use country if available and not already extracted
+      // Always use country if available (helps with disambiguation like Melbourne, Australia vs Melbourne, FL)
       if (userLocation.country && !extractedWithLocation.country) {
         extractedWithLocation.country = userLocation.country
       }
-      console.log(`[v0] Using detected user location as default (no explicit location in query): ${userLocation.city}${userLocation.country ? `, ${userLocation.country}` : ""}`)
+      console.log(`[v0] ✅ Using detected user location as default (no explicit location in query): ${userLocation.city}${userLocation.country ? `, ${userLocation.country}` : ""}`)
     } else if (hasCity) {
+      // User explicitly mentioned a location - use it, but still ensure country is set if available
+      if (userLocation?.country && !extractedWithLocation.country) {
+        // Only add country if the extracted city matches detected city (helps with disambiguation)
+        const extractedCityLower = extractedWithLocation.city?.toLowerCase().trim()
+        const detectedCityLower = userLocation.city?.toLowerCase().trim()
+        if (extractedCityLower === detectedCityLower) {
+          extractedWithLocation.country = userLocation.country
+          console.log(`[v0] ✅ Adding country from detected location to match extracted city: ${userLocation.country}`)
+        }
+      }
       console.log(`[v0] Using explicit location from query: ${extractedWithLocation.city}${extractedWithLocation.country ? `, ${extractedWithLocation.country}` : ""}`)
     } else if (!hasCity && !userLocation?.city) {
-      console.log(`[v0] No location available - neither explicit location nor detected location`)
+      console.log(`[v0] ⚠️ No location available - neither explicit location nor detected location`)
+    }
+    
+    // Final check: If we have userLocation but no city was extracted/added, this is a problem
+    if (object.intent === "search" && userLocation?.city && !extractedWithLocation.city) {
+      console.warn(`[v0] ⚠️ WARNING: User has detected location (${userLocation.city}) but it was not extracted! Adding it now.`)
+      extractedWithLocation.city = userLocation.city
+      if (userLocation.country) {
+        extractedWithLocation.country = userLocation.country
+      }
     }
 
     return NextResponse.json({

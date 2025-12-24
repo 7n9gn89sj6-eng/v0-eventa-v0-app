@@ -275,15 +275,19 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
       setShowExamples(alwaysShowSuggestions)
 
       try {
-        // Include user location in the request so the API can use it as default
+        // CRITICAL: Always include user location in the request if available
+        // This ensures the AI search intent API can use it to limit search parameters
         const requestBody: any = { query }
-        if (userLocation && userLocation.city !== "Unknown location") {
+        if (userLocation && userLocation.city && userLocation.city !== "Unknown location") {
           requestBody.userLocation = {
             lat: userLocation.lat,
             lng: userLocation.lng,
             city: userLocation.city,
-            country: userLocation.country,
+            country: userLocation.country, // Include country for disambiguation (e.g., Melbourne, Australia vs Melbourne, FL)
           }
+          console.log(`[v0] Sending user location to intent API: ${userLocation.city}${userLocation.country ? `, ${userLocation.country}` : ""}`)
+        } else {
+          console.log(`[v0] No user location available to send to intent API`)
         }
 
         const intentResponse = await fetch("/api/search/intent", {
@@ -304,16 +308,15 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
             params.set("q", query)
           }
 
-          // CRITICAL: Always add user location if available and no explicit city was extracted
-          // This ensures location filtering works for queries like "jazz this weekend"
-          // The intent API should extract city from userLocation, but if it doesn't, we add it here
+          // CRITICAL: Always ensure location is in URL params if available
+          // This is the final fallback to ensure location filtering ALWAYS works
           const cityParam = params.get("city")
           const hasCityParam = cityParam && cityParam.trim().length > 0 && cityParam !== "Unknown location"
           
-          // If no city was extracted AND user has a detected location, use it
-          // This is the fallback that ensures location filtering always works
+          // If no city was extracted by AI AND user has a detected location, ALWAYS add it
+          // This ensures location filtering works for ALL searches when location is available
           if (!hasCityParam && userLocation && userLocation.city && userLocation.city !== "Unknown location") {
-            console.log(`[v0] Adding detected location to URL params (fallback): ${userLocation.city}`)
+            console.log(`[v0] ⚠️ AI didn't extract location, adding detected location to URL params (critical fallback): ${userLocation.city}${userLocation.country ? `, ${userLocation.country}` : ""}`)
             params.set("city", userLocation.city)
             params.set("lat", userLocation.lat.toString())
             params.set("lng", userLocation.lng.toString())
@@ -321,9 +324,18 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
               params.set("country", userLocation.country)
             }
           } else if (hasCityParam) {
-            console.log(`[v0] Using extracted city from query/intent: ${cityParam}`)
+            // AI extracted a city, but ensure country is set if we have it and city matches detected location
+            if (userLocation && userLocation.country && !params.has("country")) {
+              const extractedCityLower = cityParam.toLowerCase().trim()
+              const detectedCityLower = userLocation.city.toLowerCase().trim()
+              if (extractedCityLower === detectedCityLower) {
+                params.set("country", userLocation.country)
+                console.log(`[v0] Adding country to match extracted city: ${userLocation.country}`)
+              }
+            }
+            console.log(`[v0] ✅ Using extracted city from query/intent: ${cityParam}${params.get("country") ? `, ${params.get("country")}` : ""}`)
           } else {
-            console.log(`[v0] No city available - search will be broad (no location filter)`)
+            console.log(`[v0] ⚠️ No city available - search will be broad (no location filter)`)
           }
 
           console.log("[v0] Navigating with params:", params.toString())
