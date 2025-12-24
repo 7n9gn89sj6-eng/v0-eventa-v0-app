@@ -128,7 +128,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
                 if (country) {
                   params.set("country", country)
                 }
-                console.log(`[v0] Location detected: ${city}, navigating to search`)
+                console.log(`[v0] Location detected: ${city}${country ? `, ${country}` : ""}, navigating to search with params:`, params.toString())
                 router.push(`/discover?${params.toString()}`)
               } else {
                 // Fallback to coordinates without city name
