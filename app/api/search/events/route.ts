@@ -620,12 +620,62 @@ export async function GET(req: NextRequest) {
             "madrid": ["spain", "new mexico", "usa"],
           }
           
+          // US cities to exclude when searching from Australia
+          const knownUSCities = [
+            "fort worth", "austin", "seneca", "dallas", "houston", "boston", "kansas city", "phoenix",
+            "chicago", "los angeles", "new york", "san francisco", "seattle", "denver", "miami",
+            "atlanta", "philadelphia", "san diego", "detroit", "minneapolis", "portland", "orlando"
+          ]
+          
+          // US states to check for
+          const usStates = [
+            "texas", "california", "florida", "new york", "pennsylvania", "illinois", "ohio", "georgia",
+            "north carolina", "michigan", "new jersey", "virginia", "washington", "arizona", "massachusetts"
+          ]
+          
           const isAmbiguous = ambiguousCities[cityLower] !== undefined
           const expectedCountries = isAmbiguous ? ambiguousCities[cityLower] : []
           const countryLower = country ? country.toLowerCase().trim() : null
           
           transformedWebResults = transformedWebResults.filter((result) => {
-            const resultText = `${result.title} ${result.description} ${result.city} ${result.country} ${result.location?.city || ""} ${result.location?.country || ""}`.toLowerCase()
+            // Build comprehensive text from all result fields
+            const resultText = `${result.title || ""} ${result.description || ""} ${result.city || ""} ${result.country || ""} ${result.location?.city || ""} ${result.location?.country || ""} ${result.address || ""} ${result.venueName || ""} ${result.url || ""}`.toLowerCase()
+            
+            // HARD FILTER #1: If searching from Australia, exclude ANY result mentioning US cities/states
+            if (countryLower && countryLower.includes("australia")) {
+              // Check for known US cities
+              const mentionsUSCity = knownUSCities.some(usCity => {
+                if (usCity === cityLower) return false // Don't exclude if it's the target city
+                const usCityRegex = new RegExp(`\\b${usCity.replace(/\s+/g, '\\s+')}\\b`, "i")
+                return usCityRegex.test(resultText)
+              })
+              
+              if (mentionsUSCity) {
+                console.log(`[v0] 🚫 EXCLUDED from /api/search/events: US city detected in "${result.title?.substring(0, 50)}" when searching from Australia`)
+                return false
+              }
+              
+              // Check for US state mentions
+              const mentionsUSState = usStates.some(state => {
+                const stateRegex = new RegExp(`\\b${state}\\b`, "i")
+                return stateRegex.test(resultText)
+              })
+              
+              if (mentionsUSState) {
+                console.log(`[v0] 🚫 EXCLUDED from /api/search/events: US state detected in "${result.title?.substring(0, 50)}" when searching from Australia`)
+                return false
+              }
+              
+              // Check for US country indicators without Australia indicators
+              const hasUSIndicators = /\b(usa|united states|us|america|u\.s\.|u\.s\.a\.)\b/i.test(resultText)
+              const hasAustraliaIndicators = /\b(australia|au|australian|melbourne|sydney|brisbane|perth|adelaide)\b/i.test(resultText)
+              
+              if (hasUSIndicators && !hasAustraliaIndicators) {
+                console.log(`[v0] 🚫 EXCLUDED from /api/search/events: US indicators found but no Australia indicators in "${result.title?.substring(0, 50)}"`)
+                return false
+              }
+            }
+            
             const cityRegex = new RegExp(`\\b${cityLower}\\b`, "i")
             const matchesCity = cityRegex.test(resultText)
             
