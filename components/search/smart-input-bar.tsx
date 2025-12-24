@@ -45,6 +45,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
       const stored = getUserLocation()
       if (stored) {
         setUserLocation(stored)
+        setLocationError(null) // Clear any errors if we have stored location
       }
     }, [])
 
@@ -104,6 +105,19 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
                 storeUserLocation({ lat, lng, city, country })
                 setUserLocation(location)
                 setLocationError(null) // Clear any errors on success
+                
+                // Automatically navigate to search with location
+                // Include a default query to ensure events are shown
+                const params = new URLSearchParams()
+                params.set("q", "events") // Default query to show events in this location
+                params.set("city", city)
+                params.set("lat", lat.toString())
+                params.set("lng", lng.toString())
+                if (country) {
+                  params.set("country", country)
+                }
+                console.log(`[v0] Location detected: ${city}, navigating to search`)
+                router.push(`/discover?${params.toString()}`)
               } else {
                 // Fallback to coordinates without city name
                 const location = { lat, lng, city: "Unknown location", timestamp: Date.now() }
@@ -118,6 +132,16 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
                 storeUserLocation({ lat, lng, city })
                 setUserLocation(location)
                 setLocationError(null)
+                
+                // Automatically navigate to search with location
+                // Include a default query to ensure events are shown
+                const params = new URLSearchParams()
+                params.set("q", "events") // Default query to show events in this location
+                params.set("city", city)
+                params.set("lat", lat.toString())
+                params.set("lng", lng.toString())
+                console.log(`[v0] Location detected (fallback): ${city}, navigating to search`)
+                router.push(`/discover?${params.toString()}`)
               }
             }
           } catch (error) {
@@ -129,6 +153,16 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
               storeUserLocation({ lat, lng, city })
               setUserLocation(location)
               setLocationError(null)
+              
+              // Automatically navigate to search with location
+              // Include a default query to ensure events are shown
+              const params = new URLSearchParams()
+              params.set("q", "events") // Default query to show events in this location
+              params.set("city", city)
+              params.set("lat", lat.toString())
+              params.set("lng", lng.toString())
+              console.log(`[v0] Location detected (fallback 2): ${city}, navigating to search`)
+              router.push(`/discover?${params.toString()}`)
             }
           }
 
@@ -177,8 +211,25 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
             setLocationError("Location permission was denied. You can still search by entering a city name.")
             console.log("[v0] Permission denied by user")
           } else if (error.code === error.POSITION_UNAVAILABLE) {
-            setLocationError("Location information is unavailable. You can still search by entering a city name.")
-            console.log("[v0] Position unavailable - GPS/network issue")
+            // Check permission status - if granted, this might be temporary (GPS off, network issue)
+            // Only show error if permission is actually denied
+            try {
+              const permissionStatus = await navigator.permissions.query({ name: 'geolocation' as PermissionName })
+              if (permissionStatus.state === 'granted') {
+                // Permission granted but position unavailable - likely temporary (GPS disabled, network issue)
+                // Don't show error - just silently fail and let user search by city
+                console.log("[v0] Position unavailable despite granted permission (GPS disabled or network issue) - silently failing")
+                setLocationError(null)
+              } else {
+                // Permission not granted - show helpful message
+                setLocationError("Location information is unavailable. You can still search by entering a city name.")
+                console.log("[v0] Position unavailable and permission not granted")
+              }
+            } catch (permError) {
+              // Permissions API not supported - show generic message but make it less alarming
+              console.log("[v0] Position unavailable (Permissions API not supported) - silently failing")
+              setLocationError(null)
+            }
           } else {
             // Unknown error - silently fail
             setLocationError(null)
