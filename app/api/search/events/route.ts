@@ -53,6 +53,7 @@ export async function GET(req: NextRequest) {
   const category = url.searchParams.get("category")
   const dateFrom = url.searchParams.get("date_from")
   const dateTo = url.searchParams.get("date_to")
+  const debug = url.searchParams.get("debug") === "1"
 
   // Define 'now' once at the top level for reuse throughout the function
   const now = new Date()
@@ -60,9 +61,10 @@ export async function GET(req: NextRequest) {
   // Detect if this is an event-intent query
   const isEventQuery = isEventIntentQuery(q)
 
-  // Extract city/country from query if not provided and query is event-intent
-  // This handles queries like "music in Melbourne" where city is in the query text
-  if (q && isEventQuery && !city) {
+  // NOTE: Location should come from URL params (city/country) set by UI location picker
+  // Only extract from query as fallback if location params are not provided
+  // This ensures web search uses the UI location control, not query extraction
+  if (q && isEventQuery && !city && !country) {
     try {
       const intentResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/search/intent`, {
         method: 'POST',
@@ -74,11 +76,11 @@ export async function GET(req: NextRequest) {
         const extracted = intentData.extracted || {}
         if (extracted.city && !city) {
           city = extracted.city.trim()
-          console.log(`[v0] 🔍 Extracted city from query: "${city}"`)
+          console.log(`[v0] 🔍 Extracted city from query (fallback): "${city}"`)
         }
         if (extracted.country && !country) {
           country = extracted.country.trim()
-          console.log(`[v0] 🔍 Extracted country from query: "${country}"`)
+          console.log(`[v0] 🔍 Extracted country from query (fallback): "${country}"`)
         }
       }
     } catch (error) {
@@ -531,15 +533,34 @@ export async function GET(req: NextRequest) {
     // For event-intent queries with location set, automatically fetch web results if no internal events found
     // This provides local event discovery while maintaining strict location constraints
     let webResults: any[] = []
+    let debugTrace: any = {
+      internalCount: events.length,
+      webCalled: false,
+      webQuery: null,
+      webRawCount: 0,
+      webAfterLocationCount: 0,
+      webAfterEventinessCount: 0,
+      webAfterDateCount: 0,
+      finalReturnedInternalCount: 0,
+      finalReturnedWebCount: 0,
+      webError: null,
+      sampleWebTitles: [],
+    }
     
+    // GUARANTEE: If internal results count is 0 and location is known, web search MUST run
     // Decide if we should search web:
     // 1. Always search web for non-event queries (current behavior)
     // 2. For event-intent queries: only search web if no internal events found (automatic fallback)
     // 3. Location must be set for event-intent queries to use web fallback
     const shouldSearchWeb = q.trim().length > 0 && (
       !isEventQuery || // Non-event queries: always search web
-      (isEventQuery && events.length === 0 && (city || country)) // Event-intent with no internal events: auto-fallback
+      (isEventQuery && events.length === 0 && (city || country)) // Event-intent with no internal events AND location set: auto-fallback
     )
+    
+    // CRITICAL: If internal is 0 and location is set, web search MUST be called
+    if (events.length === 0 && (city || country) && q.trim().length > 0 && !shouldSearchWeb) {
+      console.warn(`[v0] ⚠️ WARNING: Internal results empty, location set (${city || ''}, ${country || ''}), but web search not triggered!`)
+    }
     
     if (isEventQuery && events.length === 0 && shouldSearchWeb) {
       console.log(`[v0] 🔄 Event-intent query with no internal events: automatically fetching web results (location: ${city || 'none'}${country ? `, ${country}` : ''})`)
@@ -548,6 +569,7 @@ export async function GET(req: NextRequest) {
     }
     
     if (shouldSearchWeb) {
+      debugTrace.webCalled = true
       const hasGoogleConfig = Boolean(process.env.GOOGLE_API_KEY && process.env.GOOGLE_PSE_ID)
       console.log("[v0] Searching web...", { 
         hasGoogleConfig, 
@@ -556,38 +578,48 @@ export async function GET(req: NextRequest) {
       })
       
       try {
-        // Build web search query from original query, city, and category
-        // For ambiguous cities, add country to improve disambiguation
+        // Build web search query using LOCATION CONTROL (city/country from params, not query extraction)
+        // CRITICAL: Use city/country from URL params (set by UI location picker), not from query text
         let webQuery = q
+        
+        // ALWAYS add city if provided in params (from UI location picker)
         if (city) {
           const cityLower = city.toLowerCase().trim()
-          const ambiguousCities: Record<string, string> = {
-            "melbourne": "Australia",
-            "ithaca": country || "",
-            "ithaki": "Greece",
-            "cambridge": country || "",
-            "naples": country || "Italy",
-            "berlin": country || "Germany",
-            "paris": country || "France",
-            "london": country || "UK",
-            "rome": country || "Italy",
-            "athens": country || "Greece",
-            "milan": country || "Italy",
-            "vienna": country || "Austria",
-            "madrid": country || "Spain",
+          // Add city if not already in query
+          if (!webQuery.toLowerCase().includes(cityLower)) {
+            webQuery = `${webQuery} ${city}`
           }
           
-          if (!webQuery.toLowerCase().includes(cityLower)) {
-          webQuery = `${webQuery} ${city}`
-            
-            // Add country for ambiguous cities to improve Google search accuracy
-            if (ambiguousCities[cityLower] && !country) {
-              webQuery = `${webQuery} ${ambiguousCities[cityLower]}`
-            } else if (country && !webQuery.toLowerCase().includes(country.toLowerCase())) {
+          // Add country for ambiguous cities to improve Google search accuracy
+          // Use country from params if available, otherwise use defaults for ambiguous cities
+          if (country) {
+            const countryLower = country.toLowerCase()
+            if (!webQuery.toLowerCase().includes(countryLower)) {
               webQuery = `${webQuery} ${country}`
+            }
+          } else {
+            // No country in params, use defaults for ambiguous cities
+            const ambiguousCities: Record<string, string> = {
+              "melbourne": "Australia",
+              "ithaca": "",
+              "ithaki": "Greece",
+              "cambridge": "",
+              "naples": "Italy",
+              "berlin": "Germany",
+              "paris": "France",
+              "london": "UK",
+              "rome": "Italy",
+              "athens": "Greece",
+              "milan": "Italy",
+              "vienna": "Austria",
+              "madrid": "Spain",
+            }
+            if (ambiguousCities[cityLower]) {
+              webQuery = `${webQuery} ${ambiguousCities[cityLower]}`
             }
           }
         } else if (country && !webQuery.toLowerCase().includes(country.toLowerCase())) {
+          // City not in params, but country is - add it
           webQuery = `${webQuery} ${country}`
         }
         
@@ -599,12 +631,16 @@ export async function GET(req: NextRequest) {
           webQuery = `${webQuery} events`
         }
         
-        console.log("[v0] Web search query:", webQuery.trim())
+        const finalWebQuery = webQuery.trim()
+        debugTrace.webQuery = finalWebQuery
+        console.log("[v0] Web search query:", finalWebQuery)
         
         const webSearchResults = await searchWeb({
-          query: webQuery.trim(),
+          query: finalWebQuery,
           limit: 10,
         })
+        
+        debugTrace.webRawCount = webSearchResults.length
         
         // Transform web results to match expected format (both internal and external formats)
         let transformedWebResults = webSearchResults.map((result, index) => {
@@ -767,9 +803,12 @@ export async function GET(req: NextRequest) {
         }
 
         webResults = transformedWebResults
+        debugTrace.webAfterLocationCount = webResults.length
+        debugTrace.sampleWebTitles = webResults.slice(0, 3).map(r => r.title || "")
         
-        console.log("[v0] Web search found:", webResults.length, "events after filtering")
+        console.log("[v0] Web search found:", webResults.length, "events after location filtering")
       } catch (error: any) {
+        debugTrace.webError = error?.message || String(error)
         console.error("[v0] Web search error:", error?.message || error)
         console.error("[v0] Web search error details:", {
           hasApiKey: !!process.env.GOOGLE_API_KEY,
@@ -795,21 +834,28 @@ export async function GET(req: NextRequest) {
       return matchesQuery && matchesCity && matchesCountry
     })
 
-    // Filter web results: exclude past events and apply city filter if specified
+    // Filter web results: exclude past events ONLY if date is parseable
+    // CRITICAL: Don't drop web results solely because date is missing
+    // Gig guides/listing pages often don't have parseable dates but are still valid event sources
     let filteredWebResults = webResults.filter((result) => {
-      // Exclude past events - only show future events
+      // Only filter by date if date is present and parseable
       if (result.startAt) {
         try {
           const eventDate = new Date(result.startAt)
-          if (eventDate < now) {
-            return false // Exclude past events
+          // Only exclude if date is valid AND in the past
+          if (!isNaN(eventDate.getTime()) && eventDate < now) {
+            return false // Exclude past events (only if date is valid)
           }
+          // If date is invalid/unparseable, keep the result (gig guides often have unparseable dates)
         } catch {
-          // Invalid date, keep it but it will be labeled as informational
+          // Invalid date format - keep the result (don't drop for missing date)
         }
       }
+      // No date or unparseable date - keep the result (web fallback should be lenient)
       return true
     })
+    
+    debugTrace.webAfterDateCount = filteredWebResults.length
     
     // STRICT LOCATION FILTER: Apply city/country filter if specified
     // This is a second pass to ensure absolute strictness - no results from other cities/countries
