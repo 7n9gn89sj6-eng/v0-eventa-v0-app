@@ -48,8 +48,8 @@ export async function GET(req: NextRequest) {
   const take = Math.min(Number.parseInt(url.searchParams.get("take") || "20", 10) || 20, 50)
   const page = Math.max(Number.parseInt(url.searchParams.get("page") || "1", 10) || 1, 1)
   const skip = (page - 1) * take
-  const city = url.searchParams.get("city")
-  const country = url.searchParams.get("country")
+  let city = url.searchParams.get("city")
+  let country = url.searchParams.get("country")
   const category = url.searchParams.get("category")
   const dateFrom = url.searchParams.get("date_from")
   const dateTo = url.searchParams.get("date_to")
@@ -59,6 +59,33 @@ export async function GET(req: NextRequest) {
 
   // Detect if this is an event-intent query
   const isEventQuery = isEventIntentQuery(q)
+
+  // Extract city/country from query if not provided and query is event-intent
+  // This handles queries like "music in Melbourne" where city is in the query text
+  if (q && isEventQuery && !city) {
+    try {
+      const intentResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/search/intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q }),
+      })
+      if (intentResponse.ok) {
+        const intentData = await intentResponse.json()
+        const extracted = intentData.extracted || {}
+        if (extracted.city && !city) {
+          city = extracted.city.trim()
+          console.log(`[v0] 🔍 Extracted city from query: "${city}"`)
+        }
+        if (extracted.country && !country) {
+          country = extracted.country.trim()
+          console.log(`[v0] 🔍 Extracted country from query: "${country}"`)
+        }
+      }
+    } catch (error) {
+      console.warn(`[v0] Failed to extract entities from query:`, error)
+      // Continue without extraction - not critical
+    }
+  }
 
   console.log("[v0] Search params:", { q, city, country, category, dateFrom, dateTo, isEventQuery })
   if (city) {
