@@ -87,6 +87,7 @@ export function EventsListingContent({
   const [sortBy, setSortBy] = useState("date-asc")
   const [cityFilter, setCityFilter] = useState(initialCity || "")
   const [countryFilter, setCountryFilter] = useState(initialCountry || "")
+  const [includeWeb, setIncludeWeb] = useState(false) // Web results are opt-in
 
   const router = useRouter()
   const { t } = useI18n()
@@ -103,6 +104,8 @@ export function EventsListingContent({
       if (selectedCategory && selectedCategory !== "All") params.set("category", selectedCategory.toLowerCase())
       if (initialDateFrom) params.set("date_from", initialDateFrom)
       if (initialDateTo) params.set("date_to", initialDateTo)
+      // Web results are opt-in only (for event-intent queries)
+      if (includeWeb) params.set("includeWeb", "true")
 
       console.log("[v0] Searching with params:", params.toString())
 
@@ -120,6 +123,9 @@ export function EventsListingContent({
         eventsCount: data.events?.length || 0,
         count: data.count,
         total: data.total,
+        emptyState: data.emptyState,
+        includesWeb: data.includesWeb,
+        isEventIntent: data.isEventIntent,
         sampleExternal: data.external?.[0],
       })
 

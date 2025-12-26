@@ -53,16 +53,25 @@ export async function GET(req: NextRequest) {
   const category = url.searchParams.get("category")
   const dateFrom = url.searchParams.get("date_from")
   const dateTo = url.searchParams.get("date_to")
+  // NEW: Web results are opt-in only (explicitly requested by user)
+  const includeWeb = url.searchParams.get("includeWeb") === "true" || url.searchParams.get("include_web") === "true"
 
   // Define 'now' once at the top level for reuse throughout the function
   const now = new Date()
 
-    console.log("[v0] Search params:", { q, city, country, category, dateFrom, dateTo })
-    if (city) {
-      console.log(`[v0] ⚠️ FILTERING BY CITY: "${city}"${country ? `, COUNTRY: "${country}"` : ""}`)
-    } else {
-      console.log(`[v0] ⚠️ NO CITY FILTER - search will be broad`)
-    }
+  // Detect if this is an event-intent query
+  const isEventQuery = isEventIntentQuery(q)
+
+  console.log("[v0] Search params:", { q, city, country, category, dateFrom, dateTo, includeWeb, isEventQuery })
+  if (city) {
+    console.log(`[v0] ⚠️ FILTERING BY CITY: "${city}"${country ? `, COUNTRY: "${country}"` : ""}`)
+  } else {
+    console.log(`[v0] ⚠️ NO CITY FILTER - search will be broad`)
+  }
+
+  if (isEventQuery) {
+    console.log(`[v0] 🎯 Event-intent query detected: "${q}" - will apply strict location filtering and opt-in web results`)
+  }
 
   try {
     // If no query and no filters, return empty
@@ -75,6 +84,9 @@ export async function GET(req: NextRequest) {
         internal: [],
         external: [],
         total: 0,
+        emptyState: false,
+        includesWeb: false,
+        isEventIntent: false,
       })
     }
 
@@ -179,6 +191,9 @@ export async function GET(req: NextRequest) {
         internal: events,
         external: [],
         total: count,
+        emptyState: false,
+        includesWeb: false,
+        isEventIntent: false,
       })
     }
 
@@ -487,9 +502,17 @@ export async function GET(req: NextRequest) {
       if (country) console.log(`  - Event country doesn't match filter: "${country}"`)
     }
 
-    // Always search web if we have a query (not just when results are low)
+    // EVENT-INTENT QUERY BEHAVIOR:
+    // For event-intent queries, web results are OPT-IN only (user must explicitly request them)
+    // This prevents irrelevant cross-country/aggregator results from appearing automatically
     let webResults: any[] = []
-    const shouldSearchWeb = q.trim().length > 0
+    const shouldSearchWeb = q.trim().length > 0 && includeWeb
+    
+    if (isEventQuery && !includeWeb) {
+      console.log(`[v0] 🔒 Event-intent query: web results skipped (includeWeb=false). Only returning internal Eventa events.`)
+    } else if (isEventQuery && includeWeb) {
+      console.log(`[v0] ✅ Event-intent query: web results requested (includeWeb=true). Will apply strict location filtering.`)
+    }
     
     if (shouldSearchWeb) {
       const hasGoogleConfig = Boolean(process.env.GOOGLE_API_KEY && process.env.GOOGLE_PSE_ID)
@@ -941,10 +964,24 @@ export async function GET(req: NextRequest) {
       process.env.LOG_RANKING = 'true'
     }
     
-    // Combine: Internal events FIRST, then external events
-    const allEvents = [...internalEvents, ...externalEvents]
+    // EVENT-INTENT QUERY BEHAVIOR:
+    // 1. Always return internal Eventa events first
+    // 2. Only include web results if explicitly requested (includeWeb=true)
+    // 3. If no internal events and event-intent query, return empty state flag
     
-    const allExternal = [...externalEvents, ...stubExternalEvents]
+    // For event-intent queries: ONLY include web results if explicitly requested
+    const finalExternalEvents = isEventQuery && !includeWeb ? [] : externalEvents
+    const allEvents = [...internalEvents, ...finalExternalEvents]
+    
+    // Determine if we should return empty state flag
+    // Empty state = event-intent query + no internal events + no web results requested
+    const isEmptyState = isEventQuery && events.length === 0 && !includeWeb
+
+    if (isEmptyState) {
+      console.log(`[v0] 📭 Empty state: event-intent query with no internal events and web results not requested`)
+    }
+
+    const allExternal = [...finalExternalEvents, ...stubExternalEvents]
 
     return NextResponse.json({
       events: allEvents,
@@ -955,6 +992,12 @@ export async function GET(req: NextRequest) {
       internal: events,
       external: allExternal,
       total: allEvents.length,
+      // NEW: Empty state flag for UI to show appropriate message
+      emptyState: isEmptyState,
+      // NEW: Indicate if web results were included
+      includesWeb: finalExternalEvents.length > 0,
+      // NEW: Indicate if this is an event-intent query
+      isEventIntent: isEventQuery,
     })
   } catch (e: any) {
     const errorMessage = e?.message || String(e)
@@ -983,6 +1026,9 @@ export async function GET(req: NextRequest) {
         internal: [],
         external: [],
         total: 0,
+        emptyState: false,
+        includesWeb: false,
+        isEventIntent: false,
         error: process.env.NODE_ENV === "development" ? errorMessage : "Search failed",
         ...(process.env.NODE_ENV === "development" && { errorDetails: errorStack?.substring(0, 500) }),
       },
