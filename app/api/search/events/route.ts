@@ -7,6 +7,17 @@ import { withLanguageColumnGuard, getEventSelectWithoutLanguage, isLanguageFilte
 import { buildDateOverlapWhere, buildDateRangeOverlapWhere } from "@/lib/search/date-overlap"
 import { rankEventResults, isEventIntentQuery } from "@/lib/search/event-ranking"
 
+/**
+ * Helper function to check if text contains Australian location indicators
+ * @param text - Text to check
+ * @returns true if text contains Australian indicators
+ */
+function hasAustraliaIndicators(text: string): boolean {
+  if (!text) return false
+  const lower = text.toLowerCase()
+  return /\b(australia|australian|au|melbourne|sydney|brisbane|perth|adelaide|canberra|darwin|vic|victoria|naarm|tasmania|queensland|nsw|new south wales|western australia|wa|south australia|sa|northern territory|nt|australian capital territory|act)\b/i.test(lower)
+}
+
 const EXTERNAL_STUB_EVENTS = [
   {
     id: "ext-1",
