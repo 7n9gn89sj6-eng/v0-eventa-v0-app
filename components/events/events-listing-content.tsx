@@ -446,9 +446,22 @@ export function EventsListingContent({
         <LoadingSpinner size="lg" className="py-12" />
       ) : filteredResults.length === 0 ? (
         <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-lg text-muted-foreground mb-2">{tEvents("results.noEvents")}</p>
-            <p className="text-sm text-muted-foreground mb-4">{tEvents("results.noEventsHint")}</p>
+          <CardContent className="py-12 text-center space-y-4">
+            {cityFilter ? (
+              <>
+                <p className="text-lg font-medium text-foreground">
+                  No events found in {cityFilter}{countryFilter ? `, ${countryFilter}` : ""} right now
+                </p>
+                <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                  Try expanding your search area, changing dates, or searching another city.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-lg text-muted-foreground mb-2">{tEvents("results.noEvents")}</p>
+                <p className="text-sm text-muted-foreground mb-4">{tEvents("results.noEventsHint")}</p>
+              </>
+            )}
             {hasActiveFilters && (
               <Button variant="outline" onClick={clearFilters}>
                 {tEvents("filters.clearFilters")}

@@ -775,15 +775,94 @@ export async function GET(req: NextRequest) {
       return true
     })
     
-    // Apply city filter if specified
+    // STRICT LOCATION FILTER: Apply city/country filter if specified
+    // This is a second pass to ensure absolute strictness - no results from other cities/countries
     if (city) {
-      const cityLower = city.toLowerCase()
+      const cityLower = city.toLowerCase().trim()
+      const countryLower = country ? country.toLowerCase().trim() : null
       const beforeCityFilter = filteredWebResults.length
+      
+      // Known US cities to exclude when searching from Australia (same list as earlier)
+      const knownUSCities = [
+        "fort worth", "austin", "seneca", "dallas", "houston", "boston", "kansas city", "phoenix",
+        "chicago", "los angeles", "new york", "san francisco", "seattle", "denver", "miami",
+        "atlanta", "philadelphia", "san diego", "detroit", "minneapolis", "portland", "orlando",
+        "las vegas", "nashville", "cleveland", "tampa", "sacramento", "oakland", "omaha"
+      ]
+      
+      // US states to check
+      const usStates = [
+        "texas", "california", "florida", "new york", "pennsylvania", "illinois", "ohio", "georgia",
+        "north carolina", "michigan", "new jersey", "virginia", "washington", "arizona", "massachusetts",
+        "tennessee", "indiana", "missouri", "maryland", "wisconsin", "colorado", "minnesota", "south carolina"
+      ]
+      
       filteredWebResults = filteredWebResults.filter((result) => {
-        const resultCity = (result.city || result.location?.city || "").toLowerCase()
-        return resultCity.includes(cityLower) || cityLower.includes(resultCity)
+        // Build comprehensive text from all result fields for strict checking
+        const resultText = `${result.title || ""} ${result.description || ""} ${result.city || ""} ${result.country || ""} ${result.location?.city || ""} ${result.location?.country || ""} ${result.address || ""} ${result.venueName || ""}`.toLowerCase()
+        
+        // STRICT FILTER #1: If searching from Australia, exclude ANY result mentioning US cities/states
+        if (countryLower && countryLower.includes("australia")) {
+          const mentionsUSCity = knownUSCities.some(usCity => {
+            if (usCity === cityLower) return false // Don't exclude if it's the target city
+            const usCityRegex = new RegExp(`\\b${usCity.replace(/\s+/g, '\\s+')}\\b`, "i")
+            return usCityRegex.test(resultText)
+          })
+          
+          if (mentionsUSCity) {
+            console.log(`[v0] 🚫 STRICT FILTER: Excluded US city in "${result.title?.substring(0, 50)}" when searching from Australia`)
+            return false
+          }
+          
+          const mentionsUSState = usStates.some(state => {
+            const stateRegex = new RegExp(`\\b${state}\\b`, "i")
+            return stateRegex.test(resultText)
+          })
+          
+          if (mentionsUSState) {
+            console.log(`[v0] 🚫 STRICT FILTER: Excluded US state in "${result.title?.substring(0, 50)}" when searching from Australia`)
+            return false
+          }
+          
+          // Check for US country indicators without Australia indicators
+          const hasUSIndicators = /\b(usa|united states|us|america|u\.s\.|u\.s\.a\.)\b/i.test(resultText)
+          const hasAustraliaIndicators = /\b(australia|au|australian|melbourne|sydney|brisbane|perth|adelaide)\b/i.test(resultText)
+          
+          if (hasUSIndicators && !hasAustraliaIndicators) {
+            console.log(`[v0] 🚫 STRICT FILTER: Excluded US indicators (no Australia) in "${result.title?.substring(0, 50)}"`)
+            return false
+          }
+        }
+        
+        // STRICT FILTER #2: Result must match the specified city
+        const resultCity = (result.city || result.location?.city || "").toLowerCase().trim()
+        const cityMatches = resultCity.includes(cityLower) || cityLower.includes(resultCity) || resultText.includes(cityLower)
+        
+        if (!cityMatches) {
+          return false // Exclude if city doesn't match
+        }
+        
+        // STRICT FILTER #3: If country is specified, result must match country
+        if (countryLower) {
+          const resultCountry = (result.country || result.location?.country || "").toLowerCase().trim()
+          const countryMatches = resultCountry.includes(countryLower) || countryLower.includes(resultCountry) || resultText.includes(countryLower)
+          
+          if (!countryMatches) {
+            // Allow if city matches but country doesn't - might be a missing country field
+            // But exclude if country is explicitly mentioned and doesn't match
+            if (resultCountry.length > 0 && !countryMatches) {
+              console.log(`[v0] 🚫 STRICT FILTER: Excluded result with country mismatch: "${result.country}" (expected: "${country}")`)
+              return false
+            }
+          }
+        }
+        
+        return true
       })
-      console.log(`[v0] Filtered web results by city "${city}": ${beforeCityFilter} → ${filteredWebResults.length}`)
+      
+      if (beforeCityFilter !== filteredWebResults.length) {
+        console.log(`[v0] STRICT location filter applied: ${beforeCityFilter} → ${filteredWebResults.length} web results (city: "${city}"${country ? `, country: "${country}"` : ""})`)
+      }
     }
     
     console.log(`[v0] Filtered web results (past events excluded): ${webResults.length} → ${filteredWebResults.length}`)
