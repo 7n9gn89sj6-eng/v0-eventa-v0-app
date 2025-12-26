@@ -218,7 +218,7 @@ export function EventsListingContent({
 
   useEffect(() => {
     runSearch()
-  }, [q, cityFilter, countryFilter, selectedCategory, initialDateFrom, initialDateTo])
+  }, [q, cityFilter, countryFilter, selectedCategory, initialDateFrom, initialDateTo, includeWeb])
 
   const handleSmartSearch = async (query: string) => {
     setQ(query)
