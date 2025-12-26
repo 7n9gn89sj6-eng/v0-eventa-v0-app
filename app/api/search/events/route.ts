@@ -998,7 +998,7 @@ export async function GET(req: NextRequest) {
     // EVENT-FIRST RANKING: Apply event-first ranking to web results
     // This prioritizes actual, specific events over aggregators/directories
     // Ranking only applies to event-intent queries (detected automatically)
-    const isEventQuery = isEventIntentQuery(q)
+    // Note: isEventQuery is already defined at the top of the function
     
     if (isEventQuery) {
       console.log(`[v0] 🎯 Event-intent query detected: "${q}" - applying event-first ranking to web results`)
