@@ -97,8 +97,8 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
         return
       }
 
-      // Use longer timeout: 15 seconds (increased from 10)
-      const timeoutMs = 15000
+      // Use longer timeout: 20 seconds (increased for better reliability on slower networks)
+      const timeoutMs = 20000
       
       console.log(`[v0] Requesting location (attempt ${retryCount + 1}, timeout: ${timeoutMs}ms, localhost: ${isLocalhost})`)
       
@@ -111,17 +111,29 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
 
           // Reverse geocode to get city name and country
           try {
-            const response = await fetch(`/api/geocode/reverse?lat=${lat}&lng=${lng}`)
+            console.log(`[v0] Calling reverse geocoding API for lat=${lat}, lng=${lng}`)
+            // Create a timeout controller for the fetch request
+            const controller = new AbortController()
+            const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+            
+            const response = await fetch(`/api/geocode/reverse?lat=${lat}&lng=${lng}`, {
+              signal: controller.signal,
+            })
+            
+            clearTimeout(timeoutId)
+            
+            console.log(`[v0] Reverse geocoding response status: ${response.status}`)
+            
             if (response.ok) {
               const data = await response.json()
               const city = data.city
               const country = data.country
 
-              console.log("[v0] Reverse geocoded:", { city, country, lat, lng })
+              console.log("[v0] Reverse geocoded:", { city, country, lat, lng, fullData: data })
 
-              if (city) {
-                const location = { lat, lng, city, country, timestamp: Date.now() }
-                storeUserLocation({ lat, lng, city, country })
+              if (city && city !== "Unknown location") {
+                const location = { lat, lng, city, country: country || undefined, timestamp: Date.now() }
+                storeUserLocation({ lat, lng, city, country: country || undefined })
                 setUserLocation(location)
                 setLocationError(null) // Clear any errors on success
                 
@@ -140,13 +152,70 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
                 console.log(`[v0] Location detected: ${city}${country ? `, ${country}` : ""}, navigating to search with params:`, params.toString())
                 router.push(`/discover?${params.toString()}`)
               } else {
-                // Fallback to coordinates without city name
-                const location = { lat, lng, city: "Unknown location", timestamp: Date.now() }
-                setUserLocation(location)
-                setLocationError(null)
+                console.warn("[v0] Reverse geocoding returned no valid city, trying fallback method")
+                // Fallback to old method if API returns no city
+                try {
+                  const city = await reverseGeocodeDebounced(lat, lng)
+                  if (city) {
+                    const location = { lat, lng, city, timestamp: Date.now() }
+                    storeUserLocation({ lat, lng, city })
+                    setUserLocation(location)
+                    setLocationError(null)
+                    
+                    const params = new URLSearchParams()
+                    params.set("q", "events")
+                    params.set("city", city)
+                    params.set("lat", lat.toString())
+                    params.set("lng", lng.toString())
+                    console.log(`[v0] Location detected (fallback): ${city}, navigating to search`)
+                    router.push(`/discover?${params.toString()}`)
+                  } else {
+                    console.error("[v0] Both reverse geocoding methods failed")
+                    setLocationError("We couldn't determine your location right now. This can happen on some networks. You can still search by city.")
+                  }
+                } catch (fallbackError) {
+                  console.error("[v0] Fallback reverse geocoding failed:", fallbackError)
+                  setLocationError("We couldn't determine your location right now. This can happen on some networks. You can still search by city.")
+                }
               }
             } else {
-              // Fallback to old method if API fails
+              // API returned error status - try fallback
+              const errorText = await response.text()
+              console.error(`[v0] Reverse geocoding API failed with status ${response.status}:`, errorText)
+              try {
+                const city = await reverseGeocodeDebounced(lat, lng)
+                if (city) {
+                  const location = { lat, lng, city, timestamp: Date.now() }
+                  storeUserLocation({ lat, lng, city })
+                  setUserLocation(location)
+                  setLocationError(null)
+                  
+                  const params = new URLSearchParams()
+                  params.set("q", "events")
+                  params.set("city", city)
+                  params.set("lat", lat.toString())
+                  params.set("lng", lng.toString())
+                  console.log(`[v0] Location detected (fallback after API error): ${city}, navigating to search`)
+                  router.push(`/discover?${params.toString()}`)
+                } else {
+                  setLocationError("We couldn't determine your location right now. This can happen on some networks. You can still search by city.")
+                }
+              } catch (fallbackError) {
+                console.error("[v0] Fallback reverse geocoding failed:", fallbackError)
+                setLocationError("We couldn't determine your location right now. This can happen on some networks. You can still search by city.")
+              }
+            }
+          } catch (error: any) {
+            console.error("[v0] Reverse geocoding error:", error)
+            // Check if it's a timeout or network error
+            if (error.name === 'AbortError' || error.name === 'TimeoutError' || error.message?.includes('aborted')) {
+              console.error("[v0] Reverse geocoding API timed out")
+            } else {
+              console.error("[v0] Reverse geocoding API error details:", error.message, error)
+            }
+            
+            // Fallback to old method
+            try {
               const city = await reverseGeocodeDebounced(lat, lng)
               if (city) {
                 const location = { lat, lng, city, timestamp: Date.now() }
@@ -154,36 +223,20 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
                 setUserLocation(location)
                 setLocationError(null)
                 
-                // Automatically navigate to search with location
-                // Include a default query to ensure events are shown
                 const params = new URLSearchParams()
-                params.set("q", "events") // Default query to show events in this location
+                params.set("q", "events")
                 params.set("city", city)
                 params.set("lat", lat.toString())
                 params.set("lng", lng.toString())
-                console.log(`[v0] Location detected (fallback): ${city}, navigating to search`)
+                console.log(`[v0] Location detected (fallback after exception): ${city}, navigating to search`)
                 router.push(`/discover?${params.toString()}`)
+              } else {
+                console.error("[v0] All reverse geocoding methods failed")
+                setLocationError("We couldn't determine your location right now. This can happen on some networks. You can still search by city.")
               }
-            }
-          } catch (error) {
-            console.error("[v0] Reverse geocoding error:", error)
-            // Fallback to old method
-            const city = await reverseGeocodeDebounced(lat, lng)
-            if (city) {
-              const location = { lat, lng, city, timestamp: Date.now() }
-              storeUserLocation({ lat, lng, city })
-              setUserLocation(location)
-              setLocationError(null)
-              
-              // Automatically navigate to search with location
-              // Include a default query to ensure events are shown
-              const params = new URLSearchParams()
-              params.set("q", "events") // Default query to show events in this location
-              params.set("city", city)
-              params.set("lat", lat.toString())
-              params.set("lng", lng.toString())
-              console.log(`[v0] Location detected (fallback 2): ${city}, navigating to search`)
-              router.push(`/discover?${params.toString()}`)
+            } catch (fallbackError) {
+              console.error("[v0] Fallback reverse geocoding also failed:", fallbackError)
+              setLocationError("We couldn't determine your location right now. This can happen on some networks. You can still search by city.")
             }
           }
 

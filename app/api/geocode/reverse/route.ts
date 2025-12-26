@@ -41,7 +41,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Nominatim terms require User-Agent header
+    // Create a timeout controller for the fetch request
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+
+    // Nominatim terms require User-Agent header and rate limiting (max 1 request per second)
     const response = await fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${latNum}&lon=${lngNum}&format=json&addressdetails=1`,
       {
@@ -49,13 +53,17 @@ export async function GET(request: NextRequest) {
           "User-Agent": "Eventa-App/1.0 (https://eventa.app)",
           "Accept": "application/json",
         },
+        signal: controller.signal,
       },
     )
 
+    clearTimeout(timeoutId)
+
     if (!response.ok) {
-      console.error("[geocode/reverse] Nominatim API error:", response.status)
+      const errorText = await response.text()
+      console.error(`[geocode/reverse] Nominatim API error: ${response.status} - ${errorText}`)
       return NextResponse.json(
-        { error: "Reverse geocoding failed", status: response.status },
+        { error: "Reverse geocoding failed", status: response.status, details: errorText },
         { status: 500 }
       )
     }
