@@ -501,15 +501,23 @@ export async function GET(req: NextRequest) {
     }
 
     // EVENT-INTENT QUERY BEHAVIOR:
-    // For event-intent queries, web results are OPT-IN only (user must explicitly request them)
-    // This prevents irrelevant cross-country/aggregator results from appearing automatically
+    // For event-intent queries with location set, automatically fetch web results if no internal events found
+    // This provides local event discovery while maintaining strict location constraints
     let webResults: any[] = []
-    const shouldSearchWeb = q.trim().length > 0 && includeWeb
     
-    if (isEventQuery && !includeWeb) {
-      console.log(`[v0] 🔒 Event-intent query: web results skipped (includeWeb=false). Only returning internal Eventa events.`)
-    } else if (isEventQuery && includeWeb) {
-      console.log(`[v0] ✅ Event-intent query: web results requested (includeWeb=true). Will apply strict location filtering.`)
+    // Decide if we should search web:
+    // 1. Always search web for non-event queries (current behavior)
+    // 2. For event-intent queries: only search web if no internal events found (automatic fallback)
+    // 3. Location must be set for event-intent queries to use web fallback
+    const shouldSearchWeb = q.trim().length > 0 && (
+      !isEventQuery || // Non-event queries: always search web
+      (isEventQuery && events.length === 0 && (city || country)) // Event-intent with no internal events: auto-fallback
+    )
+    
+    if (isEventQuery && events.length === 0 && shouldSearchWeb) {
+      console.log(`[v0] 🔄 Event-intent query with no internal events: automatically fetching web results (location: ${city || 'none'}${country ? `, ${country}` : ''})`)
+    } else if (isEventQuery && events.length > 0) {
+      console.log(`[v0] ✅ Event-intent query: ${events.length} internal events found, skipping web search`)
     }
     
     if (shouldSearchWeb) {
