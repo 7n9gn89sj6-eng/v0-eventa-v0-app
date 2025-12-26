@@ -461,6 +461,19 @@ export function EventsListingContent({
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
                   Try expanding your search area, changing dates, or searching another city.
                 </p>
+                {/* Show "Expand search" button for event-intent queries when web results haven't been included yet */}
+                {!includeWeb && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setIncludeWeb(true)
+                      runSearch()
+                    }}
+                    className="mt-4"
+                  >
+                    Expand search to include web results
+                  </Button>
+                )}
               </>
             ) : (
               <>
