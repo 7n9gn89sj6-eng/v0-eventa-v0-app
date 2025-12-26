@@ -910,29 +910,30 @@ export async function GET(req: NextRequest) {
           }
         }
         
-        // STRICT FILTER #2: Result must match the specified city
-        const resultCity = (result.city || result.location?.city || "").toLowerCase().trim()
-        const cityMatches = resultCity.includes(cityLower) || cityLower.includes(resultCity) || resultText.includes(cityLower)
+        // RELAXED FILTERING: Web search already filtered by city in the query
+        // Only exclude obvious mismatches - don't require city/country in result text
+        // Trust Google's search relevance since we searched for "query city events"
         
-        if (!cityMatches) {
-          return false // Exclude if city doesn't match
-        }
-        
-        // STRICT FILTER #3: If country is specified, result must match country
-        if (countryLower) {
-          const resultCountry = (result.country || result.location?.country || "").toLowerCase().trim()
-          const countryMatches = resultCountry.includes(countryLower) || countryLower.includes(resultCountry) || resultText.includes(countryLower)
+        // Only exclude if explicitly mentions a different major city AND it's clearly wrong
+        const otherMajorCities = ["sydney", "brisbane", "perth", "adelaide", "canberra", "darwin", 
+          "new york", "los angeles", "london", "paris", "tokyo", "toronto"]
+        if (cityLower !== "melbourne" || countryLower?.includes("australia")) {
+          // Only check for other cities if it's NOT about the target city at all
+          const mentionsOtherCity = otherMajorCities.some(otherCity => {
+            if (otherCity === cityLower) return false
+            const otherCityRegex = new RegExp(`\\b${otherCity}\\b`, "i")
+            const mentionsTargetCity = resultText.includes(cityLower)
+            // Exclude only if mentions other city AND doesn't mention target city
+            return otherCityRegex.test(resultText) && !mentionsTargetCity
+          })
           
-          if (!countryMatches) {
-            // Allow if city matches but country doesn't - might be a missing country field
-            // But exclude if country is explicitly mentioned and doesn't match
-            if (resultCountry.length > 0 && !countryMatches) {
-              console.log(`[v0] 🚫 STRICT FILTER: Excluded result with country mismatch: "${result.country}" (expected: "${country}")`)
-              return false
-            }
+          if (mentionsOtherCity) {
+            console.log(`[v0] 🚫 STRICT FILTER: Excluded result mentioning different major city in "${result.title?.substring(0, 50)}"`)
+            return false
           }
         }
         
+        // Allow all results - web search query already filtered by city
         return true
       })
       
