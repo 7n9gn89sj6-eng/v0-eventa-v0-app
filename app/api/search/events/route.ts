@@ -774,9 +774,8 @@ export async function GET(req: NextRequest) {
               
               // Check for US country indicators without Australia indicators
               const hasUSIndicators = /\b(usa|united states|us|america|u\.s\.|u\.s\.a\.)\b/i.test(resultText)
-              const hasAustraliaIndicators = /\b(australia|au|australian|melbourne|sydney|brisbane|perth|adelaide)\b/i.test(resultText)
               
-              if (hasUSIndicators && !hasAustraliaIndicators) {
+              if (hasUSIndicators && !hasAustraliaIndicators(resultText)) {
                 console.log(`[v0] 🚫 EXCLUDED from /api/search/events: US indicators found but no Australia indicators in "${result.title?.substring(0, 50)}"`)
                 return false
               }
@@ -792,7 +791,7 @@ export async function GET(req: NextRequest) {
                 // If we're searching for Melbourne, Australia, exclude if result mentions Florida/USA
                 if (expectedLower.includes("australia") && /\b(florida|fl|usa|united states|us|america)\b/i.test(resultText)) {
                   // But allow if it also mentions Australia/Melbourne (might be a comparison or list)
-                  return !hasAustraliaIndicators || !resultText.includes(cityLower)
+                  return !hasAustraliaIndicators(resultText) || !resultText.includes(cityLower)
                 }
                 return false
               })
@@ -919,9 +918,8 @@ export async function GET(req: NextRequest) {
           
           // Check for US country indicators without Australia indicators
           const hasUSIndicators = /\b(usa|united states|us|america|u\.s\.|u\.s\.a\.)\b/i.test(resultText)
-          const hasAustraliaIndicators = /\b(australia|au|australian|melbourne|sydney|brisbane|perth|adelaide)\b/i.test(resultText)
           
-          if (hasUSIndicators && !hasAustraliaIndicators) {
+          if (hasUSIndicators && !hasAustraliaIndicators(resultText)) {
             console.log(`[v0] 🚫 STRICT FILTER: Excluded US indicators (no Australia) in "${result.title?.substring(0, 50)}"`)
             return false
           }
