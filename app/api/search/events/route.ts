@@ -656,6 +656,8 @@ export async function GET(req: NextRequest) {
         })
         
         // Filter web results by city if specified
+        // NOTE: Web search already filtered by city in the query, so we only need to exclude obvious mismatches
+        // Don't require city to appear in every result's text - trust Google's search relevance
         if (city) {
           const cityLower = city.toLowerCase().trim()
           const beforeCityFilter = transformedWebResults.length
@@ -733,12 +735,29 @@ export async function GET(req: NextRequest) {
               }
             }
             
-            const cityRegex = new RegExp(`\\b${cityLower}\\b`, "i")
-            const matchesCity = cityRegex.test(resultText)
-            
-            if (!matchesCity) {
-              return false
+            // RELAXED FILTERING: Only exclude if explicitly mentions a different major city
+            // Since web search already filtered by city in the query, we trust Google's relevance
+            // Only filter out obvious mismatches (different cities, wrong country for ambiguous cities)
+            if (isAmbiguous && countryLower) {
+              // For ambiguous cities with country specified, exclude if result mentions wrong country
+              const wrongCountryMatch = expectedCountries.some((expectedCountry) => {
+                const expectedLower = expectedCountry.toLowerCase()
+                // If we're searching for Melbourne, Australia, exclude if result mentions Florida/USA
+                if (expectedLower.includes("australia") && /\b(florida|fl|usa|united states|us|america)\b/i.test(resultText)) {
+                  // But allow if it also mentions Australia/Melbourne (might be a comparison or list)
+                  return !hasAustraliaIndicators || !resultText.includes(cityLower)
+                }
+                return false
+              })
+              
+              if (wrongCountryMatch) {
+                console.log(`[v0] 🚫 EXCLUDED: Wrong country variant for ambiguous city "${city}" in "${result.title?.substring(0, 50)}"`)
+                return false
+              }
             }
+            
+            // Allow all results that pass the negative filters above
+            // Don't require city to appear in result text - web search query already filtered by city
             
             // Apply disambiguation for ambiguous cities
             if (isAmbiguous) {
