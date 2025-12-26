@@ -1017,6 +1017,8 @@ export async function GET(req: NextRequest) {
       country || undefined
     )
     
+    debugTrace.webAfterEventinessCount = externalEvents.length
+    
     if (isEventQuery && externalEvents.length > 0) {
       console.log(`[v0] ✅ Event-first ranking applied to ${externalEvents.length} web results`)
       // Enable detailed ranking logs
@@ -1030,6 +1032,9 @@ export async function GET(req: NextRequest) {
     
     const allEvents = [...internalEvents, ...externalEvents]
     
+    debugTrace.finalReturnedInternalCount = internalEvents.length
+    debugTrace.finalReturnedWebCount = externalEvents.length
+    
     // Determine if we should return empty state flag
     // Empty state = event-intent query + no internal events + no web events (after strict filtering)
     const isEmptyState = isEventQuery && events.length === 0 && externalEvents.length === 0
@@ -1042,7 +1047,7 @@ export async function GET(req: NextRequest) {
 
     const allExternal = [...externalEvents, ...stubExternalEvents]
 
-    return NextResponse.json({
+    const response: any = {
       events: allEvents,
       count: allEvents.length,
       page,
@@ -1057,7 +1062,14 @@ export async function GET(req: NextRequest) {
       includesWeb: externalEvents.length > 0,
       // Indicate if this is an event-intent query
       isEventIntent: isEventQuery,
-    })
+    }
+    
+    // Add debug trace if ?debug=1
+    if (debug) {
+      response.debugTrace = debugTrace
+    }
+
+    return NextResponse.json(response)
   } catch (e: any) {
     const errorMessage = e?.message || String(e)
     const errorStack = e?.stack
