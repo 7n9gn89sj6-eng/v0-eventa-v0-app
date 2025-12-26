@@ -330,21 +330,23 @@ export function rankEventResults<T extends {
     score: scoreEventResult(result, query, targetCity, targetCountry),
   }))
 
-  // Log scores for debugging (show score distribution if there are multiple different scores)
+  // Log scores for debugging
   if (scored.length > 0) {
     const scores = scored.map(s => s.score)
     const uniqueScores = [...new Set(scores)].sort((a, b) => b - a)
     console.log(`[event-ranking] Score distribution: min=${Math.min(...scores)}, max=${Math.max(...scores)}, unique=[${uniqueScores.join(', ')}]`)
     
-    // Log top 3 and bottom 3 after sorting (we'll sort next)
+    // Log top 3 and bottom 3 for debugging (create copy to avoid mutating)
     const sortedForLog = [...scored].sort((a, b) => b.score - a.score)
-    console.log(`[event-ranking] Top 3 results (by score):`, sortedForLog.slice(0, Math.min(3, sortedForLog.length)).map(s => ({
-      title: s.result.title?.substring(0, 60),
-      score: s.score,
-      hasDate: !!s.result.startAt,
-      hasVenue: !!(s.result.venueName || s.result.address),
-      city: s.result.city || 'none',
-    })))
+    if (sortedForLog.length > 0) {
+      console.log(`[event-ranking] Top 3 results (by score):`, sortedForLog.slice(0, Math.min(3, sortedForLog.length)).map(s => ({
+        title: s.result.title?.substring(0, 60),
+        score: s.score,
+        hasDate: !!s.result.startAt,
+        hasVenue: !!(s.result.venueName || s.result.address),
+        city: s.result.city || 'none',
+      })))
+    }
   }
 
   // Sort by score (descending), then by date (ascending)
