@@ -53,8 +53,6 @@ export async function GET(req: NextRequest) {
   const category = url.searchParams.get("category")
   const dateFrom = url.searchParams.get("date_from")
   const dateTo = url.searchParams.get("date_to")
-  // NEW: Web results are opt-in only (explicitly requested by user)
-  const includeWeb = url.searchParams.get("includeWeb") === "true" || url.searchParams.get("include_web") === "true"
 
   // Define 'now' once at the top level for reuse throughout the function
   const now = new Date()
@@ -62,7 +60,7 @@ export async function GET(req: NextRequest) {
   // Detect if this is an event-intent query
   const isEventQuery = isEventIntentQuery(q)
 
-  console.log("[v0] Search params:", { q, city, country, category, dateFrom, dateTo, includeWeb, isEventQuery })
+  console.log("[v0] Search params:", { q, city, country, category, dateFrom, dateTo, isEventQuery })
   if (city) {
     console.log(`[v0] ⚠️ FILTERING BY CITY: "${city}"${country ? `, COUNTRY: "${country}"` : ""}`)
   } else {
@@ -70,7 +68,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (isEventQuery) {
-    console.log(`[v0] 🎯 Event-intent query detected: "${q}" - will apply strict location filtering and opt-in web results`)
+    console.log(`[v0] 🎯 Event-intent query detected: "${q}" - will apply strict location filtering and automatic web fallback if no internal events`)
   }
 
   try {
@@ -966,22 +964,22 @@ export async function GET(req: NextRequest) {
     
     // EVENT-INTENT QUERY BEHAVIOR:
     // 1. Always return internal Eventa events first
-    // 2. Only include web results if explicitly requested (includeWeb=true)
-    // 3. If no internal events and event-intent query, return empty state flag
+    // 2. Automatically include web results if no internal events found (for event-intent queries)
+    // 3. Empty state only if both internal events = 0 AND web events (after strict filtering) = 0
     
-    // For event-intent queries: ONLY include web results if explicitly requested
-    const finalExternalEvents = isEventQuery && !includeWeb ? [] : externalEvents
-    const allEvents = [...internalEvents, ...finalExternalEvents]
+    const allEvents = [...internalEvents, ...externalEvents]
     
     // Determine if we should return empty state flag
-    // Empty state = event-intent query + no internal events + no web results requested
-    const isEmptyState = isEventQuery && events.length === 0 && !includeWeb
+    // Empty state = event-intent query + no internal events + no web events (after strict filtering)
+    const isEmptyState = isEventQuery && events.length === 0 && externalEvents.length === 0
 
     if (isEmptyState) {
-      console.log(`[v0] 📭 Empty state: event-intent query with no internal events and web results not requested`)
+      console.log(`[v0] 📭 Empty state: event-intent query with no internal events and no web events found (after strict location filtering)`)
+    } else if (isEventQuery && events.length === 0 && externalEvents.length > 0) {
+      console.log(`[v0] ✅ Web fallback successful: ${externalEvents.length} local web events found for event-intent query`)
     }
 
-    const allExternal = [...finalExternalEvents, ...stubExternalEvents]
+    const allExternal = [...externalEvents, ...stubExternalEvents]
 
     return NextResponse.json({
       events: allEvents,
@@ -992,11 +990,11 @@ export async function GET(req: NextRequest) {
       internal: events,
       external: allExternal,
       total: allEvents.length,
-      // NEW: Empty state flag for UI to show appropriate message
+      // Empty state flag: true only if both internal and web events are 0
       emptyState: isEmptyState,
-      // NEW: Indicate if web results were included
-      includesWeb: finalExternalEvents.length > 0,
-      // NEW: Indicate if this is an event-intent query
+      // Indicate if web results were included (for UI labeling)
+      includesWeb: externalEvents.length > 0,
+      // Indicate if this is an event-intent query
       isEventIntent: isEventQuery,
     })
   } catch (e: any) {
