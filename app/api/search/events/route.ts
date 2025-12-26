@@ -758,46 +758,6 @@ export async function GET(req: NextRequest) {
             
             // Allow all results that pass the negative filters above
             // Don't require city to appear in result text - web search query already filtered by city
-            
-            // Apply disambiguation for ambiguous cities
-            if (isAmbiguous) {
-              if (countryLower) {
-                // Country specified - check if result matches expected country
-                const countryMatches = expectedCountries.some((expectedCountry) => {
-                  const expectedLower = expectedCountry.toLowerCase()
-                  return resultText.includes(expectedLower) || 
-                         (expectedLower.includes("usa") && /\b(usa|united states|us|america)\b/i.test(resultText)) ||
-                         (expectedLower.includes("uk") && /\b(uk|united kingdom|britain|british)\b/i.test(resultText))
-                })
-                
-                if (countryLower) {
-                  const specifiedMatchesExpected = expectedCountries.some((expectedCountry) => {
-                    const expectedLower = expectedCountry.toLowerCase()
-                    return countryLower.includes(expectedLower) || expectedLower.includes(countryLower)
-                  })
-                  
-                  if (specifiedMatchesExpected && !countryMatches) {
-                    return false // Exclude if country was specified but doesn't match
-                  }
-                }
-              } else {
-                // No country specified - exclude US state matches for major international cities
-                const hasUSState = /\b(maryland|md|california|ca|texas|tx|new york|ny|florida|fl|georgia|ga|tennessee|tn|virginia|va|new mexico|nm|massachusetts|ma|ontario)\b/i.test(resultText)
-                const hasUSCountry = /\b(usa|united states|us|america)\b/i.test(resultText)
-                const hasAustralia = /\b(australia|australian)\b/i.test(resultText)
-                
-                // For Melbourne, prefer Australia over US
-                if (cityLower === "melbourne") {
-                  if (hasUSState && !hasAustralia) {
-                    return false // Exclude US Melbourne if no Australia mention
-                  }
-                } else if (hasUSState && !hasUSCountry) {
-                  // For other ambiguous cities, exclude US state matches unless US is mentioned
-                  return false
-                }
-              }
-            }
-            
             return true
           })
           
