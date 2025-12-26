@@ -237,6 +237,10 @@ export function scoreEventResult(
   
   if (hasVenue && hasSpecificDate) {
     score += 5
+    // Log for debugging
+    if (process.env.NODE_ENV === 'development' || process.env.LOG_RANKING === 'true') {
+      console.log(`[event-ranking] ⬆️ +5: Specific event with venue + date: "${title.substring(0, 60)}"`)
+    }
   }
 
   // +4: Same city/suburb match (when location is specified)
@@ -245,6 +249,10 @@ export function scoreEventResult(
     const cityMatches = resultCity.includes(targetCityLower) || targetCityLower.includes(resultCity)
     if (cityMatches) {
       score += 4
+      // Log for debugging
+      if (process.env.NODE_ENV === 'development' || process.env.LOG_RANKING === 'true') {
+        console.log(`[event-ranking] ⬆️ +4: City match (${resultCity}): "${title.substring(0, 60)}"`)
+      }
     }
   }
 
@@ -259,6 +267,10 @@ export function scoreEventResult(
         const daysDiff = (eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
         if (daysDiff <= 30) {
           score += 3
+          // Log for debugging
+          if (process.env.NODE_ENV === 'development' || process.env.LOG_RANKING === 'true') {
+            console.log(`[event-ranking] ⬆️ +3: Event within 30 days (${Math.round(daysDiff)} days): "${title.substring(0, 60)}"`)
+          }
         }
       }
     } catch {
@@ -317,6 +329,23 @@ export function rankEventResults<T extends {
     result,
     score: scoreEventResult(result, query, targetCity, targetCountry),
   }))
+
+  // Log scores for debugging (show score distribution if there are multiple different scores)
+  if (scored.length > 0) {
+    const scores = scored.map(s => s.score)
+    const uniqueScores = [...new Set(scores)].sort((a, b) => b - a)
+    console.log(`[event-ranking] Score distribution: min=${Math.min(...scores)}, max=${Math.max(...scores)}, unique=[${uniqueScores.join(', ')}]`)
+    
+    // Log top 3 and bottom 3 after sorting (we'll sort next)
+    const sortedForLog = [...scored].sort((a, b) => b.score - a.score)
+    console.log(`[event-ranking] Top 3 results (by score):`, sortedForLog.slice(0, Math.min(3, sortedForLog.length)).map(s => ({
+      title: s.result.title?.substring(0, 60),
+      score: s.score,
+      hasDate: !!s.result.startAt,
+      hasVenue: !!(s.result.venueName || s.result.address),
+      city: s.result.city || 'none',
+    })))
+  }
 
   // Sort by score (descending), then by date (ascending)
   scored.sort((a, b) => {

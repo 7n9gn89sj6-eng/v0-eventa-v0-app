@@ -937,6 +937,8 @@ export async function GET(req: NextRequest) {
     
     if (isEventQuery && externalEvents.length > 0) {
       console.log(`[v0] ✅ Event-first ranking applied to ${externalEvents.length} web results`)
+      // Enable detailed ranking logs
+      process.env.LOG_RANKING = 'true'
     }
     
     // Combine: Internal events FIRST, then external events
