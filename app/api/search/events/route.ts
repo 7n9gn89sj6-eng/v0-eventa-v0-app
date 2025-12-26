@@ -5,6 +5,7 @@ import type { EventCategory } from "@prisma/client"
 import { searchWeb } from "@/lib/search/web-search"
 import { withLanguageColumnGuard, getEventSelectWithoutLanguage, isLanguageFilteringAvailable } from "@/lib/db-runtime-guard"
 import { buildDateOverlapWhere, buildDateRangeOverlapWhere } from "@/lib/search/date-overlap"
+import { rankEventResults, isEventIntentQuery } from "@/lib/search/event-ranking"
 
 const EXTERNAL_STUB_EVENTS = [
   {
@@ -879,7 +880,7 @@ export async function GET(req: NextRequest) {
     }))
     
     // Mark external events with source
-    const externalEvents = filteredWebResults.map((e: any) => ({
+    const externalEventsUnranked = filteredWebResults.map((e: any) => ({
       ...e,
       source: "web" as const,
       isWebResult: true,
@@ -912,28 +913,30 @@ export async function GET(req: NextRequest) {
       })
     }
     
-    // Sort external events similarly (but they'll appear after internal)
-    if (city) {
-      const cityLower = city.toLowerCase()
-      externalEvents.sort((a, b) => {
-        const aCity = (a.city || "").toLowerCase()
-        const bCity = (b.city || "").toLowerCase()
-        const aMatchesCity = aCity.includes(cityLower) || cityLower.includes(aCity)
-        const bMatchesCity = bCity.includes(cityLower) || cityLower.includes(bCity)
-        
-        if (aMatchesCity && !bMatchesCity) return -1
-        if (!aMatchesCity && bMatchesCity) return 1
-        
-        const aDate = new Date(a.startAt).getTime()
-        const bDate = new Date(b.startAt).getTime()
-        return aDate - bDate
-      })
-    } else {
-      externalEvents.sort((a, b) => {
-        const aDate = new Date(a.startAt).getTime()
-        const bDate = new Date(b.startAt).getTime()
-        return aDate - bDate
-      })
+    // EVENT-FIRST RANKING: Apply event-first ranking to web results
+    // This prioritizes actual, specific events over aggregators/directories
+    // Ranking only applies to event-intent queries (detected automatically)
+    const isEventQuery = isEventIntentQuery(q)
+    
+    if (isEventQuery) {
+      console.log(`[v0] 🎯 Event-intent query detected: "${q}" - applying event-first ranking to web results`)
+    }
+    
+    // Rank external events using event-first scoring
+    // This will:
+    // - Boost specific events with dates, venues, locations (+5, +4, +3)
+    // - Penalize aggregators/directories (-5)
+    // - Penalize wrong country (-6)
+    // - Penalize venue homepages without events (-3)
+    const externalEvents = rankEventResults(
+      externalEventsUnranked,
+      q,
+      city || undefined,
+      country || undefined
+    )
+    
+    if (isEventQuery && externalEvents.length > 0) {
+      console.log(`[v0] ✅ Event-first ranking applied to ${externalEvents.length} web results`)
     }
     
     // Combine: Internal events FIRST, then external events
