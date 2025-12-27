@@ -195,14 +195,27 @@ export async function GET(req: NextRequest) {
   let microLocation: string | null = null
   let destinationCityDetected: string | null = null
 
-  // Step 1: Extract place from query (if any)
+  // Step 1: Check if query contains location-based keywords (nearby, near me, etc.)
+  const locationKeywords = /\b(nearby|near\s+me|around\s+me|close\s+to\s+me|local)\b/i
+  const hasLocationKeyword = q ? locationKeywords.test(q) : false
+  
+  // Step 2: Extract place from query (if any)
   const queryPlace = extractPlaceFromQuery(q)
   
-  if (queryPlace) {
+  if (hasLocationKeyword && !queryPlace) {
+    // Query contains "nearby" or similar but no specific place extracted
+    // Use device/stored location (already set in effectiveLocation above)
+    // If city/country are in URL params, they were set by the location picker, so use them
+    if (!city && !country) {
+      console.log(`[v0] Query contains location keyword (nearby/near me) but no location params - location may not be set`)
+    } else {
+      console.log(`[v0] Query contains location keyword (nearby/near me) - using location from params: ${city || 'none'}${country ? `, ${country}` : ""}`)
+    }
+  } else if (queryPlace) {
     // Check if it's "near me" / "around here" - use device/stored (already set above)
-    if (queryPlace.toLowerCase().includes("me") || queryPlace.toLowerCase().includes("here")) {
+    if (queryPlace.toLowerCase().includes("me") || queryPlace.toLowerCase().includes("here") || queryPlace.toLowerCase() === "nearby") {
       // Keep device/stored location, don't override
-      console.log(`[v0] Query contains "near me/here" - using device/stored location`)
+      console.log(`[v0] Query contains "near me/here/nearby" - using device/stored location`)
     } else if (city && isLikelySuburb(queryPlace, city)) {
       // Suburb/neighbourhood within selected city → treat as micro-location
       microLocation = queryPlace
@@ -247,9 +260,13 @@ export async function GET(req: NextRequest) {
       }
     }
   } else if (city || country) {
-    // No place in query, use UI location picker
+    // No place in query, use UI location picker (from URL params)
     effectiveLocation.source = "ui"
     console.log(`[v0] ✅ Effective location from UI: ${city || 'none'}${country ? `, ${country}` : ""}`)
+  } else {
+    // No location in query AND no location in URL params
+    // This means search will be broad (no location filter)
+    console.log(`[v0] ⚠️ No location specified - search will be broad (no location filter)`)
   }
 
   // Use effectiveLocation for all location-based operations

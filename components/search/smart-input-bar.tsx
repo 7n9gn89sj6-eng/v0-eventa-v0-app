@@ -142,7 +142,16 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
         },
         async (error) => {
           console.log("[v0] Geolocation error:", error.code)
-          setLocationError(null) // Silently fail
+          // Show user-friendly error message for geolocation failures
+          if (error.code === error.PERMISSION_DENIED) {
+            setLocationError("Location permission denied. Please enable location access in your browser settings.")
+          } else if (error.code === error.POSITION_UNAVAILABLE) {
+            setLocationError("Unable to determine your location. GPS may be disabled or unavailable.")
+          } else if (error.code === error.TIMEOUT) {
+            setLocationError("Location request timed out. Please try again.")
+          } else {
+            setLocationError("Location detection failed. You can still search by typing a city name.")
+          }
         },
         {
           enableHighAccuracy: false,
@@ -202,17 +211,28 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
           const cityParam = params.get("city")
           const hasCityParam = cityParam && cityParam.trim().length > 0 && cityParam !== "Unknown location"
           
+          // Check if the extracted city is different from detected location (user override)
+          const isLocationOverride = hasCityParam && defaultLocation?.city && 
+            cityParam.toLowerCase() !== defaultLocation.city.toLowerCase()
+          
           // Add defaultLocation if available (backend will use query place if present, otherwise defaultLocation)
           if (defaultLocation && defaultLocation.city && defaultLocation.city !== "Unknown location") {
             if (!hasCityParam) {
-              // No city in query, use defaultLocation
-              console.log(`[v0] Adding defaultLocation to URL params: ${defaultLocation.city}${defaultLocation.country ? `, ${defaultLocation.country}` : ""}`)
+              // No city in query, use defaultLocation as default
+              console.log(`[v0] No city in query - using defaultLocation: ${defaultLocation.city}${defaultLocation.country ? `, ${defaultLocation.country}` : ""}`)
               params.set("city", defaultLocation.city)
               if (defaultLocation.lat && defaultLocation.lng) {
                 params.set("lat", defaultLocation.lat.toString())
                 params.set("lng", defaultLocation.lng.toString())
               }
+            } else if (isLocationOverride) {
+              // User specified a different location - let it override (backend will handle this)
+              console.log(`[v0] User specified different location (${cityParam}) - will override detected location (${defaultLocation.city})`)
+            } else {
+              // Same city or city from query matches detected location
+              console.log(`[v0] Using extracted city from query/intent: ${cityParam}`)
             }
+            // Always add country if available and not already set
             if (defaultLocation.country && !params.has("country")) {
               params.set("country", defaultLocation.country)
             }
@@ -225,20 +245,36 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
           console.log("[v0] Navigating with params:", params.toString())
           router.push(`/discover?${params.toString()}`)
         } else {
-          // Fallback
-          console.log("[v0] Intent API failed, using fallback")
+          // Fallback: Intent API failed, but search can still work
+          const errorData = await intentResponse.json().catch(() => ({}))
+          console.warn("[v0] Intent API failed, using fallback:", errorData.error || "Unknown error")
+          
           const fallbackParams = new URLSearchParams()
           fallbackParams.set("q", query)
+          
+          // ALWAYS add defaultLocation if available (unless user specified a different location in query)
+          // Check if query contains a city name that's different from detected location
+          const cityMatch = query.match(/\b(in|at|near|around)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/i)
+          const extractedCity = cityMatch ? cityMatch[2].trim() : null
+          const isLocationOverride = extractedCity && defaultLocation?.city && 
+            extractedCity.toLowerCase() !== defaultLocation.city.toLowerCase()
+          
           if (defaultLocation && defaultLocation.city && defaultLocation.city !== "Unknown location") {
-            fallbackParams.set("city", defaultLocation.city)
-            if (defaultLocation.lat && defaultLocation.lng) {
-              fallbackParams.set("lat", defaultLocation.lat.toString())
-              fallbackParams.set("lng", defaultLocation.lng.toString())
+            if (!isLocationOverride) {
+              // No location override - use defaultLocation
+              fallbackParams.set("city", defaultLocation.city)
+              if (defaultLocation.lat && defaultLocation.lng) {
+                fallbackParams.set("lat", defaultLocation.lat.toString())
+                fallbackParams.set("lng", defaultLocation.lng.toString())
+              }
+              if (defaultLocation.country) {
+                fallbackParams.set("country", defaultLocation.country)
+              }
+              console.log(`[v0] Adding defaultLocation to fallback params: ${defaultLocation.city}`)
+            } else {
+              // User specified different location - let query extraction handle it
+              console.log(`[v0] User specified different location in query (${extractedCity}) - will override detected location`)
             }
-            if (defaultLocation.country) {
-              fallbackParams.set("country", defaultLocation.country)
-            }
-            console.log(`[v0] Adding defaultLocation to fallback params: ${defaultLocation.city}`)
           }
           router.push(`/discover?${fallbackParams.toString()}`)
         }

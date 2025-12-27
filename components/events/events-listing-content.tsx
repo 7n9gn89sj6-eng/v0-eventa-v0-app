@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { Calendar, MapPin, SlidersHorizontal, X } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -76,6 +77,10 @@ export function EventsListingContent({
   userLat,
   userLng,
 }: EventsListingContentProps) {
+  const router = useRouter()
+  const { t } = useI18n()
+  const { defaultLocation } = useLocation()
+
   const [q, setQ] = useState(initialQuery || "")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -86,12 +91,10 @@ export function EventsListingContent({
   const [selectedCategory, setSelectedCategory] = useState(initialCategory || "All")
   const [selectedPriceFilter, setSelectedPriceFilter] = useState("all")
   const [sortBy, setSortBy] = useState("date-asc")
-  const [cityFilter, setCityFilter] = useState(initialCity || "")
-  const [countryFilter, setCountryFilter] = useState(initialCountry || "")
-
-  const router = useRouter()
-  const { t } = useI18n()
-  const { defaultLocation } = useLocation()
+  // Initialize city/country filters from URL params OR defaultLocation
+  // Must initialize after useLocation hook is called
+  const [cityFilter, setCityFilter] = useState(() => initialCity || defaultLocation?.city || "")
+  const [countryFilter, setCountryFilter] = useState(() => initialCountry || defaultLocation?.country || "")
 
   async function runSearch() {
     if (loading) return
@@ -219,20 +222,28 @@ export function EventsListingContent({
   }, [initialQuery])
 
   useEffect(() => {
-    if (initialCity !== undefined && initialCity !== cityFilter) {
-      setCityFilter(initialCity)
+    // Update cityFilter from URL params, or use defaultLocation if no URL param
+    if (initialCity !== undefined) {
+      setCityFilter(initialCity || defaultLocation?.city || "")
+    } else if (defaultLocation?.city && !cityFilter) {
+      // No URL param but we have defaultLocation - use it
+      setCityFilter(defaultLocation.city)
     }
-  }, [initialCity])
+  }, [initialCity, defaultLocation?.city, cityFilter])
 
   useEffect(() => {
-    if (initialCountry !== undefined && initialCountry !== countryFilter) {
-      setCountryFilter(initialCountry)
+    // Update countryFilter from URL params, or use defaultLocation if no URL param
+    if (initialCountry !== undefined) {
+      setCountryFilter(initialCountry || defaultLocation?.country || "")
+    } else if (defaultLocation?.country && !countryFilter) {
+      // No URL param but we have defaultLocation - use it
+      setCountryFilter(defaultLocation.country)
     }
-  }, [initialCountry])
+  }, [initialCountry, defaultLocation?.country, countryFilter])
 
   useEffect(() => {
     runSearch()
-  }, [q, cityFilter, countryFilter, selectedCategory, initialDateFrom, initialDateTo])
+  }, [q, cityFilter, countryFilter, selectedCategory, initialDateFrom, initialDateTo, defaultLocation])
 
   const handleSmartSearch = async (query: string) => {
     setQ(query)
@@ -401,7 +412,18 @@ export function EventsListingContent({
 
         {showFilters && (
           <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="space-y-2">
+                <Label htmlFor="city">City</Label>
+                <Input
+                  id="city"
+                  placeholder="Enter city name"
+                  value={cityFilter}
+                  onChange={(e) => setCityFilter(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Filter events by city</p>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="category">{tEvents("filters.category")}</Label>
                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
