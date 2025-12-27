@@ -1420,9 +1420,9 @@ export async function GET(req: NextRequest) {
         boost += 2
       }
       
-      // Boost reputable ticket/listing pages
-      if (url.includes('eventbrite.com') && url.includes('/e/')) {
-        boost += 2
+      // Penalty for Eventbrite (deprioritize to allow other sources to rank higher)
+      if (url.includes('eventbrite.com')) {
+        boost -= 3  // Penalize Eventbrite to rank lower than other sources
       }
       
       // Penalty (ranking only) for forums/social posts

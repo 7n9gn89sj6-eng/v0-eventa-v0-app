@@ -109,8 +109,9 @@ function isAggregatorOrDirectory(result: {
   const hasAggregatorPhrase = aggregatorPhrases.some(pattern => pattern.test(fullText))
 
   // Check for aggregator URLs (Eventbrite, Facebook, etc.)
+  // Eventbrite is treated as aggregator (both category pages and event pages)
   const isAggregatorUrl = 
-    url.includes("eventbrite.com/c/") || // Eventbrite category pages
+    url.includes("eventbrite.com") || // All Eventbrite pages (category and event pages)
     url.includes("facebook.com/events") || // Facebook events pages
     url.includes("ticketmaster.com/") ||
     url.includes("ticketek.com.au/") ||
