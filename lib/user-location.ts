@@ -1,9 +1,10 @@
 /**
  * User location utilities
  * Handles storing and retrieving user's detected location
+ * Uses localStorage key "eventa.defaultLocation" for consistency with Location Context
  */
 
-const LOCATION_STORAGE_KEY = "eventa-user-location"
+const LOCATION_STORAGE_KEY = "eventa.defaultLocation"
 
 export interface UserLocation {
   lat: number

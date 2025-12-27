@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Calendar, MapPin, List, Loader2, X, AlertCircle, Check } from "lucide-react";
 
@@ -11,7 +11,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { VersionBadge } from "@/components/version-badge";
 
 import { useI18n } from "@/lib/i18n/context";
-import { getUserLocation, storeUserLocation, clearUserLocation, type UserLocation } from "@/lib/user-location";
+import { useLocation } from "@/lib/location-context";
 import { reverseGeocodeDebounced } from "@/lib/geocoding";
 
 type GeolocationErrorCode = "PERMISSION_DENIED" | "POSITION_UNAVAILABLE" | "TIMEOUT" | "TIMEOUT_GRANTED" | "NOT_SUPPORTED" | "HTTPS_REQUIRED" | null;
@@ -19,27 +19,12 @@ type GeolocationErrorCode = "PERMISSION_DENIED" | "POSITION_UNAVAILABLE" | "TIME
 export function SiteHeader() {
   const { t } = useI18n();
   const tCommon = t("common");
-  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
-  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const { defaultLocation, isLoadingLocation: contextLoadingLocation, setDefaultLocation, clearDefaultLocation } = useLocation();
+  const [manualLoadingLocation, setManualLoadingLocation] = useState(false);
   const [geolocationError, setGeolocationError] = useState<GeolocationErrorCode>(null);
 
-  // Load stored location on mount
-  useEffect(() => {
-    const stored = getUserLocation();
-    if (stored) {
-      // Only set location if it has valid city data (not "Unknown location")
-      if (stored.city && stored.city !== "Unknown location") {
-        setUserLocation(stored);
-        setGeolocationError(null); // Clear any errors if we have stored location
-        console.log(`[Header] Loaded stored location: ${stored.city}${stored.country ? `, ${stored.country}` : ""}`);
-      } else {
-        // Clear invalid stored location
-        console.log(`[Header] Clearing invalid stored location: ${stored.city}`);
-        clearUserLocation();
-        setUserLocation(null);
-      }
-    }
-  }, []);
+  // Combine context loading and manual loading states
+  const isLoadingLocation = contextLoadingLocation || manualLoadingLocation;
 
   // Helper to detect if we're on localhost
   const isLocalhost = typeof window !== "undefined" && 
@@ -49,26 +34,25 @@ export function SiteHeader() {
      window.location.hostname.startsWith("10."));
 
   const handleLocationRequest = async (retryCount = 0) => {
-    console.log("[Header] Location button clicked", { userLocation, isLoadingLocation, retryCount });
+    console.log("[Header] Location button clicked", { defaultLocation, isLoadingLocation, retryCount });
     
     try {
-      if (userLocation) {
+      if (defaultLocation) {
         // If location exists, clear it
         console.log("[Header] Clearing existing location");
-        clearUserLocation();
-        setUserLocation(null);
+        clearDefaultLocation();
         setGeolocationError(null);
         return;
       }
 
       console.log("[Header] Starting location detection");
-      setIsLoadingLocation(true);
+      setManualLoadingLocation(true);
       setGeolocationError(null); // Clear previous errors
 
       // Check if geolocation is available
       if (!navigator.geolocation) {
         console.warn("[Header] Geolocation API not available");
-        setIsLoadingLocation(false);
+        setManualLoadingLocation(false);
         setGeolocationError("NOT_SUPPORTED");
         return;
       }
@@ -76,7 +60,7 @@ export function SiteHeader() {
       // Check HTTPS requirement (skip on localhost - expected to fail there)
       if (!isLocalhost && typeof window !== "undefined" && window.location.protocol !== "https:") {
         console.warn("[Header] Geolocation requires HTTPS (non-localhost)");
-        setIsLoadingLocation(false);
+        setManualLoadingLocation(false);
         setGeolocationError("HTTPS_REQUIRED");
         return;
       }
@@ -107,10 +91,15 @@ export function SiteHeader() {
 
               console.log("[Header] Reverse geocoding result:", { city, country });
 
-              if (city) {
-                const location = { lat, lng, city, country };
-                storeUserLocation(location);
-                setUserLocation({ ...location, timestamp: Date.now() });
+              if (city && city !== "Unknown location") {
+                // Use Location Context to set location
+                setDefaultLocation({
+                  city,
+                  country: country || undefined,
+                  lat,
+                  lng,
+                  source: "manual",
+                }, "manual");
                 console.log("[Header] Location stored successfully:", city);
               } else {
                 console.warn("[Header] No city found in reverse geocoding result");
@@ -119,10 +108,13 @@ export function SiteHeader() {
               console.warn("[Header] Reverse geocoding API failed, trying fallback");
               // Fallback to old method if API fails
               const city = await reverseGeocodeDebounced(lat, lng);
-              if (city) {
-                const location = { lat, lng, city };
-                storeUserLocation(location);
-                setUserLocation({ ...location, timestamp: Date.now() });
+              if (city && city !== "Unknown location") {
+                setDefaultLocation({
+                  city,
+                  lat,
+                  lng,
+                  source: "manual",
+                }, "manual");
                 console.log("[Header] Fallback geocoding successful:", city);
               }
             }
@@ -131,10 +123,13 @@ export function SiteHeader() {
             // Fallback to old method
             try {
               const city = await reverseGeocodeDebounced(lat, lng);
-              if (city) {
-                const location = { lat, lng, city };
-                storeUserLocation(location);
-                setUserLocation({ ...location, timestamp: Date.now() });
+              if (city && city !== "Unknown location") {
+                setDefaultLocation({
+                  city,
+                  lat,
+                  lng,
+                  source: "manual",
+                }, "manual");
                 console.log("[Header] Fallback geocoding successful:", city);
               }
             } catch (fallbackError) {
@@ -142,7 +137,7 @@ export function SiteHeader() {
             }
           }
 
-          setIsLoadingLocation(false);
+          setManualLoadingLocation(false);
           setGeolocationError(null); // Clear any previous errors on success
         },
         async (error) => {
@@ -213,14 +208,14 @@ export function SiteHeader() {
           // On localhost, this is expected - don't show error to user
           if (isLocalhost) {
             console.log("[Header] Geolocation failed on localhost (expected behavior):", errorDetails);
-            setIsLoadingLocation(false);
+            setManualLoadingLocation(false);
             setGeolocationError(null); // Don't show error on localhost
             return;
           }
 
           // On production, show user-friendly error message
           setGeolocationError(errorCode);
-          setIsLoadingLocation(false);
+          setManualLoadingLocation(false);
         },
         {
           enableHighAccuracy: false,
@@ -230,7 +225,7 @@ export function SiteHeader() {
       );
     } catch (error) {
       console.error("[Header] Unexpected error in handleLocationRequest:", error);
-      setIsLoadingLocation(false);
+      setManualLoadingLocation(false);
       // Don't show error for unexpected errors - just log and continue
       // Search still works without location
     }
@@ -291,20 +286,20 @@ export function SiteHeader() {
             variant="outline"
             size="sm"
             className={`gap-2 min-h-[44px] touch-manipulation active:scale-95 ${
-              userLocation && userLocation.city && userLocation.city !== "Unknown location"
+              defaultLocation && defaultLocation.city && defaultLocation.city !== "Unknown location"
                 ? "bg-primary/10 border-primary/20"
                 : "bg-transparent"
             }`}
             onClick={handleLocationRequest}
             disabled={isLoadingLocation}
             title={
-              userLocation && userLocation.city && userLocation.city !== "Unknown location"
-                ? `Location: ${userLocation.city}${userLocation.country ? `, ${userLocation.country}` : ""}. Click to clear.`
+              defaultLocation && defaultLocation.city && defaultLocation.city !== "Unknown location"
+                ? `Location: ${defaultLocation.city}${defaultLocation.country ? `, ${defaultLocation.country}` : ""}. Click to clear.`
                 : "Detect my location"
             }
             aria-label={
-              userLocation && userLocation.city && userLocation.city !== "Unknown location"
-                ? `Clear location: ${userLocation.city}`
+              defaultLocation && defaultLocation.city && defaultLocation.city !== "Unknown location"
+                ? `Clear location: ${defaultLocation.city}`
                 : "Detect my location"
             }
             type="button"
@@ -318,11 +313,11 @@ export function SiteHeader() {
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="hidden sm:inline">Finding your location…</span>
               </>
-            ) : userLocation && userLocation.city && userLocation.city !== "Unknown location" ? (
+            ) : defaultLocation && defaultLocation.city && defaultLocation.city !== "Unknown location" ? (
               <>
                 <Check className="h-4 w-4 text-primary" />
                 <span className="hidden sm:inline">
-                  {userLocation.city}{userLocation.country ? `, ${userLocation.country}` : ""}
+                  {defaultLocation.city}{defaultLocation.country ? `, ${defaultLocation.country}` : ""}
                 </span>
               </>
             ) : (

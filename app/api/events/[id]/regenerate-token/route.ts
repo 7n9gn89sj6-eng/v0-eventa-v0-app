@@ -43,9 +43,9 @@ export async function POST(
     // Generate new token
     const token = await createEventEditToken(event.id, event.endAt)
 
-    // Use request origin for edit URL (works in production)
-    // Falls back to NEXT_PUBLIC_APP_URL or localhost if not available
-    const baseUrl = request.nextUrl.origin
+    // Prioritize NEXT_PUBLIC_APP_URL if set (required for production)
+    // Fall back to request origin if env var not set (for local dev)
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
     const editUrl = `${baseUrl}/edit/${event.id}?token=${token}`
 
     // Optional: regenerate + send email

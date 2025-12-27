@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import ClientOnly from "@/components/ClientOnly"
 import { useI18n } from "@/lib/i18n/context"
 import { SmartInputBar } from "@/components/search/smart-input-bar"
+import { useLocation } from "@/lib/location-context"
 
 const CATEGORIES = [
   "All",
@@ -90,6 +91,7 @@ export function EventsListingContent({
 
   const router = useRouter()
   const { t } = useI18n()
+  const { defaultLocation } = useLocation()
 
   async function runSearch() {
     if (loading) return
@@ -98,10 +100,12 @@ export function EventsListingContent({
     try {
       const params = new URLSearchParams()
       if (q) params.set("query", q)
-      // CRITICAL: Always include location from location picker (cityFilter/countryFilter)
-      // Do NOT rely on URL params - location must come from UI state
-      if (cityFilter) params.set("city", cityFilter)
-      if (countryFilter) params.set("country", countryFilter)
+      // CRITICAL: Always include location from location picker (cityFilter/countryFilter) OR defaultLocation
+      // Prefer cityFilter/countryFilter (UI state) over defaultLocation, but use defaultLocation as fallback
+      const effectiveCity = cityFilter || defaultLocation?.city || ""
+      const effectiveCountry = countryFilter || defaultLocation?.country || ""
+      if (effectiveCity) params.set("city", effectiveCity)
+      if (effectiveCountry) params.set("country", effectiveCountry)
       if (selectedCategory && selectedCategory !== "All") params.set("category", selectedCategory.toLowerCase())
       if (initialDateFrom) params.set("date_from", initialDateFrom)
       if (initialDateTo) params.set("date_to", initialDateTo)
