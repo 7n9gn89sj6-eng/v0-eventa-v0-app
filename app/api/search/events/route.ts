@@ -72,6 +72,42 @@ export async function GET(req: NextRequest) {
   // Detect if this is an event-intent query
   const isEventQuery = isEventIntentQuery(q)
 
+  /**
+   * Extract micro-location from query (e.g., "Brunswick" in "Live music in Brunswick")
+   * Only activates if city is set (micro-location is within the city)
+   */
+  function extractMicroLocation(query: string, city: string | null): string | null {
+    if (!query || !city) return null
+    
+    // Patterns: "in X", "near X", "around X" where X is 1-3 words
+    const patterns = [
+      /\b(in|near|around)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\b/g,
+    ]
+    
+    for (const pattern of patterns) {
+      const matches = Array.from(query.matchAll(pattern))
+      for (const match of matches) {
+        const microLoc = match[2]?.trim()
+        if (microLoc && microLoc.toLowerCase() !== city.toLowerCase()) {
+          // Exclude common words that aren't locations
+          const commonWords = ["this", "that", "the", "a", "an", "weekend", "week", "month", "year", "today", "tomorrow"]
+          if (!commonWords.includes(microLoc.toLowerCase())) {
+            return microLoc
+          }
+        }
+      }
+    }
+    
+    return null
+  }
+
+  // Extract micro-location if city is set
+  const microLocation = extractMicroLocation(q, city)
+  
+  if (microLocation) {
+    console.log(`[v0] 🔍 Micro-location detected: "${microLocation}" within "${city}"`)
+  }
+
   // NOTE: Location should come from URL params (city/country) set by UI location picker
   // Only extract from query as fallback if location params are not provided
   // This ensures web search uses the UI location control, not query extraction
@@ -556,6 +592,11 @@ export async function GET(req: NextRequest) {
       finalReturnedWebCount: 0,
       webError: null,
       sampleWebTitles: [],
+      effectiveLocation: { city: city || null, country: country || null },
+      microLocation: microLocation || null,
+      webQueriesUsed: [] as string[],
+      webAfterMicroLocationCount: 0,
+      topDomains: [] as string[],
     }
     
     // GUARANTEE: If internal results count is 0 and location is known, web search MUST run
@@ -701,6 +742,101 @@ export async function GET(req: NextRequest) {
             },
           }
         })
+        
+        // JUNK FILTER: Exclude PDFs, reports, census, executive summaries, etc.
+        transformedWebResults = transformedWebResults.filter((result) => {
+          // Exclude PDFs
+          if (result.externalUrl && result.externalUrl.toLowerCase().endsWith('.pdf')) {
+            console.log(`[v0] 🚫 EXCLUDED: PDF file - "${result.title?.substring(0, 50)}"`)
+            return false
+          }
+          
+          // Exclude reports, studies, census, executive summaries
+          const fullText = `${result.title || ""} ${result.description || ""}`.toLowerCase()
+          const junkPatterns = [
+            /\bcensus\b/i,
+            /\bexecutive\s+summary\b/i,
+            /\breport\b/i,
+            /\bstudy\b/i,
+            /\bsubmission\b/i,
+            /\bresearch\b/i,
+            /\banalysis\b/i,
+            /\bwhitepaper\b/i,
+          ]
+          
+          const isJunk = junkPatterns.some(pattern => pattern.test(fullText))
+          if (isJunk) {
+            console.log(`[v0] 🚫 EXCLUDED: Junk content (report/census) - "${result.title?.substring(0, 50)}"`)
+            return false
+          }
+          
+          return true
+        })
+        
+        // MICRO-LOCATION FILTER: If micro-location was used, filter results to mention it
+        if (microLocation && transformedWebResults.length > 0) {
+          const microLocLower = microLocation.toLowerCase()
+          const beforeMicroFilter = transformedWebResults.length
+          
+          transformedWebResults = transformedWebResults.filter((result) => {
+            const resultText = `${result.title || ""} ${result.description || ""} ${result.externalUrl || ""}`.toLowerCase()
+            return resultText.includes(microLocLower)
+          })
+          
+          debugTrace.webAfterMicroLocationCount = transformedWebResults.length
+          
+          if (beforeMicroFilter !== transformedWebResults.length) {
+            console.log(`[v0] Micro-location filter: ${beforeMicroFilter} → ${transformedWebResults.length} results mentioning "${microLocation}"`)
+          }
+          
+          // FALLBACK: If micro-location filter returns 0, fall back to city-level results
+          if (transformedWebResults.length === 0 && webSearchResults.length > 0) {
+            console.log(`[v0] ⚠️ Micro-location filter returned 0 results, falling back to city-level results`)
+            // Re-run city-level query and use all results
+            const cityQuery = webQueries[webQueries.length - 1] // Last query is city-level
+            const fallbackResults = await searchWeb({
+              query: cityQuery,
+              limit: 10,
+            })
+            
+            transformedWebResults = fallbackResults.map((result, index) => {
+              return {
+                id: `web-fallback-${Date.now()}-${index}`,
+                title: result.title,
+                description: result.snippet || "",
+                startAt: result.startAt,
+                endAt: result.startAt,
+                city: city || "",
+                country: country || "",
+                address: "",
+                venueName: "",
+                categories: category && category !== "all" ? [category] : [],
+                priceFree: false,
+                imageUrls: result.imageUrl ? [result.imageUrl] : [],
+                status: "PUBLISHED" as const,
+                aiStatus: "SAFE" as const,
+                source: "web" as const,
+                externalUrl: result.url,
+                imageUrl: result.imageUrl || undefined,
+                location: {
+                  city: city || "",
+                  country: country || "",
+                  address: "",
+                },
+              }
+            })
+            
+            // Apply junk filter to fallback results
+            transformedWebResults = transformedWebResults.filter((result) => {
+              if (result.externalUrl && result.externalUrl.toLowerCase().endsWith('.pdf')) return false
+              const fullText = `${result.title || ""} ${result.description || ""}`.toLowerCase()
+              const junkPatterns = [/\bcensus\b/i, /\bexecutive\s+summary\b/i, /\breport\b/i, /\bstudy\b/i, /\bsubmission\b/i]
+              return !junkPatterns.some(pattern => pattern.test(fullText))
+            })
+            
+            debugTrace.webAfterMicroLocationCount = transformedWebResults.length
+          }
+        }
         
         // Filter web results by city if specified
         // NOTE: Web search already filtered by city in the query, so we only need to exclude obvious mismatches

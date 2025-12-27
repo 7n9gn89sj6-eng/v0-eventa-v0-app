@@ -98,13 +98,15 @@ export function EventsListingContent({
     try {
       const params = new URLSearchParams()
       if (q) params.set("query", q)
+      // CRITICAL: Always include location from location picker (cityFilter/countryFilter)
+      // Do NOT rely on URL params - location must come from UI state
       if (cityFilter) params.set("city", cityFilter)
       if (countryFilter) params.set("country", countryFilter)
       if (selectedCategory && selectedCategory !== "All") params.set("category", selectedCategory.toLowerCase())
       if (initialDateFrom) params.set("date_from", initialDateFrom)
       if (initialDateTo) params.set("date_to", initialDateTo)
 
-      console.log("[v0] Searching with params:", params.toString())
+      console.log("[v0] Fetching /api/search/events with params:", params.toString())
 
       const r = await fetch(`/api/search/events?${params.toString()}`, {
         method: "GET",
