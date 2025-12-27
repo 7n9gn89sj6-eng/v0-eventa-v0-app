@@ -73,26 +73,32 @@ export async function GET(req: NextRequest) {
   const isEventQuery = isEventIntentQuery(q)
 
   /**
-   * Extract micro-location from query (e.g., "Brunswick" in "Live music in Brunswick")
-   * Only activates if city is set (micro-location is within the city)
+   * Extract place from query using patterns like "in X", "near X", "to X", "going to X"
+   * Returns the place name (1-3 words, trimmed, stops at punctuation)
    */
-  function extractMicroLocation(query: string, city: string | null): string | null {
-    if (!query || !city) return null
+  function extractPlaceFromQuery(query: string): string | null {
+    if (!query) return null
     
-    // Patterns: "in X", "near X", "around X" where X is 1-3 words
+    // Patterns: "in X", "near X", "around X", "to X", "going to X", "X this weekend"
     const patterns = [
-      /\b(in|near|around)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\b/g,
+      /\b(in|near|around|to)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/g,
+      /\bgoing\s+to\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/gi,
+      /([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\s+this\s+weekend/gi,
     ]
     
     for (const pattern of patterns) {
       const matches = Array.from(query.matchAll(pattern))
       for (const match of matches) {
-        const microLoc = match[2]?.trim()
-        if (microLoc && microLoc.toLowerCase() !== city.toLowerCase()) {
-          // Exclude common words that aren't locations
-          const commonWords = ["this", "that", "the", "a", "an", "weekend", "week", "month", "year", "today", "tomorrow"]
-          if (!commonWords.includes(microLoc.toLowerCase())) {
-            return microLoc
+        const place = match[match.length - 1]?.trim() // Last capture group
+        if (place) {
+          // Stop at punctuation
+          const placeClean = place.split(/[.,;!?]/)[0].trim()
+          if (placeClean && placeClean.length > 1) {
+            // Exclude common words that aren't locations
+            const commonWords = ["this", "that", "the", "a", "an", "weekend", "week", "month", "year", "today", "tomorrow", "here", "there"]
+            if (!commonWords.includes(placeClean.toLowerCase())) {
+              return placeClean
+            }
           }
         }
       }
@@ -102,49 +108,146 @@ export async function GET(req: NextRequest) {
   }
 
   /**
-   * COMPUTE EFFECTIVE LOCATION (Locality Contract v1)
+   * Check if a place is likely a suburb/neighbourhood within a city
+   */
+  function isLikelySuburb(place: string, city: string | null): boolean {
+    if (!city) return false
+    
+    const placeLower = place.toLowerCase()
+    const cityLower = city.toLowerCase()
+    
+    // Melbourne suburbs (extendable list)
+    if (cityLower === "melbourne") {
+      const melbourneSuburbs = [
+        "brunswick", "fitzroy", "carlton", "south yarra", "st kilda", "richmond",
+        "collingwood", "prahran", "footscray", "south melbourne", "docklands",
+        "cbd", "downtown", "city", "inner city"
+      ]
+      if (melbourneSuburbs.some(sub => placeLower.includes(sub) || sub.includes(placeLower))) {
+        return true
+      }
+    }
+    
+    // Generic indicators of micro-locations
+    const microIndicators = ["cbd", "downtown", "inner city", "city center", "city centre"]
+    if (microIndicators.some(ind => placeLower.includes(ind))) {
+      return true
+    }
+    
+    return false
+  }
+
+  /**
+   * Country resolution for globally-known cities
+   */
+  function getCountryForCity(city: string): string | null {
+    const cityLower = city.toLowerCase()
+    const cityCountryMap: Record<string, string> = {
+      "berlin": "Germany",
+      "paris": "France",
+      "rome": "Italy",
+      "london": "United Kingdom",
+      "new york": "United States",
+      "tokyo": "Japan",
+      "sydney": "Australia",
+      "melbourne": "Australia",
+      "brisbane": "Australia",
+      "perth": "Australia",
+      "adelaide": "Australia",
+      "vienna": "Austria",
+      "madrid": "Spain",
+      "milan": "Italy",
+      "athens": "Greece",
+      "dublin": "Ireland",
+      "amsterdam": "Netherlands",
+      "brussels": "Belgium",
+      "stockholm": "Sweden",
+      "oslo": "Norway",
+      "copenhagen": "Denmark",
+      "lisbon": "Portugal",
+      "warsaw": "Poland",
+      "prague": "Czech Republic",
+      "budapest": "Hungary",
+      "zurich": "Switzerland",
+    }
+    
+    return cityCountryMap[cityLower] || null
+  }
+
+  /**
+   * COMPUTE EFFECTIVE LOCATION with strict precedence (Query place overrides location picker)
    * 
-   * Precedence:
-   * 1. Destination parsed from query/intent (trip planning or explicit city in query) - source: "query"
-   * 2. Manual location picker (city/country params) - source: "ui"
-   * 3. Device geolocation fallback (if we had it) - source: "device"
+   * Precedence (must match product rule):
+   * 1. Query place (destination typed in query) - source: "query"
+   * 2. UI location picker - source: "ui"
+   * 3. Device/stored - source: "device"
    * 
-   * effectiveLocation is per-search and separate from defaultLocation (stored location)
+   * Additionally:
+   * - If query place is a suburb/neighbourhood within selected city → set microLocation, keep effectiveLocation.city=uiCity
+   * - "near me / around here" should use device/stored location
    */
   let effectiveLocation: { city: string | null; country: string | null; source: "query" | "ui" | "device" } = {
     city: city || null,
     country: country || null,
-    source: (city || country) ? "ui" : "device", // Default to "ui" if params provided, else "device"
+    source: (city || country) ? "ui" : "device",
   }
+  
+  let microLocation: string | null = null
+  let destinationCityDetected: string | null = null
 
-  // If no location from params, try intent extraction (for trip planning / explicit city in query)
-  if (q && isEventQuery && !city && !country) {
-    try {
-      const intentResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/search/intent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q }),
-      })
-      if (intentResponse.ok) {
-        const intentData = await intentResponse.json()
-        const extracted = intentData.extracted || {}
-        if (extracted.city && !city) {
-          city = extracted.city.trim()
-          effectiveLocation.city = city
-          effectiveLocation.source = "query"
-          console.log(`[v0] ✅ Effective location from query: ${city}${extracted.country ? `, ${extracted.country}` : ""}`)
-        }
-        if (extracted.country && !country) {
-          country = extracted.country.trim()
-          effectiveLocation.country = country
-          effectiveLocation.source = "query"
+  // Step 1: Extract place from query (if any)
+  const queryPlace = extractPlaceFromQuery(q)
+  
+  if (queryPlace) {
+    // Check if it's "near me" / "around here" - use device/stored (already set above)
+    if (queryPlace.toLowerCase().includes("me") || queryPlace.toLowerCase().includes("here")) {
+      // Keep device/stored location, don't override
+      console.log(`[v0] Query contains "near me/here" - using device/stored location`)
+    } else if (city && isLikelySuburb(queryPlace, city)) {
+      // Suburb/neighbourhood within selected city → treat as micro-location
+      microLocation = queryPlace
+      effectiveLocation.city = city // Keep UI city
+      effectiveLocation.country = country || null
+      effectiveLocation.source = "ui"
+      console.log(`[v0] ✅ Micro-location detected: "${queryPlace}" within "${city}" (source=ui)`)
+    } else {
+      // Query place is a destination city override
+      destinationCityDetected = queryPlace
+      effectiveLocation.city = queryPlace
+      effectiveLocation.source = "query"
+      
+      // Country resolution for globally-known cities
+      const resolvedCountry = getCountryForCity(queryPlace)
+      if (resolvedCountry) {
+        effectiveLocation.country = resolvedCountry
+        console.log(`[v0] ✅ Effective location from query: ${queryPlace}, ${resolvedCountry} (source=query)`)
+      } else {
+        // If uiCountry exists and destination is plausibly in that country, keep it
+        // Otherwise, set to null and rely on city + disambiguation filtering
+        if (country) {
+          // Conservative: only keep uiCountry if destination is plausibly in that country
+          // (e.g., Sydney with Australia)
+          const cityLower = queryPlace.toLowerCase()
+          const countryLower = country.toLowerCase()
+          
+          // Australian cities
+          if (countryLower.includes("australia") && 
+              (cityLower === "sydney" || cityLower === "melbourne" || cityLower === "brisbane" || 
+               cityLower === "perth" || cityLower === "adelaide" || cityLower === "canberra" || cityLower === "darwin")) {
+            effectiveLocation.country = country
+            console.log(`[v0] ✅ Effective location from query: ${queryPlace}, ${country} (source=query, kept uiCountry)`)
+          } else {
+            effectiveLocation.country = null
+            console.log(`[v0] ✅ Effective location from query: ${queryPlace} (source=query, country=null, will use city+disambiguation)`)
+          }
+        } else {
+          effectiveLocation.country = null
+          console.log(`[v0] ✅ Effective location from query: ${queryPlace} (source=query, country=null)`)
         }
       }
-    } catch (error) {
-      console.error("[v0] Error extracting location from query:", error)
     }
   } else if (city || country) {
-    // Location from UI params (location picker)
+    // No place in query, use UI location picker
     effectiveLocation.source = "ui"
     console.log(`[v0] ✅ Effective location from UI: ${city || 'none'}${country ? `, ${country}` : ""}`)
   }
@@ -152,9 +255,6 @@ export async function GET(req: NextRequest) {
   // Use effectiveLocation for all location-based operations
   const effectiveCity = effectiveLocation.city
   const effectiveCountry = effectiveLocation.country
-
-  // Extract micro-location if effectiveCity is set (D: Micro-location)
-  const microLocation = extractMicroLocation(q, effectiveCity)
   
   if (microLocation) {
     console.log(`[v0] 🔍 Micro-location detected: "${microLocation}" within "${effectiveCity}"`)
