@@ -101,11 +101,63 @@ export async function GET(req: NextRequest) {
     return null
   }
 
-  // Extract micro-location if city is set
-  const microLocation = extractMicroLocation(q, city)
+  /**
+   * COMPUTE EFFECTIVE LOCATION (Locality Contract v1)
+   * 
+   * Precedence:
+   * 1. Destination parsed from query/intent (trip planning or explicit city in query) - source: "query"
+   * 2. Manual location picker (city/country params) - source: "ui"
+   * 3. Device geolocation fallback (if we had it) - source: "device"
+   * 
+   * effectiveLocation is per-search and separate from defaultLocation (stored location)
+   */
+  let effectiveLocation: { city: string | null; country: string | null; source: "query" | "ui" | "device" } = {
+    city: city || null,
+    country: country || null,
+    source: (city || country) ? "ui" : "device", // Default to "ui" if params provided, else "device"
+  }
+
+  // If no location from params, try intent extraction (for trip planning / explicit city in query)
+  if (q && isEventQuery && !city && !country) {
+    try {
+      const intentResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/search/intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q }),
+      })
+      if (intentResponse.ok) {
+        const intentData = await intentResponse.json()
+        const extracted = intentData.extracted || {}
+        if (extracted.city && !city) {
+          city = extracted.city.trim()
+          effectiveLocation.city = city
+          effectiveLocation.source = "query"
+          console.log(`[v0] ✅ Effective location from query: ${city}${extracted.country ? `, ${extracted.country}` : ""}`)
+        }
+        if (extracted.country && !country) {
+          country = extracted.country.trim()
+          effectiveLocation.country = country
+          effectiveLocation.source = "query"
+        }
+      }
+    } catch (error) {
+      console.error("[v0] Error extracting location from query:", error)
+    }
+  } else if (city || country) {
+    // Location from UI params (location picker)
+    effectiveLocation.source = "ui"
+    console.log(`[v0] ✅ Effective location from UI: ${city || 'none'}${country ? `, ${country}` : ""}`)
+  }
+
+  // Use effectiveLocation for all location-based operations
+  const effectiveCity = effectiveLocation.city
+  const effectiveCountry = effectiveLocation.country
+
+  // Extract micro-location if effectiveCity is set (D: Micro-location)
+  const microLocation = extractMicroLocation(q, effectiveCity)
   
   if (microLocation) {
-    console.log(`[v0] 🔍 Micro-location detected: "${microLocation}" within "${city}"`)
+    console.log(`[v0] 🔍 Micro-location detected: "${microLocation}" within "${effectiveCity}"`)
   }
 
   // NOTE: Location should come from URL params (city/country) set by UI location picker
@@ -592,30 +644,30 @@ export async function GET(req: NextRequest) {
       finalReturnedWebCount: 0,
       webError: null,
       sampleWebTitles: [],
-      effectiveLocation: { city: city || null, country: country || null },
+      effectiveLocation: effectiveLocation,
       microLocation: microLocation || null,
       webQueriesUsed: [] as string[],
       webAfterMicroLocationCount: 0,
       topDomains: [] as string[],
     }
     
-    // GUARANTEE: If internal results count is 0 and location is known, web search MUST run
-    // Decide if we should search web:
-    // 1. Always search web for non-event queries (current behavior)
-    // 2. For event-intent queries: only search web if no internal events found (automatic fallback)
-    // 3. Location must be set for event-intent queries to use web fallback
+    // LOCality Contract C3: Web fallback MUST run when internal=0 + effectiveLocation exists
+    // Rule: If internalCount === 0 AND effectiveLocation.city || effectiveLocation.country exists, 
+    //       web search MUST run for event-intent queries.
     const shouldSearchWeb = q.trim().length > 0 && (
       !isEventQuery || // Non-event queries: always search web
-      (isEventQuery && events.length === 0 && (city || country)) // Event-intent with no internal events AND location set: auto-fallback
+      (isEventQuery && events.length === 0 && (effectiveCity || effectiveCountry)) // Event-intent with no internal events AND effectiveLocation set: auto-fallback
     )
     
-    // CRITICAL: If internal is 0 and location is set, web search MUST be called
-    if (events.length === 0 && (city || country) && q.trim().length > 0 && !shouldSearchWeb) {
-      console.warn(`[v0] ⚠️ WARNING: Internal results empty, location set (${city || ''}, ${country || ''}), but web search not triggered!`)
+    // CRITICAL: If internal is 0 and effectiveLocation is set, web search MUST be called
+    if (events.length === 0 && (effectiveCity || effectiveCountry) && q.trim().length > 0 && !shouldSearchWeb) {
+      console.warn(`[v0] ⚠️ WARNING: Internal results empty, effectiveLocation set (${effectiveCity || ''}, ${effectiveCountry || ''}), but web search not triggered!`)
+      // Force web search
+      debugTrace.webCalled = true
     }
     
     if (isEventQuery && events.length === 0 && shouldSearchWeb) {
-      console.log(`[v0] 🔄 Event-intent query with no internal events: automatically fetching web results (location: ${city || 'none'}${country ? `, ${country}` : ''})`)
+      console.log(`[v0] 🔄 Event-intent query with no internal events: automatically fetching web results (effectiveLocation: ${effectiveCity || 'none'}${effectiveCountry ? `, ${effectiveCountry}` : ''})`)
     } else if (isEventQuery && events.length > 0) {
       console.log(`[v0] ✅ Event-intent query: ${events.length} internal events found, skipping web search`)
     }
@@ -636,38 +688,44 @@ export async function GET(req: NextRequest) {
         // If micro-location is detected, try micro-location query first
         let webQueries: string[] = []
         
-        if (microLocation && city) {
-          // Micro-location query: include micro-location explicitly
-          // Examples: "live music Brunswick Melbourne Australia" or "Brunswick Melbourne gig guide"
+        // E1: Multi-query CSE merge - Run 2-3 queries in parallel and merge/dedupe
+        // Use effectiveCity/effectiveCountry (not city/country params)
+        if (microLocation && effectiveCity) {
+          // Micro-location queries
           const baseQuery = q.replace(new RegExp(`\\b(in|near|around)\\s+${microLocation}\\b`, "gi"), "").trim()
           
           // Query 1: Micro-location with full context
-          let microQuery = `${baseQuery} "${microLocation}" ${city}`
-          if (country) microQuery = `${microQuery} ${country}`
+          let microQuery = `${baseQuery} "${microLocation}" ${effectiveCity}`
+          if (effectiveCountry) microQuery = `${microQuery} ${effectiveCountry}`
           if (category && category !== "all") microQuery = `${microQuery} ${category}`
           if (!microQuery.toLowerCase().includes("event")) microQuery = `${microQuery} events`
           webQueries.push(microQuery.trim())
           
           // Query 2: Alternative format for gig guides
-          let altQuery = `${microLocation} ${city}`
-          if (country) altQuery = `${altQuery} ${country}`
+          let altQuery = `${microLocation} ${effectiveCity}`
+          if (effectiveCountry) altQuery = `${altQuery} ${effectiveCountry}`
           if (baseQuery) altQuery = `${baseQuery} ${altQuery}`
           if (!altQuery.toLowerCase().includes("event")) altQuery = `${altQuery} events`
           webQueries.push(altQuery.trim())
+          
+          // Query 3: Micro-location live music events
+          let microQuery3 = `${microLocation} ${effectiveCity} live music events`
+          if (effectiveCountry) microQuery3 = `${microQuery3} ${effectiveCountry}`
+          webQueries.push(microQuery3.trim())
         }
         
-        // Always add city-level query (fallback if micro-location query returns 0)
-        let cityQuery = q
-        if (city) {
-          const cityLower = city.toLowerCase().trim()
-          if (!cityQuery.toLowerCase().includes(cityLower)) {
-            cityQuery = `${cityQuery} ${city}`
+        // Always add city-level queries (fallback if micro-location query returns 0)
+        let cityQuery1 = q
+        if (effectiveCity) {
+          const cityLower = effectiveCity.toLowerCase().trim()
+          if (!cityQuery1.toLowerCase().includes(cityLower)) {
+            cityQuery1 = `${cityQuery1} ${effectiveCity}`
           }
           
-          if (country) {
-            const countryLower = country.toLowerCase()
-            if (!cityQuery.toLowerCase().includes(countryLower)) {
-              cityQuery = `${cityQuery} ${country}`
+          if (effectiveCountry) {
+            const countryLower = effectiveCountry.toLowerCase()
+            if (!cityQuery1.toLowerCase().includes(countryLower)) {
+              cityQuery1 = `${cityQuery1} ${effectiveCountry}`
             }
           } else {
             // Use defaults for ambiguous cities
@@ -687,78 +745,70 @@ export async function GET(req: NextRequest) {
               "madrid": "Spain",
             }
             if (ambiguousCities[cityLower]) {
-              cityQuery = `${cityQuery} ${ambiguousCities[cityLower]}`
+              cityQuery1 = `${cityQuery1} ${ambiguousCities[cityLower]}`
             }
           }
-        } else if (country && !cityQuery.toLowerCase().includes(country.toLowerCase())) {
-          cityQuery = `${cityQuery} ${country}`
+        } else if (effectiveCountry && !cityQuery1.toLowerCase().includes(effectiveCountry.toLowerCase())) {
+          cityQuery1 = `${cityQuery1} ${effectiveCountry}`
         }
         
-        if (category && category !== "all" && !cityQuery.toLowerCase().includes(category.toLowerCase())) {
-          cityQuery = `${cityQuery} ${category}`
+        if (category && category !== "all" && !cityQuery1.toLowerCase().includes(category.toLowerCase())) {
+          cityQuery1 = `${cityQuery1} ${category}`
         }
-        if (!cityQuery.toLowerCase().includes("event")) {
-          cityQuery = `${cityQuery} events`
+        if (!cityQuery1.toLowerCase().includes("event")) {
+          cityQuery1 = `${cityQuery1} events`
         }
         
-        // Add city-level query (only if not already in micro-location queries)
-        const cityQueryTrimmed = cityQuery.trim()
-        if (!microLocation || !webQueries.includes(cityQueryTrimmed)) {
-          webQueries.push(cityQueryTrimmed)
+        // Query 2: City gig guide
+        let cityQuery2 = effectiveCity ? `${effectiveCity} gig guide live music` : ""
+        if (effectiveCountry) cityQuery2 = `${cityQuery2} ${effectiveCountry}`
+        if (cityQuery2) webQueries.push(cityQuery2.trim())
+        
+        // Query 3: City what's on
+        let cityQuery3 = effectiveCity ? `${effectiveCity} what's on live music` : ""
+        if (effectiveCountry) cityQuery3 = `${cityQuery3} ${effectiveCountry}`
+        if (cityQuery3) webQueries.push(cityQuery3.trim())
+        
+        // Add city-level query 1 (only if not already in micro-location queries)
+        const cityQuery1Trimmed = cityQuery1.trim()
+        if (!microLocation || !webQueries.includes(cityQuery1Trimmed)) {
+          webQueries.push(cityQuery1Trimmed)
         }
         
         debugTrace.webQueriesUsed = webQueries
         
-        // Execute web searches (try micro-location first, then fall back to city-level)
-        let webSearchResults: any[] = []
-        
-        for (const webQuery of webQueries) {
-          console.log("[v0] Web search query:", webQuery)
-          debugTrace.webQuery = webQuery // Track the last query used
-          
-          const results = await searchWeb({
-            query: webQuery,
-            limit: 10,
+        // E1: Execute web searches in parallel and merge/dedupe by canonical URL
+        console.log(`[v0] Running ${webQueries.length} web queries in parallel...`)
+        const webSearchPromises = webQueries.map(query => 
+          searchWeb({ query, limit: 10 }).catch(err => {
+            console.error(`[v0] Web search failed for query "${query}":`, err)
+            return []
           })
-          
-          if (results.length > 0) {
-            webSearchResults = results
-            debugTrace.webRawCount = results.length
-            break // Use first query that returns results
+        )
+        
+        const webSearchResultsArrays = await Promise.all(webSearchPromises)
+        
+        // Merge and dedupe by URL
+        const urlMap = new Map<string, any>()
+        for (const results of webSearchResultsArrays) {
+          for (const result of results) {
+            if (result.url && !urlMap.has(result.url)) {
+              urlMap.set(result.url, result)
+            }
           }
         }
         
-        // If no results from any query, use the city-level query result
-        if (webSearchResults.length === 0 && webQueries.length > 0) {
-          const fallbackQuery = webQueries[webQueries.length - 1] // City-level query
-          webSearchResults = await searchWeb({
-            query: fallbackQuery,
-            limit: 10,
-          })
-          debugTrace.webRawCount = webSearchResults.length
-        }
+        let webSearchResults = Array.from(urlMap.values())
+        debugTrace.webRawCount = webSearchResults.length
+        console.log(`[v0] Merged ${webSearchResults.length} unique web results from ${webQueries.length} queries`)
         
         // Transform web results to match expected format (both internal and external formats)
+        // Use effectiveLocation for labeling (not stored default location) - Locality Contract F
         let transformedWebResults = webSearchResults.map((result, index) => {
-          // Try to extract city from snippet if not provided
-          let extractedCity = city || ""
-          let extractedCountry = country || ""
-          
-          if (!extractedCity && result.snippet) {
-            // Simple extraction: look for common city patterns in snippet
-            const cityMatch = result.snippet.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/)
-            if (cityMatch) {
-              extractedCity = cityMatch[1]
-            }
-          }
-          
-          // Try to extract country from snippet/URL
-          if (!extractedCountry && result.snippet) {
-            const countryMatch = result.snippet.match(/\b(Australia|USA|United States|UK|United Kingdom|Greece|Italy|Spain|France|Germany)\b/i)
-            if (countryMatch) {
-              extractedCountry = countryMatch[1]
-            }
-          }
+          // Use effectiveLocation for city/country (not extracted from snippet)
+          // This ensures results are labeled with the effective search location, not default location
+          const extractedCity = effectiveCity || ""
+          const extractedCountry = effectiveCountry || ""
           
           return {
             id: `web-${Date.now()}-${index}`,
@@ -784,19 +834,27 @@ export async function GET(req: NextRequest) {
               country: extractedCountry,
               address: "",
             },
+            // Store original URL for eventness scoring
+            _originalUrl: result.url,
+            _originalSnippet: result.snippet || "",
           }
         })
         
-        // JUNK FILTER: Exclude PDFs, reports, census, executive summaries, etc.
+        // E2: Eventness gating - Filter out non-events (PDFs, reports, cruises, homepages)
+        const beforeEventnessFilter = transformedWebResults.length
         transformedWebResults = transformedWebResults.filter((result) => {
+          const url = (result._originalUrl || result.externalUrl || "").toLowerCase()
+          const title = (result.title || "").toLowerCase()
+          const snippet = (result._originalSnippet || result.description || "").toLowerCase()
+          const fullText = `${title} ${snippet}`.toLowerCase()
+          
           // Exclude PDFs
-          if (result.externalUrl && result.externalUrl.toLowerCase().endsWith('.pdf')) {
-            console.log(`[v0] 🚫 EXCLUDED: PDF file - "${result.title?.substring(0, 50)}"`)
+          if (url.endsWith('.pdf') || url.includes('/pdf/')) {
+            console.log(`[v0] 🚫 E2 EXCLUDED: PDF file - "${result.title?.substring(0, 50)}"`)
             return false
           }
           
           // Exclude reports, studies, census, executive summaries
-          const fullText = `${result.title || ""} ${result.description || ""}`.toLowerCase()
           const junkPatterns = [
             /\bcensus\b/i,
             /\bexecutive\s+summary\b/i,
@@ -808,14 +866,35 @@ export async function GET(req: NextRequest) {
             /\bwhitepaper\b/i,
           ]
           
-          const isJunk = junkPatterns.some(pattern => pattern.test(fullText))
-          if (isJunk) {
-            console.log(`[v0] 🚫 EXCLUDED: Junk content (report/census) - "${result.title?.substring(0, 50)}"`)
+          if (junkPatterns.some(pattern => pattern.test(fullText))) {
+            console.log(`[v0] 🚫 E2 EXCLUDED: Junk content (report/census) - "${result.title?.substring(0, 50)}"`)
+            return false
+          }
+          
+          // Exclude obvious non-event commercial promos (cruises/tours when query is live music)
+          if (q.toLowerCase().includes("live music") || q.toLowerCase().includes("music")) {
+            if (fullText.includes("cruise") && !fullText.includes("music cruise")) {
+              console.log(`[v0] 🚫 E2 EXCLUDED: Cruise promo (not music event) - "${result.title?.substring(0, 50)}"`)
+              return false
+            }
+          }
+          
+          // Exclude generic root homepages with no listing cues
+          // Very short path + no "events/calendar/whats-on/gig" cues
+          const urlPath = url.split('/').filter(p => p).length
+          const hasListingCues = /(gig|gig-guide|whats-on|whatson|events|calendar|what-s-on|program)/i.test(url + fullText)
+          if (urlPath <= 2 && !hasListingCues) {
+            console.log(`[v0] 🚫 E2 EXCLUDED: Generic homepage (no listing cues) - "${result.title?.substring(0, 50)}"`)
             return false
           }
           
           return true
         })
+        
+        debugTrace.webAfterEventinessCount = transformedWebResults.length
+        if (beforeEventnessFilter !== transformedWebResults.length) {
+          console.log(`[v0] E2 Eventness filter: ${beforeEventnessFilter} → ${transformedWebResults.length} results`)
+        }
         
         // MICRO-LOCATION FILTER: If micro-location was used, filter results to mention it
         // Store original results before filtering for fallback
@@ -862,8 +941,8 @@ export async function GET(req: NextRequest) {
                   description: result.snippet || "",
                   startAt: result.startAt,
                   endAt: result.startAt,
-                  city: city || "",
-                  country: country || "",
+                  city: effectiveCity || "",
+                  country: effectiveCountry || "",
                   address: "",
                   venueName: "",
                   categories: category && category !== "all" ? [category] : [],
@@ -875,8 +954,8 @@ export async function GET(req: NextRequest) {
                   externalUrl: result.url,
                   imageUrl: result.imageUrl || undefined,
                   location: {
-                    city: city || "",
-                    country: country || "",
+                    city: effectiveCity || "",
+                    country: effectiveCountry || "",
                     address: "",
                   },
                 }
@@ -1206,17 +1285,57 @@ export async function GET(req: NextRequest) {
       console.log(`[v0] 🎯 Event-intent query detected: "${q}" - applying event-first ranking to web results`)
     }
     
+    // E3: Boost gig guides / calendars without hardcoding a single city
+    // Add lightweight scoring for ranking (not filtering)
+    const scoredWebResults = externalEventsUnranked.map((result: any) => {
+      let boost = 0
+      const url = (result._originalUrl || result.externalUrl || "").toLowerCase()
+      const snippet = (result._originalSnippet || result.description || "").toLowerCase()
+      const fullText = `${url} ${snippet}`.toLowerCase()
+      
+      // Boost if URL or snippet suggests a listing/calendar
+      if (/(gig|gig-guide|whats-on|whatson|events|calendar|what-s-on|program)/i.test(fullText)) {
+        boost += 3
+      }
+      
+      // Boost local civic/venue sources
+      if (url.includes('.gov.au') || url.includes('.gov/') || url.includes('/events')) {
+        boost += 2
+      }
+      
+      // Boost reputable ticket/listing pages
+      if (url.includes('eventbrite.com') && url.includes('/e/')) {
+        boost += 2
+      }
+      
+      // Penalty (ranking only) for forums/social posts
+      if (url.includes('reddit.com') || url.includes('facebook.com/posts')) {
+        boost -= 2
+      }
+      
+      // Penalty for global "choose your country" landing pages
+      if (url.includes('/choose') || url.includes('/select-country')) {
+        boost -= 3
+      }
+      
+      return { ...result, _eventnessBoost: boost }
+    })
+    
+    // Sort by boost first, then apply event-first ranking
+    scoredWebResults.sort((a: any, b: any) => (b._eventnessBoost || 0) - (a._eventnessBoost || 0))
+    
     // Rank external events using event-first scoring
     // This will:
     // - Boost specific events with dates, venues, locations (+5, +4, +3)
     // - Penalize aggregators/directories (-5)
     // - Penalize wrong country (-6)
     // - Penalize venue homepages without events (-3)
+    // Use effectiveLocation for ranking (not stored default location)
     const externalEvents = rankEventResults(
-      externalEventsUnranked,
+      scoredWebResults,
       q,
-      city || undefined,
-      country || undefined
+      effectiveCity || undefined,
+      effectiveCountry || undefined
     )
     
     debugTrace.webAfterEventinessCount = externalEvents.length
@@ -1264,6 +1383,8 @@ export async function GET(req: NextRequest) {
       includesWeb: externalEvents.length > 0,
       // Indicate if this is an event-intent query
       isEventIntent: isEventQuery,
+      // Locality Contract F: Return effectiveLocation for UI labeling
+      effectiveLocation: effectiveLocation,
     }
     
     // Add debug trace if ?debug=1

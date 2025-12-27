@@ -106,6 +106,17 @@ export function EventsListingContent({
       if (initialDateFrom) params.set("date_from", initialDateFrom)
       if (initialDateTo) params.set("date_to", initialDateTo)
 
+      // Locality Contract A: Always send full context (q/city/country/date_from/date_to/category)
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[v0] Search API params:", {
+          q: params.get("query") || params.get("q"),
+          city: params.get("city"),
+          country: params.get("country"),
+          date_from: params.get("date_from"),
+          date_to: params.get("date_to"),
+          category: params.get("category"),
+        })
+      }
       console.log("[v0] Fetching /api/search/events with params:", params.toString())
 
       const r = await fetch(`/api/search/events?${params.toString()}`, {
