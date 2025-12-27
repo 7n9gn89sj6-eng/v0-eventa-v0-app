@@ -630,27 +630,47 @@ export async function GET(req: NextRequest) {
       })
       
       try {
-        // Build web search query using LOCATION CONTROL (city/country from params, not query extraction)
+        // Build web search queries using LOCATION CONTROL (city/country from params, not query extraction)
         // CRITICAL: Use city/country from URL params (set by UI location picker), not from query text
-        let webQuery = q
         
-        // ALWAYS add city if provided in params (from UI location picker)
+        // If micro-location is detected, try micro-location query first
+        let webQueries: string[] = []
+        
+        if (microLocation && city) {
+          // Micro-location query: include micro-location explicitly
+          // Examples: "live music Brunswick Melbourne Australia" or "Brunswick Melbourne gig guide"
+          const baseQuery = q.replace(new RegExp(`\\b(in|near|around)\\s+${microLocation}\\b`, "gi"), "").trim()
+          
+          // Query 1: Micro-location with full context
+          let microQuery = `${baseQuery} "${microLocation}" ${city}`
+          if (country) microQuery = `${microQuery} ${country}`
+          if (category && category !== "all") microQuery = `${microQuery} ${category}`
+          if (!microQuery.toLowerCase().includes("event")) microQuery = `${microQuery} events`
+          webQueries.push(microQuery.trim())
+          
+          // Query 2: Alternative format for gig guides
+          let altQuery = `${microLocation} ${city}`
+          if (country) altQuery = `${altQuery} ${country}`
+          if (baseQuery) altQuery = `${baseQuery} ${altQuery}`
+          if (!altQuery.toLowerCase().includes("event")) altQuery = `${altQuery} events`
+          webQueries.push(altQuery.trim())
+        }
+        
+        // Always add city-level query (fallback if micro-location query returns 0)
+        let cityQuery = q
         if (city) {
           const cityLower = city.toLowerCase().trim()
-          // Add city if not already in query
-          if (!webQuery.toLowerCase().includes(cityLower)) {
-            webQuery = `${webQuery} ${city}`
+          if (!cityQuery.toLowerCase().includes(cityLower)) {
+            cityQuery = `${cityQuery} ${city}`
           }
           
-          // Add country for ambiguous cities to improve Google search accuracy
-          // Use country from params if available, otherwise use defaults for ambiguous cities
           if (country) {
             const countryLower = country.toLowerCase()
-            if (!webQuery.toLowerCase().includes(countryLower)) {
-              webQuery = `${webQuery} ${country}`
+            if (!cityQuery.toLowerCase().includes(countryLower)) {
+              cityQuery = `${cityQuery} ${country}`
             }
           } else {
-            // No country in params, use defaults for ambiguous cities
+            // Use defaults for ambiguous cities
             const ambiguousCities: Record<string, string> = {
               "melbourne": "Australia",
               "ithaca": "",
@@ -667,32 +687,56 @@ export async function GET(req: NextRequest) {
               "madrid": "Spain",
             }
             if (ambiguousCities[cityLower]) {
-              webQuery = `${webQuery} ${ambiguousCities[cityLower]}`
+              cityQuery = `${cityQuery} ${ambiguousCities[cityLower]}`
             }
           }
-        } else if (country && !webQuery.toLowerCase().includes(country.toLowerCase())) {
-          // City not in params, but country is - add it
-          webQuery = `${webQuery} ${country}`
+        } else if (country && !cityQuery.toLowerCase().includes(country.toLowerCase())) {
+          cityQuery = `${cityQuery} ${country}`
         }
         
-        if (category && category !== "all" && !webQuery.toLowerCase().includes(category.toLowerCase())) {
-          webQuery = `${webQuery} ${category}`
+        if (category && category !== "all" && !cityQuery.toLowerCase().includes(category.toLowerCase())) {
+          cityQuery = `${cityQuery} ${category}`
         }
-        // Add "events" to improve search results
-        if (!webQuery.toLowerCase().includes("event")) {
-          webQuery = `${webQuery} events`
+        if (!cityQuery.toLowerCase().includes("event")) {
+          cityQuery = `${cityQuery} events`
         }
         
-        const finalWebQuery = webQuery.trim()
-        debugTrace.webQuery = finalWebQuery
-        console.log("[v0] Web search query:", finalWebQuery)
+        // Add city-level query (only if not already in micro-location queries)
+        const cityQueryTrimmed = cityQuery.trim()
+        if (!microLocation || !webQueries.includes(cityQueryTrimmed)) {
+          webQueries.push(cityQueryTrimmed)
+        }
         
-        const webSearchResults = await searchWeb({
-          query: finalWebQuery,
-          limit: 10,
-        })
+        debugTrace.webQueriesUsed = webQueries
         
-        debugTrace.webRawCount = webSearchResults.length
+        // Execute web searches (try micro-location first, then fall back to city-level)
+        let webSearchResults: any[] = []
+        
+        for (const webQuery of webQueries) {
+          console.log("[v0] Web search query:", webQuery)
+          debugTrace.webQuery = webQuery // Track the last query used
+          
+          const results = await searchWeb({
+            query: webQuery,
+            limit: 10,
+          })
+          
+          if (results.length > 0) {
+            webSearchResults = results
+            debugTrace.webRawCount = results.length
+            break // Use first query that returns results
+          }
+        }
+        
+        // If no results from any query, use the city-level query result
+        if (webSearchResults.length === 0 && webQueries.length > 0) {
+          const fallbackQuery = webQueries[webQueries.length - 1] // City-level query
+          webSearchResults = await searchWeb({
+            query: fallbackQuery,
+            limit: 10,
+          })
+          debugTrace.webRawCount = webSearchResults.length
+        }
         
         // Transform web results to match expected format (both internal and external formats)
         let transformedWebResults = webSearchResults.map((result, index) => {
@@ -774,6 +818,9 @@ export async function GET(req: NextRequest) {
         })
         
         // MICRO-LOCATION FILTER: If micro-location was used, filter results to mention it
+        // Store original results before filtering for fallback
+        const resultsBeforeMicroFilter = [...transformedWebResults]
+        
         if (microLocation && transformedWebResults.length > 0) {
           const microLocLower = microLocation.toLowerCase()
           const beforeMicroFilter = transformedWebResults.length
@@ -789,52 +836,62 @@ export async function GET(req: NextRequest) {
             console.log(`[v0] Micro-location filter: ${beforeMicroFilter} → ${transformedWebResults.length} results mentioning "${microLocation}"`)
           }
           
-          // FALLBACK: If micro-location filter returns 0, fall back to city-level results
-          if (transformedWebResults.length === 0 && webSearchResults.length > 0) {
+          // FALLBACK: If micro-location filter returns 0, fall back to city-level results (already fetched)
+          if (transformedWebResults.length === 0) {
             console.log(`[v0] ⚠️ Micro-location filter returned 0 results, falling back to city-level results`)
-            // Re-run city-level query and use all results
-            const cityQuery = webQueries[webQueries.length - 1] // Last query is city-level
-            const fallbackResults = await searchWeb({
-              query: cityQuery,
-              limit: 10,
-            })
-            
-            transformedWebResults = fallbackResults.map((result, index) => {
-              return {
-                id: `web-fallback-${Date.now()}-${index}`,
-                title: result.title,
-                description: result.snippet || "",
-                startAt: result.startAt,
-                endAt: result.startAt,
-                city: city || "",
-                country: country || "",
-                address: "",
-                venueName: "",
-                categories: category && category !== "all" ? [category] : [],
-                priceFree: false,
-                imageUrls: result.imageUrl ? [result.imageUrl] : [],
-                status: "PUBLISHED" as const,
-                aiStatus: "SAFE" as const,
-                source: "web" as const,
-                externalUrl: result.url,
-                imageUrl: result.imageUrl || undefined,
-                location: {
+            // If we have multiple queries, the last one is city-level - use all results before micro-filter
+            // Otherwise, re-run city-level query as fallback
+            if (resultsBeforeMicroFilter.length > 0) {
+              // Use the results we already have (from city-level query)
+              transformedWebResults = resultsBeforeMicroFilter
+              debugTrace.webAfterMicroLocationCount = transformedWebResults.length
+              console.log(`[v0] Using city-level results as fallback: ${transformedWebResults.length} results`)
+            } else if (webQueries.length > 1) {
+              // No results from micro-location query, try city-level query
+              const cityQuery = webQueries[webQueries.length - 1] // Last query is city-level
+              console.log(`[v0] Re-running city-level query as fallback: ${cityQuery}`)
+              const fallbackResults = await searchWeb({
+                query: cityQuery,
+                limit: 10,
+              })
+              
+              transformedWebResults = fallbackResults.map((result, index) => {
+                return {
+                  id: `web-fallback-${Date.now()}-${index}`,
+                  title: result.title,
+                  description: result.snippet || "",
+                  startAt: result.startAt,
+                  endAt: result.startAt,
                   city: city || "",
                   country: country || "",
                   address: "",
-                },
-              }
-            })
-            
-            // Apply junk filter to fallback results
-            transformedWebResults = transformedWebResults.filter((result) => {
-              if (result.externalUrl && result.externalUrl.toLowerCase().endsWith('.pdf')) return false
-              const fullText = `${result.title || ""} ${result.description || ""}`.toLowerCase()
-              const junkPatterns = [/\bcensus\b/i, /\bexecutive\s+summary\b/i, /\breport\b/i, /\bstudy\b/i, /\bsubmission\b/i]
-              return !junkPatterns.some(pattern => pattern.test(fullText))
-            })
-            
-            debugTrace.webAfterMicroLocationCount = transformedWebResults.length
+                  venueName: "",
+                  categories: category && category !== "all" ? [category] : [],
+                  priceFree: false,
+                  imageUrls: result.imageUrl ? [result.imageUrl] : [],
+                  status: "PUBLISHED" as const,
+                  aiStatus: "SAFE" as const,
+                  source: "web" as const,
+                  externalUrl: result.url,
+                  imageUrl: result.imageUrl || undefined,
+                  location: {
+                    city: city || "",
+                    country: country || "",
+                    address: "",
+                  },
+                }
+              })
+              
+              // Apply junk filter to fallback results
+              transformedWebResults = transformedWebResults.filter((result) => {
+                if (result.externalUrl && result.externalUrl.toLowerCase().endsWith('.pdf')) return false
+                const fullText = `${result.title || ""} ${result.description || ""}`.toLowerCase()
+                const junkPatterns = [/\bcensus\b/i, /\bexecutive\s+summary\b/i, /\breport\b/i, /\bstudy\b/i, /\bsubmission\b/i]
+                return !junkPatterns.some(pattern => pattern.test(fullText))
+              })
+              
+              debugTrace.webAfterMicroLocationCount = transformedWebResults.length
+            }
           }
         }
         
