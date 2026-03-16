@@ -12,234 +12,49 @@ import { VersionBadge } from "@/components/version-badge";
 
 import { useI18n } from "@/lib/i18n/context";
 import { useLocation } from "@/lib/location-context";
-import { reverseGeocodeDebounced } from "@/lib/geocoding";
+import type { GeolocationErrorCode } from "@/lib/location-context";
 
-type GeolocationErrorCode = "PERMISSION_DENIED" | "POSITION_UNAVAILABLE" | "TIMEOUT" | "TIMEOUT_GRANTED" | "NOT_SUPPORTED" | "HTTPS_REQUIRED" | null;
+type HeaderGeolocationErrorCode = GeolocationErrorCode | "TIMEOUT_GRANTED";
 
 export function SiteHeader() {
   const { t } = useI18n();
   const tCommon = t("common");
-  const { defaultLocation, isLoadingLocation: contextLoadingLocation, setDefaultLocation, clearDefaultLocation } = useLocation();
+  const { defaultLocation, isLoadingLocation: contextLoadingLocation, clearDefaultLocation, requestUserLocation } = useLocation();
   const [manualLoadingLocation, setManualLoadingLocation] = useState(false);
-  const [geolocationError, setGeolocationError] = useState<GeolocationErrorCode>(null);
+  const [geolocationError, setGeolocationError] = useState<HeaderGeolocationErrorCode>(null);
 
-  // Only show/disable for user-triggered request so the button is always clickable
   const isLoadingLocation = manualLoadingLocation;
 
-  // Helper to detect if we're on localhost
-  const isLocalhost = typeof window !== "undefined" && 
-    (window.location.hostname === "localhost" || 
-     window.location.hostname === "127.0.0.1" || 
-     window.location.hostname.startsWith("192.168.") ||
-     window.location.hostname.startsWith("10."));
-
-  const handleLocationRequest = async (retryCount = 0) => {
-    console.log("[Header] Location button clicked", { defaultLocation, isLoadingLocation, retryCount });
-    
+  const handleLocationRequest = async () => {
+    if (defaultLocation) {
+      clearDefaultLocation();
+      setGeolocationError(null);
+      return;
+    }
+    setManualLoadingLocation(true);
+    setGeolocationError(null);
     try {
-      if (defaultLocation) {
-        // If location exists, clear it
-        console.log("[Header] Clearing existing location");
-        clearDefaultLocation();
+      const result = await requestUserLocation({ maxRetries: 3 });
+      if (result.success) {
         setGeolocationError(null);
-        return;
+      } else {
+        setGeolocationError(result.errorCode);
       }
-
-      console.log("[Header] Starting location detection");
-      setManualLoadingLocation(true);
-      setGeolocationError(null); // Clear previous errors
-
-      // Check if geolocation is available
-      if (!navigator.geolocation) {
-        console.warn("[Header] Geolocation API not available");
-        setManualLoadingLocation(false);
-        setGeolocationError("NOT_SUPPORTED");
-        return;
-      }
-
-      // Check HTTPS requirement (skip on localhost - expected to fail there)
-      if (!isLocalhost && typeof window !== "undefined" && window.location.protocol !== "https:") {
-        console.warn("[Header] Geolocation requires HTTPS (non-localhost)");
-        setManualLoadingLocation(false);
-        setGeolocationError("HTTPS_REQUIRED");
-        return;
-      }
-
-      // On localhost, expect geolocation to fail gracefully
-      if (isLocalhost) {
-        console.log("[Header] Localhost detected - geolocation may fail (expected)");
-      }
-
-      // Use longer timeout: 15 seconds (increased from 10)
-      const timeoutMs = 15000
-      
-      console.log(`[Header] Requesting geolocation permission (attempt ${retryCount + 1}, timeout: ${timeoutMs}ms)`);
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          console.log(`[Header] Geolocation success (attempt ${retryCount + 1}):`, position.coords);
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-
-          // Reverse geocode to get city name and country
-          try {
-            console.log("[Header] Reverse geocoding coordinates:", { lat, lng });
-            const response = await fetch(`/api/geocode/reverse?lat=${lat}&lng=${lng}`);
-            if (response.ok) {
-              const data = await response.json();
-              const city = data.city;
-              const country = data.country;
-
-              console.log("[Header] Reverse geocoding result:", { city, country });
-
-              if (city && city !== "Unknown location") {
-                // Use Location Context to set location
-                setDefaultLocation({
-                  city,
-                  country: country || undefined,
-                  lat,
-                  lng,
-                  source: "manual",
-                }, "manual");
-                console.log("[Header] Location stored successfully:", city);
-              } else {
-                console.warn("[Header] No city found in reverse geocoding result");
-              }
-            } else {
-              console.warn("[Header] Reverse geocoding API failed, trying fallback");
-              // Fallback to old method if API fails
-              const city = await reverseGeocodeDebounced(lat, lng);
-              if (city && city !== "Unknown location") {
-                setDefaultLocation({
-                  city,
-                  lat,
-                  lng,
-                  source: "manual",
-                }, "manual");
-                console.log("[Header] Fallback geocoding successful:", city);
-              }
-            }
-          } catch (error) {
-            console.error("[Header] Reverse geocoding error:", error);
-            // Fallback to old method
-            try {
-              const city = await reverseGeocodeDebounced(lat, lng);
-              if (city && city !== "Unknown location") {
-                setDefaultLocation({
-                  city,
-                  lat,
-                  lng,
-                  source: "manual",
-                }, "manual");
-                console.log("[Header] Fallback geocoding successful:", city);
-              }
-            } catch (fallbackError) {
-              console.error("[Header] Fallback geocoding also failed:", fallbackError);
-            }
-          }
-
-          setManualLoadingLocation(false);
-          setGeolocationError(null); // Clear any previous errors on success
-        },
-        async (error) => {
-          // Map error codes to our error type with detailed logging
-          let errorCode: GeolocationErrorCode = null;
-          
-          const errorDetails = {
-            code: error.code,
-            message: error.message,
-            attempt: retryCount + 1,
-            timeout: timeoutMs,
-            isLocalhost,
-          };
-          
-          if (error.code === error.PERMISSION_DENIED) {
-            errorCode = "PERMISSION_DENIED";
-            console.warn("[Header] Permission denied by user:", errorDetails);
-          } else if (error.code === error.POSITION_UNAVAILABLE) {
-            // Check permission status - if granted, this might be temporary (GPS off, network issue)
-            // Only show error if permission is actually denied
-            try {
-              const permissionStatus = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
-              if (permissionStatus.state === 'granted') {
-                // Permission granted but position unavailable - likely temporary (GPS disabled, network issue)
-                // Don't show error - just silently fail
-                console.log("[Header] Position unavailable despite granted permission (GPS disabled or network issue) - silently failing");
-                errorCode = null; // Don't show error
-              } else {
-                // Permission not granted - show error
-                errorCode = "POSITION_UNAVAILABLE";
-                console.warn("[Header] Position unavailable and permission not granted:", errorDetails);
-              }
-            } catch (permError) {
-              // Permissions API not supported - silently fail
-              console.log("[Header] Position unavailable (Permissions API not supported) - silently failing");
-              errorCode = null;
-            }
-          } else if (error.code === error.TIMEOUT) {
-            // Timeout: Check if we should retry (only retry once)
-            if (retryCount === 0) {
-              console.log("[Header] Timeout occurred, retrying once with longer timeout...", errorDetails);
-              // Retry once with same timeout
-              setTimeout(() => {
-                handleLocationRequest(1);
-              }, 500); // Small delay before retry
-              return; // Don't set loading to false yet, retry is happening
-            }
-            
-            // Second attempt also timed out - check permission state
-            try {
-              const permissionStatus = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
-              if (permissionStatus.state === 'granted') {
-                // Permission granted but timed out - network issue, not permission issue
-                errorCode = "TIMEOUT_GRANTED";
-                console.warn("[Header] Timeout with granted permission (likely network/positioning issue):", errorDetails);
-              } else {
-                // Permission denied or prompt - different message
-                errorCode = "TIMEOUT";
-                console.warn("[Header] Timeout with denied/prompt permission:", errorDetails);
-              }
-            } catch (permError) {
-              // Permissions API not supported - fallback to generic timeout
-              errorCode = "TIMEOUT";
-              console.warn("[Header] Permissions API not supported, using generic timeout message:", errorDetails);
-            }
-          }
-
-          // On localhost, this is expected - don't show error to user
-          if (isLocalhost) {
-            console.log("[Header] Geolocation failed on localhost (expected behavior):", errorDetails);
-            setManualLoadingLocation(false);
-            setGeolocationError(null); // Don't show error on localhost
-            return;
-          }
-
-          // On production, show user-friendly error message
-          setGeolocationError(errorCode);
-          setManualLoadingLocation(false);
-        },
-        {
-          enableHighAccuracy: false,
-          timeout: timeoutMs, // Increased timeout: 15 seconds
-          maximumAge: 300000, // Cache for 5 minutes
-        }
-      );
-    } catch (error) {
-      console.error("[Header] Unexpected error in handleLocationRequest:", error);
+    } catch (err) {
+      console.error("[Header] requestUserLocation threw:", err);
+      setGeolocationError("POSITION_UNAVAILABLE");
+    } finally {
       setManualLoadingLocation(false);
-      // Don't show error for unexpected errors - just log and continue
-      // Search still works without location
     }
   };
 
-  // Get user-friendly error message
-  const getErrorMessage = (errorCode: GeolocationErrorCode): string => {
+  const getErrorMessage = (errorCode: HeaderGeolocationErrorCode): string => {
     switch (errorCode) {
       case "PERMISSION_DENIED":
         return "Location permission was denied. You can still search by entering a city name.";
       case "POSITION_UNAVAILABLE":
-        return "Location information is unavailable. You can still search by entering a city name.";
+        return "We couldn't determine your location right now (e.g. GPS off or weak signal). You can still search by city name.";
       case "TIMEOUT_GRANTED":
-        // Permission granted but timed out - network issue, not permission issue
         return "We couldn't determine your location right now. This can happen on some networks. You can still search by city.";
       case "TIMEOUT":
         return "Location request timed out. You can still search by entering a city name.";
@@ -247,6 +62,8 @@ export function SiteHeader() {
         return "Location detection is not supported in your browser. You can still search by entering a city name.";
       case "HTTPS_REQUIRED":
         return "Location detection requires a secure connection (HTTPS). You can still search by entering a city name.";
+      case "REVERSE_GEOCODE_FAILURE":
+        return "Location detected but we couldn't resolve the city name. You can still search by city.";
       default:
         return "";
     }

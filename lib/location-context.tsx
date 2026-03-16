@@ -11,12 +11,38 @@ export interface DefaultLocation {
   source: "device" | "stored" | "manual"
 }
 
+/** Error codes returned by requestUserLocation for UI messaging and logging */
+export type GeolocationErrorCode =
+  | "PERMISSION_DENIED"
+  | "POSITION_UNAVAILABLE"
+  | "TIMEOUT"
+  | "NOT_SUPPORTED"
+  | "HTTPS_REQUIRED"
+  | "REVERSE_GEOCODE_FAILURE"
+  | null
+
+export interface RequestUserLocationResult {
+  success: boolean
+  errorCode: GeolocationErrorCode
+  errorMessage?: string
+}
+
+/** Structured log for geolocation (permission_denied | timeout | position_unavailable | reverse_geocode_failure) */
+function logGeolocation(
+  type: "permission_denied" | "timeout" | "position_unavailable" | "reverse_geocode_failure",
+  details: { code?: number; message?: string; attempt?: number; maxRetries?: number; status?: number }
+) {
+  console.warn("[Geolocation]", { type, ...details })
+}
+
 interface LocationContextType {
   defaultLocation: DefaultLocation | null
   isLocationReady: boolean
   isLoadingLocation: boolean
   setDefaultLocation: (location: DefaultLocation | null, source?: "device" | "stored" | "manual") => void
   clearDefaultLocation: () => void
+  /** User-triggered location with retries and reverse geocode. Use for header and search bar buttons. */
+  requestUserLocation: (options?: { maxRetries?: number }) => Promise<RequestUserLocationResult>
 }
 
 const LocationContext = createContext<LocationContextType | undefined>(undefined)
@@ -89,8 +115,8 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
         }
       },
       (error) => {
-        // Silently fail - geolocation errors are expected (permission denied, timeout, etc.)
-        console.log(`[LocationContext] Geolocation failed (non-blocking):`, error.code === error.PERMISSION_DENIED ? "permission denied" : "other")
+        const type = error.code === error.PERMISSION_DENIED ? "permission_denied" : error.code === error.TIMEOUT ? "timeout" : "position_unavailable"
+        logGeolocation(type, { code: error.code, message: error.message || undefined })
         setIsLoadingLocation(false)
       },
       {
@@ -156,6 +182,114 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     console.log("[LocationContext] Location cleared")
   }, [])
 
+  const requestUserLocation = useCallback(
+    (options?: { maxRetries?: number }): Promise<RequestUserLocationResult> => {
+      const maxRetries = Math.max(1, Math.min(5, options?.maxRetries ?? 3))
+      const timeoutMs = 15000
+
+      return new Promise((resolve) => {
+        if (typeof window === "undefined" || !navigator.geolocation) {
+          resolve({ success: false, errorCode: "NOT_SUPPORTED", errorMessage: "Location detection is not supported in your browser." })
+          return
+        }
+        const isLocalhost =
+          window.location.hostname === "localhost" ||
+          window.location.hostname === "127.0.0.1" ||
+          window.location.hostname.startsWith("192.168.") ||
+          window.location.hostname.startsWith("10.")
+        if (!isLocalhost && window.location.protocol !== "https:") {
+          resolve({ success: false, errorCode: "HTTPS_REQUIRED", errorMessage: "Location detection requires a secure connection (HTTPS). You can still search by city name." })
+          return
+        }
+
+        let attempt = 0
+
+        const tryReverseGeocode = (lat: number, lng: number) => {
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 10000)
+          fetch(`/api/geocode/reverse?lat=${lat}&lng=${lng}`, { signal: controller.signal })
+            .then((response) => {
+              clearTimeout(timeoutId)
+              if (!response.ok) {
+                logGeolocation("reverse_geocode_failure", { status: response.status, message: response.statusText })
+                const fallback: DefaultLocation = { city: "Current location", lat, lng, source: "manual" }
+                storeUserLocationUtil({ lat, lng, city: fallback.city, country: undefined })
+                setDefaultLocationState({ ...fallback, source: "manual" })
+                return resolve({ success: true, errorCode: null })
+              }
+              return response.json().then((data: { city?: string; country?: string }) => {
+                const city = data?.city && data.city !== "Unknown location" ? data.city : "Current location"
+                const country = data?.country || undefined
+                storeUserLocationUtil({ lat, lng, city, country })
+                setDefaultLocationState({ city, country, lat, lng, source: "manual" })
+                resolve({ success: true, errorCode: null })
+              })
+            })
+            .catch((err) => {
+              clearTimeout(timeoutId)
+              if (err?.name === "AbortError") return
+              logGeolocation("reverse_geocode_failure", { message: String(err?.message || err) })
+              const fallback: DefaultLocation = { city: "Current location", lat, lng, source: "manual" }
+              storeUserLocationUtil({ lat, lng, city: fallback.city, country: undefined })
+              setDefaultLocationState({ ...fallback, source: "manual" })
+              resolve({ success: true, errorCode: null })
+            })
+        }
+
+        const tryGetPosition = () => {
+          attempt += 1
+          const useHighAccuracy = attempt >= maxRetries
+
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              const lat = position.coords.latitude
+              const lng = position.coords.longitude
+              tryReverseGeocode(lat, lng)
+            },
+            (error: GeolocationPositionError) => {
+              if (error.code === error.PERMISSION_DENIED) {
+                logGeolocation("permission_denied", { code: error.code, message: error.message || undefined })
+                resolve({
+                  success: false,
+                  errorCode: "PERMISSION_DENIED",
+                  errorMessage: "Location permission was denied. You can still search by entering a city name.",
+                })
+                return
+              }
+              if (error.code === error.POSITION_UNAVAILABLE || error.code === error.TIMEOUT) {
+                const type = error.code === error.TIMEOUT ? "timeout" : "position_unavailable"
+                logGeolocation(type, { code: error.code, message: error.message || undefined, attempt, maxRetries })
+                if (attempt < maxRetries) {
+                  setTimeout(() => tryGetPosition(), 1500)
+                  return
+                }
+                resolve({
+                  success: false,
+                  errorCode: error.code === error.TIMEOUT ? "TIMEOUT" : "POSITION_UNAVAILABLE",
+                  errorMessage:
+                    error.code === error.TIMEOUT
+                      ? "Location request timed out. You can still search by city name."
+                      : "We couldn't determine your location right now (e.g. GPS off or weak signal). You can still search by city name.",
+                })
+                return
+              }
+              logGeolocation("position_unavailable", { code: error.code, message: error.message || undefined, attempt })
+              resolve({
+                success: false,
+                errorCode: "POSITION_UNAVAILABLE",
+                errorMessage: "We couldn't determine your location. You can still search by city name.",
+              })
+            },
+            { enableHighAccuracy: useHighAccuracy, timeout: timeoutMs, maximumAge: 300000 }
+          )
+        }
+
+        tryGetPosition()
+      })
+    },
+    []
+  )
+
   return (
     <LocationContext.Provider
       value={{
@@ -164,6 +298,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
         isLoadingLocation,
         setDefaultLocation,
         clearDefaultLocation,
+        requestUserLocation,
       }}
     >
       {children}
