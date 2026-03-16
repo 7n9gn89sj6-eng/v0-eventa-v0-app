@@ -37,6 +37,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
     const [showExamples, setShowExamples] = useState(!initialQuery || alwaysShowSuggestions)
     const [error, setError] = useState<string | null>(null)
     const [locationError, setLocationError] = useState<string | null>(null)
+    const [manualLocationLoading, setManualLocationLoading] = useState(false)
 
     // Detect if we're on localhost
     const isLocalhost = typeof window !== "undefined" && 
@@ -66,13 +67,22 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
       }
 
       setLocationError(null)
+      setManualLocationLoading(true)
 
       if (!navigator.geolocation) {
-        console.log("[v0] Geolocation API not available")
+        setLocationError("Location detection is not supported in your browser. You can still search by city name.")
+        setManualLocationLoading(false)
         return
       }
 
-      const timeoutMs = 20000
+      // Geolocation requires HTTPS in production (browser security)
+      if (!isLocalhost && typeof window !== "undefined" && window.location.protocol !== "https:") {
+        setLocationError("Location detection requires a secure connection (HTTPS). You can still search by city name.")
+        setManualLocationLoading(false)
+        return
+      }
+
+      const timeoutMs = retryCount === 0 ? 20000 : 25000
       
       console.log(`[v0] Requesting location (attempt ${retryCount + 1}, timeout: ${timeoutMs}ms)`)
       
@@ -109,7 +119,6 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
                 setLocationError(null)
                 console.log(`[v0] Location set: ${city}${country ? `, ${country}` : ""}`)
               } else {
-                // Fallback
                 const cityFallback = await reverseGeocodeDebounced(lat, lng)
                 if (cityFallback && cityFallback !== "Unknown location") {
                   setDefaultLocation({
@@ -119,7 +128,19 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
                     source: "manual",
                   }, "manual")
                   setLocationError(null)
+                } else {
+                  setDefaultLocation({ city: "Current location", lat, lng, source: "manual" }, "manual")
+                  setLocationError(null)
                 }
+              }
+            } else {
+              const cityFallback = await reverseGeocodeDebounced(lat, lng)
+              if (cityFallback && cityFallback !== "Unknown location") {
+                setDefaultLocation({ city: cityFallback, lat, lng, source: "manual" }, "manual")
+                setLocationError(null)
+              } else {
+                setDefaultLocation({ city: "Current location", lat, lng, source: "manual" }, "manual")
+                setLocationError(null)
               }
             }
           } catch (error: any) {
@@ -127,31 +148,62 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
             try {
               const city = await reverseGeocodeDebounced(lat, lng)
               if (city && city !== "Unknown location") {
-                setDefaultLocation({
-                  city,
-                  lat,
-                  lng,
-                  source: "manual",
-                }, "manual")
+                setDefaultLocation({ city, lat, lng, source: "manual" }, "manual")
+                setLocationError(null)
+              } else {
+                setDefaultLocation({ city: "Current location", lat, lng, source: "manual" }, "manual")
                 setLocationError(null)
               }
             } catch (fallbackError) {
               console.warn("[v0] Fallback geocoding failed:", fallbackError)
+              setDefaultLocation({ city: "Current location", lat, lng, source: "manual" }, "manual")
+              setLocationError(null)
             }
+          } finally {
+            setManualLocationLoading(false)
           }
         },
-        async (error) => {
-          console.log("[v0] Geolocation error:", error.code)
-          // Show user-friendly error message for geolocation failures
-          if (error.code === error.PERMISSION_DENIED) {
-            setLocationError("Location permission denied. Please enable location access in your browser settings.")
-          } else if (error.code === error.POSITION_UNAVAILABLE) {
-            setLocationError("Unable to determine your location. GPS may be disabled or unavailable.")
-          } else if (error.code === error.TIMEOUT) {
-            setLocationError("Location request timed out. Please try again.")
-          } else {
-            setLocationError("Location detection failed. You can still search by typing a city name.")
+        async (error: GeolocationPositionError) => {
+          // Client-side log for production debugging (error.code: 1=denied, 2=unavailable, 3=timeout)
+          console.warn("[v0] Geolocation failed", { code: error.code, message: error.message || "no message" })
+          // Don't show error on localhost (expected to fail)
+          if (isLocalhost) {
+            setManualLocationLoading(false)
+            setLocationError(null)
+            return
           }
+          if (error.code === error.PERMISSION_DENIED) {
+            setLocationError("Location permission denied. You can still search by city name.")
+            setManualLocationLoading(false)
+            return
+          }
+          if (error.code === error.TIMEOUT) {
+            if (retryCount === 0) {
+              console.log("[v0] Timeout, retrying once with longer timeout")
+              setTimeout(() => handleLocationRequest(1), 300)
+              return
+            }
+            setLocationError("Location request timed out. You can still search by city name.")
+            setManualLocationLoading(false)
+            return
+          }
+          if (error.code === error.POSITION_UNAVAILABLE) {
+            try {
+              const permissionStatus = await navigator.permissions?.query({ name: "geolocation" as PermissionName })
+              if (permissionStatus?.state === "granted") {
+                setLocationError(null)
+                console.log("[v0] Position unavailable but permission granted (e.g. GPS off) - failing gracefully")
+              } else {
+                setLocationError("Location is unavailable. You can still search by city name.")
+              }
+            } catch {
+              setLocationError("Location is unavailable. You can still search by city name.")
+            }
+            setManualLocationLoading(false)
+            return
+          }
+          setLocationError("Location detection failed. You can still search by city name.")
+          setManualLocationLoading(false)
         },
         {
           enableHighAccuracy: false,
@@ -353,7 +405,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
               variant="outline"
               size="lg"
               onClick={() => handleLocationRequest(0)}
-              disabled={isLoadingLocation || isProcessing}
+              disabled={manualLocationLoading || isProcessing}
               className={cn(
                 "shrink-0 min-h-[44px] active:scale-95",
                 defaultLocation && defaultLocation.city && defaultLocation.city !== "Unknown location" 
@@ -372,7 +424,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
               }
               style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
             >
-              {isLoadingLocation ? (
+              {manualLocationLoading ? (
                 <>
                   <Loader2 className="h-5 w-5 animate-spin" />
                   <span className="hidden sm:inline ml-2">Finding your location…</span>
