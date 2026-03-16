@@ -81,19 +81,7 @@ export async function GET(request: NextRequest) {
     // Log full Nominatim response for debugging
     console.log("[geocode/reverse] Nominatim response:", JSON.stringify(data.address, null, 2))
 
-    // Try to extract city name from address hierarchy
-    // For Australia, prioritize: city, town, suburb, locality, municipality
-    const city =
-      data.address?.city ||
-      data.address?.town ||
-      data.address?.suburb ||
-      data.address?.locality ||
-      data.address?.village ||
-      data.address?.municipality ||
-      data.address?.county ||
-      null
-
-    // Normalize country names
+    // Normalize country names first (needed for fallback)
     let country = data.address?.country || null
     if (country) {
       // Normalize country names to standard format
@@ -106,6 +94,17 @@ export async function GET(request: NextRequest) {
         country = "United Kingdom"
       }
     }
+
+    // Try to extract city name from address hierarchy
+    const city =
+      data.address?.city ||
+      data.address?.town ||
+      data.address?.suburb ||
+      data.address?.locality ||
+      data.address?.village ||
+      data.address?.municipality ||
+      data.address?.county ||
+      (country ?? null) // fallback to country so client can show something
 
     console.log("[geocode/reverse] Extracted:", { city, country, fullAddress: data.address })
 

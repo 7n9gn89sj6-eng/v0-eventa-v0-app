@@ -23,8 +23,8 @@ export function SiteHeader() {
   const [manualLoadingLocation, setManualLoadingLocation] = useState(false);
   const [geolocationError, setGeolocationError] = useState<GeolocationErrorCode>(null);
 
-  // Combine context loading and manual loading states
-  const isLoadingLocation = contextLoadingLocation || manualLoadingLocation;
+  // Only show/disable for user-triggered request so the button is always clickable
+  const isLoadingLocation = manualLoadingLocation;
 
   // Helper to detect if we're on localhost
   const isLocalhost = typeof window !== "undefined" && 
