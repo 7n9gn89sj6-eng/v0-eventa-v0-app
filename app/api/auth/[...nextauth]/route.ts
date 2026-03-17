@@ -2,6 +2,8 @@
 import NextAuth from "next-auth";
 import EmailProvider from "next-auth/providers/email";
 import { sendEmailAPI } from "@/lib/email"; // ⬅️ changed
+import { db } from "@/lib/db";
+import { createSession } from "@/lib/jwt";
 
 export const runtime = "nodejs";
 
@@ -54,6 +56,17 @@ const handler = NextAuth({
   providers,
   ...(AUTH_ENABLED ? {} : { pages: { signIn: "/" } }),
   callbacks: {
+    async signIn({ user }) {
+      // Bridge: create app session so /admin and other getSession() routes work
+      if (user?.email) {
+        const dbUser = await db.user.findUnique({
+          where: { email: user.email },
+          select: { id: true },
+        });
+        if (dbUser) await createSession(dbUser.id);
+      }
+      return true;
+    },
     async session({ session }) {
       return session;
     },

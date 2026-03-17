@@ -63,12 +63,8 @@ export async function POST(request: NextRequest) {
       data: { consumedAt: new Date() },
     })
 
-    // Create session cookie
-    await createSession({
-      userId: user.id,
-      email: user.email,
-      isVerified: true,
-    })
+    // Create app session (required by /admin and getSession())
+    await createSession(user.id)
 
     return NextResponse.json({ ok: true })
   } catch (err) {
