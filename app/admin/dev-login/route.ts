@@ -3,6 +3,10 @@ import { createSession } from "@/lib/jwt";
 import { db } from "@/lib/db";
 
 export async function GET() {
+  if (process.env.NODE_ENV === "production") {
+    return new NextResponse(null, { status: 404 });
+  }
+
   const email = "pana2112gnostatos@gmail.com";
 
 

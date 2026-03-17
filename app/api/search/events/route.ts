@@ -317,22 +317,6 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // If no query and no filters, return empty
-    if (!q && !city && !category && !dateFrom && !dateTo) {
-      return NextResponse.json({
-        events: [],
-        count: 0,
-        page: 1,
-        take,
-        internal: [],
-        external: [],
-        total: 0,
-        emptyState: false,
-        includesWeb: false,
-        isEventIntent: false,
-      })
-    }
-
     if (!q) {
       // BUILD WHERE CLAUSE IN PRIORITY ORDER:
       // 1. Location (city/country) - FIRST PRIORITY
