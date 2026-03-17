@@ -13,7 +13,25 @@ if (!DEFAULT_ADMIN_EMAIL) {
   );
 }
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+function resolveAppUrl(raw: string): string {
+  try {
+    const url = new URL(raw);
+    if (process.env.NODE_ENV === "production" && url.protocol !== "https:") {
+      console.warn("[admin-notifications] NEXT_PUBLIC_APP_URL is not HTTPS in production:", raw);
+    }
+    const pathname = url.pathname.replace(/\/+$/, "");
+    return `${url.protocol}//${url.host}${pathname}`;
+  } catch (err) {
+    console.error(
+      "[admin-notifications] Invalid NEXT_PUBLIC_APP_URL, falling back to localhost:",
+      raw,
+      err
+    );
+    return "http://localhost:3000";
+  }
+}
+
+const APP_URL = resolveAppUrl(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000");
 
 type NeedsReviewArgs = {
   eventId: string;

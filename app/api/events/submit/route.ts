@@ -198,6 +198,11 @@ export async function POST(request: NextRequest) {
 
     /* ------------------------- AI MODERATION ------------------------- */
 
+    type ModerationOutcome = "approved" | "needs_review" | "rejected" | "moderation_failed" | "pending";
+    let moderationOutcome: ModerationOutcome = "pending";
+    let adminNotificationAttempted = false;
+    let adminNotificationSent = false;
+
     try {
       const moderation = await moderateEvent({
         title: validated.title,
@@ -212,6 +217,7 @@ export async function POST(request: NextRequest) {
 
       /* CASE 1 — APPROVED */
       if (moderation.approved) {
+        moderationOutcome = "approved";
         await db.event.update({
           where: { id: event.id },
           data: {
@@ -226,6 +232,7 @@ export async function POST(request: NextRequest) {
 
       /* CASE 2 — NEEDS REVIEW */
       else if (moderation.needsReview) {
+        moderationOutcome = "needs_review";
         await db.event.update({
           where: { id: event.id },
           data: {
@@ -236,7 +243,8 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        await notifyAdminsEventNeedsReview({
+        adminNotificationAttempted = true;
+        const notifyResult = await notifyAdminsEventNeedsReview({
           eventId: event.id,
           title: validated.title,
           city,
@@ -244,10 +252,18 @@ export async function POST(request: NextRequest) {
           aiStatus: "NEEDS_REVIEW",
           aiReason: moderation.reason,
         });
+        adminNotificationSent = notifyResult.success === true;
+        if (!adminNotificationSent) {
+          logger.warn("[submit] Admin notification failed (event needs review)", {
+            eventId: event.id,
+            error: notifyResult.error,
+          });
+        }
       }
 
       /* CASE 3 — REJECTED */
       else {
+        moderationOutcome = "rejected";
         await db.event.update({
           where: { id: event.id },
           data: {
@@ -260,15 +276,46 @@ export async function POST(request: NextRequest) {
       }
     } catch (err) {
       console.error("[AI] moderation error:", err);
-      // Log the error but don't block event creation
-      // Event will remain in DRAFT/PENDING state until manually reviewed
+      moderationOutcome = "moderation_failed";
       logger.error("[submit] AI moderation failed completely", {
         eventId: event.id,
         error: err instanceof Error ? err.message : String(err),
       });
+
+      // Harden: put event in visible review state so it is not stranded in silent limbo.
+      // status=PENDING + aiStatus=NEEDS_REVIEW ensures it appears in admin "Needs Review" and "Pending" queues.
+      await db.event.update({
+        where: { id: event.id },
+        data: {
+          status: "PENDING",
+          aiStatus: "NEEDS_REVIEW",
+          aiReason: "Moderation service failed – manual review required",
+          aiAnalyzedAt: new Date(),
+        },
+      });
+
+      adminNotificationAttempted = true;
+      const notifyResult = await notifyAdminsEventNeedsReview({
+        eventId: event.id,
+        title: validated.title,
+        city,
+        country,
+        aiStatus: "NEEDS_REVIEW",
+        aiReason: "Moderation service failed – manual review required",
+      });
+      adminNotificationSent = notifyResult.success === true;
+      if (!adminNotificationSent) {
+        logger.warn("[submit] Admin notification failed (moderation_failed)", {
+          eventId: event.id,
+          error: notifyResult.error,
+        });
+      }
     }
 
     /* ------------------------- SEND EDIT LINK EMAIL ------------------------- */
+
+    let emailSent = false;
+    let emailWarning: string | undefined;
 
     try {
       const token = await createEventEditToken(
@@ -276,8 +323,6 @@ export async function POST(request: NextRequest) {
         validated.end ?? validated.start
       );
 
-      // Prioritize NEXT_PUBLIC_APP_URL if set (required for production)
-      // Fall back to request origin if env var not set (for local dev)
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
 
       const emailResult = await sendEventEditLinkEmailAPI(
@@ -288,12 +333,14 @@ export async function POST(request: NextRequest) {
         baseUrl
       );
 
+      emailSent = emailResult.success === true;
       if (!emailResult.success) {
+        emailWarning = "Your event was saved, but we could not send the edit email. You can request a new edit link from the event page.";
         console.error("[submit] Email send failed:", emailResult.error);
-        console.error("[submit] Email config check:", {
-          RESEND_API_KEY: process.env.RESEND_API_KEY ? "SET" : "NOT SET",
-          EMAIL_FROM: process.env.EMAIL_FROM,
+        logger.warn("[submit] Edit-link email failed", {
+          eventId: event.id,
           recipient: validated.creatorEmail,
+          error: emailResult.error,
         });
       } else {
         console.log("[submit] Email sent successfully:", {
@@ -302,16 +349,33 @@ export async function POST(request: NextRequest) {
         });
       }
     } catch (err) {
+      emailWarning = "Your event was saved, but we could not send the edit email. You can request a new edit link from the event page.";
       console.error("[submit] Email error:", err);
+      logger.warn("[submit] Edit-link email error", {
+        eventId: event.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
 
     /* ------------------------- RESPONSE ------------------------- */
 
-    return NextResponse.json({
+    const payload = {
       ok: true,
       eventId: event.id,
       message: "Event submitted successfully",
-    });
+      eventSaved: true,
+      moderationOutcome,
+      emailSent,
+      ...(emailWarning && { emailWarning }),
+      ...((moderationOutcome === "needs_review" || moderationOutcome === "moderation_failed") && {
+        adminNotification: {
+          attempted: adminNotificationAttempted,
+          sent: adminNotificationSent,
+        },
+      }),
+    };
+
+    return NextResponse.json(payload);
 
   } catch (error) {
     console.error("[submit] ERROR:", error);

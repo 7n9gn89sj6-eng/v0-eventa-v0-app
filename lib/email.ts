@@ -51,6 +51,18 @@ const FROM = RAW_FROM;
 // Only create Resend client if we actually have a key
 const resend = RESEND_KEY ? new Resend(RESEND_KEY) : null;
 
+if (process.env.NODE_ENV === "production") {
+  if (!RESEND_KEY) {
+    console.warn("[email] WARNING: RESEND_API_KEY is not set in production – no emails will be sent.");
+  }
+  if (!process.env.EMAIL_FROM) {
+    console.warn("[email] WARNING: EMAIL_FROM is not set in production – using fallback sender:", FROM);
+  }
+  if (!process.env.NEXT_PUBLIC_APP_URL) {
+    console.warn("[email] WARNING: NEXT_PUBLIC_APP_URL is not set – links may use request origin or localhost.");
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Helpers                                                                   */
 /* -------------------------------------------------------------------------- */

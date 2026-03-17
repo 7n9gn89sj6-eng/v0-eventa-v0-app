@@ -48,6 +48,7 @@ interface Event {
 interface AdminEventsTableProps {
   events: Event[]
   stats: {
+    pending: number
     needsReview: number
     aiRejected: number
     autoApproved: number
@@ -155,6 +156,8 @@ export function AdminEventsTable({ events, stats, currentTab, currentPage, total
 
   const getEmptyStateMessage = (tab: string) => {
     switch (tab) {
+      case "pending":
+        return "No events pending moderation. New submissions or failed AI runs appear here."
       case "needs-review":
         return "No events need review right now."
       case "ai-rejected":
@@ -228,7 +231,12 @@ export function AdminEventsTable({ events, stats, currentTab, currentPage, total
   return (
     <div className="space-y-6">
       <Tabs value={currentTab} onValueChange={handleTabChange}>
-        <TabsList className="grid w-full grid-cols-4 h-auto">
+        <TabsList className="grid w-full grid-cols-5 h-auto">
+          <TabsTrigger value="pending" className="text-xs sm:text-sm whitespace-nowrap">
+            <span className="hidden sm:inline">Pending</span>
+            <span className="sm:hidden">Pending</span>
+            {stats.pending > 0 && ` (${stats.pending})`}
+          </TabsTrigger>
           <TabsTrigger value="needs-review" className="text-xs sm:text-sm whitespace-nowrap">
             <span className="hidden sm:inline">Needs Review</span>
             <span className="sm:hidden">Review</span>

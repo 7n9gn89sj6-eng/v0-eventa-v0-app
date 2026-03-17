@@ -34,6 +34,10 @@ export default async function AdminEventsPage({
   let where: any = {};
 
   switch (currentTab) {
+    case "pending":
+      where = { aiStatus: "PENDING" };
+      break;
+
     case "needs-review":
       where = { aiStatus: "NEEDS_REVIEW" };
       break;
@@ -82,6 +86,9 @@ export default async function AdminEventsPage({
   /* ------------------------- STATS ------------------------- */
 
   const stats = {
+    pending: await db.event.count({
+      where: { aiStatus: "PENDING" },
+    }),
     needsReview: await db.event.count({
       where: { aiStatus: "NEEDS_REVIEW" },
     }),

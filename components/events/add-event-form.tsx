@@ -283,8 +283,11 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
   }
 
   if (submitResult) {
-    const hasEmailWarning = submitResult.emailWarning && !submitResult.emailSent
-    
+    const emailFailed = !submitResult.emailSent;
+    const emailWarningMessage =
+      submitResult.emailWarning ||
+      "Your event was saved, but we could not send the edit email. You can request a new edit link from the event page.";
+
     return (
       <Card>
         <CardContent className="pt-6">
@@ -295,17 +298,17 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
             <div className="space-y-2">
               <h2 className="text-2xl font-semibold">{tForm("success.title")}</h2>
               <p className="text-muted-foreground text-pretty">
-                {submitResult.emailSent 
+                {submitResult.emailSent
                   ? "Your event has been submitted successfully! Check your email for a link to edit your event details."
                   : tForm("success.message")}
               </p>
             </div>
-            
-            {hasEmailWarning && (
-              <Alert className="max-w-md">
+
+            {emailFailed && (
+              <Alert className="max-w-md" variant="default">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription className="text-left text-sm">
-                  {submitResult.emailWarning}
+                  {emailWarningMessage}
                 </AlertDescription>
               </Alert>
             )}

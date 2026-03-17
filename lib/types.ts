@@ -144,16 +144,39 @@ export interface EventExtractionOutput {
 }
 
 /**
+ * Moderation outcome as returned by the submit API (safe for frontend).
+ */
+export type SubmitModerationOutcome =
+  | "approved"
+  | "needs_review"
+  | "rejected"
+  | "moderation_failed"
+  | "pending"
+
+/**
  * Response from the event submission API.
- * Includes both the event details and email delivery status.
+ * Includes event id, moderation outcome, and email/admin notification status.
+ * Do not expose secrets (e.g. edit token) or internal error details.
  */
 export interface EventSubmitResponse {
   ok: boolean
   eventId: string
-  token: string
-  editUrl: string
   message: string
-  aiStatus: EventAIStatus
+  /** Event was persisted (always true on 200). */
+  eventSaved: boolean
+  /** Moderation result: approved | needs_review | rejected | moderation_failed | pending */
+  moderationOutcome: SubmitModerationOutcome
+  /** Whether the submitter edit-link email was sent successfully. */
   emailSent: boolean
+  /** Shown when email failed: e.g. "Your event was saved, but we could not send the edit email." */
   emailWarning?: string
+  /** Present only when moderation was needs_review or moderation_failed. */
+  adminNotification?: {
+    attempted: boolean
+    sent: boolean
+  }
+  /** Legacy: optional for backwards compatibility; API does not return token/editUrl. */
+  token?: string
+  editUrl?: string
+  aiStatus?: EventAIStatus
 }
