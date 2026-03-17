@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { db } from "@/lib/db"
 import { requireAuth } from "@/lib/auth-helpers"
-import { geocodeAddress } from "@/lib/geocoding"
+import { geocodeAddress, GeocodingConfigError } from "@/lib/geocoding"
 import { createSearchTextFolded } from "@/lib/search/accent-fold"
 import { createEventEditToken } from "@/lib/eventEditToken"
 import { ok, fail, validationError } from "@/lib/http"
@@ -93,11 +93,20 @@ export async function POST(request: NextRequest) {
 
     if (body.address) {
       address = body.address
-      const geocoded = await geocodeAddress(address)
-      if (geocoded) {
-        lat = geocoded.lat
-        lng = geocoded.lng
-        geocodedAddress = geocoded.address
+      try {
+        const geocoded = await geocodeAddress(address)
+        if (geocoded) {
+          lat = geocoded.lat
+          lng = geocoded.lng
+          geocodedAddress = geocoded.address
+        }
+      } catch (err) {
+        if (err instanceof GeocodingConfigError) {
+          console.warn("[events] Geocoding not available, event created without coordinates:", err.message)
+        } else {
+          console.error("[events] Geocoding failed for address:", err)
+        }
+        // Continue without lat/lng
       }
     }
 

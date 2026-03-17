@@ -59,15 +59,10 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
       setLocationError(null)
       setManualLocationLoading(true)
       try {
-        const result = await requestUserLocation({ maxRetries: 3 })
-        if (result.success) {
-          setLocationError(null)
-        } else {
-          setLocationError(result.errorMessage ?? "Location detection failed. You can still search by city name.")
-        }
+        await requestUserLocation({ maxRetries: 4 })
+        setLocationError(null)
       } catch (err) {
         console.error("[SmartInputBar] requestUserLocation threw:", err)
-        setLocationError("We couldn't determine your location. You can still search by city name.")
       } finally {
         setManualLocationLoading(false)
       }
