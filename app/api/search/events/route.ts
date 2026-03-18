@@ -6,6 +6,8 @@ import { searchWeb } from "@/lib/search/web-search"
 import { withLanguageColumnGuard, getEventSelectWithoutLanguage, isLanguageFilteringAvailable } from "@/lib/db-runtime-guard"
 import { buildDateOverlapWhere, buildDateRangeOverlapWhere } from "@/lib/search/date-overlap"
 import { rankEventResults, isEventIntentQuery } from "@/lib/search/event-ranking"
+import { getExpandedTermGroups } from "@/lib/search/search-taxonomy"
+import { parseSearchIntent } from "@/lib/search/parse-search-intent"
 
 /**
  * Helper function to check if text contains Australian location indicators
@@ -410,12 +412,17 @@ export async function GET(req: NextRequest) {
           throw error
         }
       }
+      const noQueryInternal = (events as any[]).map((e: any) => ({
+        ...e,
+        source: "internal" as const,
+        isEventaEvent: true,
+      }))
       return NextResponse.json({
-        events,
+        events: noQueryInternal,
         count,
         page,
         take,
-        internal: events,
+        internal: noQueryInternal,
         external: [],
         total: count,
         emptyState: false,
@@ -536,37 +543,15 @@ export async function GET(req: NextRequest) {
 
     // PRIORITY 3: TEXT SEARCH AND CATEGORY - applied after location and date
     // Build OR clause for text search (only if we have a cleaned query)
+    // Uses phrase-level expansion: "garage sale", "live music", "art show" etc.
     if (cleanedQuery) {
-      // Split query into individual words for more flexible matching
-      // This allows matching "Xmas market" even if the event has "Christmas Market"
-      const queryWords = cleanedQuery
-        .split(/\s+/)
-        .filter(word => word.length > 0)
-        .map(word => word.toLowerCase().trim())
-      
-      // Build text search conditions - match if ANY word from the query appears
-      // This is more flexible than requiring the entire phrase
+      const termGroups = getExpandedTermGroups(cleanedQuery)
       const textSearchConditions: any[] = []
-      
-      if (queryWords.length > 0) {
-        // Synonym mapping for common terms
-        const synonymMap: Record<string, string[]> = {
-          "xmas": ["christmas", "x-mas", "noel", "navidad", "natal"],
-          "christmas": ["xmas", "x-mas", "noel", "navidad", "natal"],
-          "market": ["markets", "flea market", "bazaar", "fair", "fiesta"],
-          "markets": ["market", "flea market", "bazaar", "fair", "fiesta"],
-        }
-        
-        // For each word, check if it appears in title, description, venueName, or city/country
-        // Include synonyms for better matching (e.g., "Xmas" matches "Christmas")
-        queryWords.forEach(word => {
-          const wordLower = word.toLowerCase()
-          const synonyms = synonymMap[wordLower] || []
-          const allTerms = [wordLower, ...synonyms]
-          
-          // Build OR conditions for this word and its synonyms
+
+      if (termGroups.length > 0) {
+        termGroups.forEach((terms) => {
           const wordConditions: any[] = []
-          allTerms.forEach(term => {
+          terms.forEach((term) => {
             wordConditions.push(
               { title: { contains: term, mode: "insensitive" } },
               { description: { contains: term, mode: "insensitive" } },
@@ -575,15 +560,10 @@ export async function GET(req: NextRequest) {
               { country: { contains: term, mode: "insensitive" } },
             )
           })
-          
-          // Each word must match somewhere (AND across words, OR within each word+synonyms)
-          textSearchConditions.push({
-            OR: wordConditions,
-          })
+          textSearchConditions.push({ OR: wordConditions })
         })
       }
-      
-      // If we have conditions, use AND to require all words match
+
       if (textSearchConditions.length > 0) {
         where.AND = where.AND || []
         where.AND.push(...textSearchConditions)
@@ -656,7 +636,7 @@ export async function GET(req: NextRequest) {
     console.log("[v0] Search query breakdown:", {
       originalQuery: q,
       cleanedQuery,
-      queryWords: cleanedQuery ? cleanedQuery.split(/\s+/).filter(w => w.length > 0) : [],
+      termGroups: cleanedQuery ? getExpandedTermGroups(cleanedQuery).length : 0,
       cityFilter: city,
       countryFilter: country,
       categoryFilter: category,
@@ -1351,47 +1331,71 @@ export async function GET(req: NextRequest) {
     // External web results come AFTER, regardless of date or city match
     // This ensures user satisfaction with accurate, curated events
     
-    // Mark internal events with source
-    const internalEvents = events.map((e: any) => ({
+    // Score internal events for ranking (categories/category/text, location, date); do not expose _score
+    const effectiveCityLower = (effectiveCity || "").toLowerCase()
+    const parsedIntent = q ? parseSearchIntent(q) : {}
+    const detectedCat = parsedIntent.detectedCategory
+    const categoryToEnum: Record<string, EventCategory> = {
+      music: "MUSIC_NIGHTLIFE",
+      markets: "MARKETS_FAIRS",
+      arts: "ARTS_CULTURE",
+      food: "FOOD_DRINK",
+      sports: "SPORTS_OUTdoors",
+      family: "FAMILY_KIDS",
+      community: "COMMUNITY_CAUSES",
+      learning: "LEARNING_TALKS",
+    }
+    const scoredInternal = events.map((e: any) => {
+      let score = 0
+      if (detectedCat) {
+        const enumVal = categoryToEnum[detectedCat]
+        const catLower = detectedCat.toLowerCase()
+        if (Array.isArray(e.categories) && e.categories.length > 0) {
+          const matches = e.categories.some(
+            (c: string) =>
+              c?.toLowerCase().includes(catLower) ||
+              (enumVal && String(c).toUpperCase() === enumVal)
+          )
+          if (matches) score += 4
+        }
+        if (score === 0 && e.category && enumVal && e.category === enumVal) score += 4
+        if (score === 0) {
+          const text = [e.title, e.description, e.venueName, e.city].filter(Boolean).join(" ").toLowerCase()
+          if (text.includes(catLower)) score += 2
+        }
+      }
+      if (effectiveCityLower) {
+        const ec = (e.city || "").toLowerCase()
+        if (ec && (ec.includes(effectiveCityLower) || effectiveCityLower.includes(ec))) score += 3
+      }
+      try {
+        if (e.startAt && new Date(e.startAt) > now) {
+          const days = (new Date(e.startAt).getTime() - now.getTime()) / (86400 * 1000)
+          if (days <= 7) score += 2
+          else if (days <= 30) score += 1
+        }
+      } catch {
+        // ignore
+      }
+      return { ...e, _score: score }
+    })
+    scoredInternal.sort((a: any, b: any) => {
+      if ((b._score ?? 0) !== (a._score ?? 0)) return (b._score ?? 0) - (a._score ?? 0)
+      return new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
+    })
+    const internalEvents = scoredInternal.map(({ _score, ...e }: any) => ({
       ...e,
       source: "internal" as const,
       isEventaEvent: true,
     }))
-    
+
     // Mark external events with source
     const externalEventsUnranked = filteredWebResults.map((e: any) => ({
       ...e,
       source: "web" as const,
       isWebResult: true,
     }))
-    
-    // Sort internal events: prioritize city matches, then by date
-    if (city) {
-      const cityLower = city.toLowerCase()
-      internalEvents.sort((a, b) => {
-        const aCity = (a.city || "").toLowerCase()
-        const bCity = (b.city || "").toLowerCase()
-        const aMatchesCity = aCity.includes(cityLower) || cityLower.includes(aCity)
-        const bMatchesCity = bCity.includes(cityLower) || cityLower.includes(bCity)
-        
-        // First sort: city match (matching city first)
-        if (aMatchesCity && !bMatchesCity) return -1
-        if (!aMatchesCity && bMatchesCity) return 1
-        
-        // Second sort: date (earlier dates first)
-        const aDate = new Date(a.startAt).getTime()
-        const bDate = new Date(b.startAt).getTime()
-        return aDate - bDate
-      })
-    } else {
-      // No city filter: just sort by date
-      internalEvents.sort((a, b) => {
-        const aDate = new Date(a.startAt).getTime()
-        const bDate = new Date(b.startAt).getTime()
-        return aDate - bDate
-      })
-    }
-    
+
     // EVENT-FIRST RANKING: Apply event-first ranking to web results
     // This prioritizes actual, specific events over aggregators/directories
     // Ranking only applies to event-intent queries (detected automatically)
@@ -1467,7 +1471,10 @@ export async function GET(req: NextRequest) {
     // 2. Automatically include web results if no internal events found (for event-intent queries)
     // 3. Empty state only if both internal events = 0 AND web events (after strict filtering) = 0
     
-    const allEvents = [...internalEvents, ...externalEvents]
+    const allEvents = [
+      ...internalEvents,
+      ...externalEvents.map(({ _eventnessBoost, ...e }: any) => e),
+    ]
     
     debugTrace.finalReturnedInternalCount = internalEvents.length
     debugTrace.finalReturnedWebCount = externalEvents.length
@@ -1482,10 +1489,15 @@ export async function GET(req: NextRequest) {
       console.log(`[v0] ✅ Web fallback successful: ${externalEvents.length} local web events found for event-intent query`)
     }
 
-    const allExternal =
+    const stripDebug = (e: any) => {
+      const { _eventnessBoost, _score, ...rest } = e
+      return rest
+    }
+    const allExternal = (
       process.env.NODE_ENV === "production"
         ? externalEvents
         : [...externalEvents, ...stubExternalEvents]
+    ).map(stripDebug)
 
     const response: any = {
       events: allEvents,
@@ -1493,7 +1505,7 @@ export async function GET(req: NextRequest) {
       page,
       take,
       query: q,
-      internal: events,
+      internal: internalEvents,
       external: allExternal,
       total: allEvents.length,
       // Empty state flag: true only if both internal and web events are 0
