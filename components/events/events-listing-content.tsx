@@ -245,59 +245,10 @@ export function EventsListingContent({
     runSearch()
   }, [q, cityFilter, countryFilter, selectedCategory, initialDateFrom, initialDateTo, defaultLocation])
 
-  const handleSmartSearch = async (query: string) => {
-    setQ(query)
-    setLoading(true)
+  const handleSmartSearch = (query: string) => {
     setError(null)
-    try {
-      const params = new URLSearchParams()
-      params.set("query", query)
-      if (cityFilter) params.set("city", cityFilter)
-      if (countryFilter) params.set("country", countryFilter)
-
-      const r = await fetch(`/api/search/events?${params.toString()}`, {
-        method: "GET",
-        headers: { accept: "application/json" },
-        cache: "no-store",
-      })
-      const data = await r.json()
-      if (!r.ok) throw new Error(data?.error || `Search failed (${r.status})`)
-
-      const allEvents = [
-        ...(data.internal || []),
-        ...(data.external || []).map((ext: any) => ({
-          id: ext.id,
-          title: ext.title,
-          description: ext.description,
-          startAt: ext.startAt,
-          endAt: ext.endAt,
-          city: ext.location?.city || "",
-          country: ext.location?.country || "",
-          address: ext.location?.address || "",
-          venueName: ext.location?.address || "",
-          categories: [],
-          priceFree: false,
-          imageUrls: ext.imageUrl ? [ext.imageUrl] : [],
-          status: "PUBLISHED",
-          aiStatus: "SAFE",
-          source: ext.source,
-          imageUrl: ext.imageUrl,
-          externalUrl: ext.externalUrl,
-        })),
-      ]
-
-      setResults(allEvents)
-      setTotal(data.count ?? 0)
-
-      router.push(`/discover?q=${encodeURIComponent(query)}`, { scroll: false })
-    } catch (e: any) {
-      console.error(e)
-      setError(e?.message || "Search failed")
-      setResults([])
-      setTotal(0)
-    } finally {
-      setLoading(false)
-    }
+    setQ(query)
+    router.push(`/discover?q=${encodeURIComponent(query)}`, { scroll: false })
   }
 
   const filteredResults = results
@@ -314,6 +265,12 @@ export function EventsListingContent({
       return true
     })
     .sort((a, b) => {
+      // Always rank internal Eventa events before external/web results
+      const aPriority = a.isEventaEvent ? 0 : 1
+      const bPriority = b.isEventaEvent ? 0 : 1
+      if (aPriority !== bPriority) return aPriority - bPriority
+
+      // Then apply existing sortBy logic
       switch (sortBy) {
         case "date-asc":
           return new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
