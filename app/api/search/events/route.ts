@@ -444,10 +444,41 @@ export async function GET(req: NextRequest) {
     // Clean up multiple spaces
     cleanedQuery = cleanedQuery.replace(/\s+/g, " ").trim()
     
+    // Remove obvious time-intent words/phrases from the TEXT matching layer.
+    // These are still implicitly respected via the date overlap logic and ranking,
+    // but we don't require them to appear in the event text.
+    const timePhrasePatterns = [
+      /\bthis\s+weekend\b/gi,
+      /\bthis\s+week\b/gi,
+      /\btonight\b/gi,
+      /\btoday\b/gi,
+      /\btomorrow\b/gi,
+      /\bfriday\b/gi,
+      /\bsaturday\b/gi,
+      /\bsunday\b/gi,
+      /\bweekend\b/gi,
+    ]
+    let textQuery = cleanedQuery
+    timePhrasePatterns.forEach((re) => {
+      textQuery = textQuery.replace(re, " ")
+    })
+    textQuery = textQuery.replace(/\s+/g, " ").trim()
+    
     // If cleaned query is empty but we have filters, use empty string (will search by filters only)
-    // If cleaned query is not empty, use it for text search
+    // If cleaned query is not empty, use textQuery for text matching (with time words removed)
 
-    console.log("[v0] Cleaned query:", cleanedQuery, "from original:", q, "city:", city, "category:", category)
+    console.log(
+      "[v0] Cleaned query:",
+      cleanedQuery,
+      "textQuery:",
+      textQuery,
+      "from original:",
+      q,
+      "city:",
+      city,
+      "category:",
+      category,
+    )
 
     // BUILD WHERE CLAUSE IN PRIORITY ORDER:
     // 1. Location (city/country) - FIRST PRIORITY
@@ -542,10 +573,12 @@ export async function GET(req: NextRequest) {
     }
 
     // PRIORITY 3: TEXT SEARCH AND CATEGORY - applied after location and date
-    // Build OR clause for text search (only if we have a cleaned query)
+    // Build OR clause for text search (only if we have remaining non-time terms).
     // Uses phrase-level expansion: "garage sale", "live music", "art show" etc.
-    if (cleanedQuery) {
-      const termGroups = getExpandedTermGroups(cleanedQuery)
+    // IMPORTANT: term groups are built from the time-stripped textQuery so that
+    // phrases like "this weekend" don't over-constrain the text search.
+    if (textQuery) {
+      const termGroups = getExpandedTermGroups(textQuery)
       const textSearchConditions: any[] = []
 
       if (termGroups.length > 0) {
@@ -567,26 +600,8 @@ export async function GET(req: NextRequest) {
       if (textSearchConditions.length > 0) {
         where.AND = where.AND || []
         where.AND.push(...textSearchConditions)
-      } else {
-        // Fallback: if no words extracted, use original full phrase search
-        // Use AND structure to be compatible with city filter
-        const fallbackConditions: any[] = [
-          { title: { contains: cleanedQuery, mode: "insensitive" } },
-          { description: { contains: cleanedQuery, mode: "insensitive" } },
-          { venueName: { contains: cleanedQuery, mode: "insensitive" } },
-        ]
-        // Only include city/country in OR if not already filtering by them
-        if (!city) {
-          fallbackConditions.push({ city: { contains: cleanedQuery, mode: "insensitive" } })
-        }
-        if (!country) {
-          fallbackConditions.push({ country: { contains: cleanedQuery, mode: "insensitive" } })
-        }
-        
-        // Add as OR condition inside AND structure
-        where.AND = where.AND || []
-        where.AND.push({ OR: fallbackConditions })
       }
+      // If there are no term groups, fall through and rely on location/date/category only.
     }
 
     // Apply category filter
@@ -636,7 +651,8 @@ export async function GET(req: NextRequest) {
     console.log("[v0] Search query breakdown:", {
       originalQuery: q,
       cleanedQuery,
-      termGroups: cleanedQuery ? getExpandedTermGroups(cleanedQuery).length : 0,
+      textQuery,
+      termGroups: cleanedQuery ? getExpandedTermGroups(textQuery || cleanedQuery).length : 0,
       cityFilter: city,
       countryFilter: country,
       categoryFilter: category,
