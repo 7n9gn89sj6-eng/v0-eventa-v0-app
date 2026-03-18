@@ -146,8 +146,8 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="container mx-auto px-4 py-8">
-        <div className="mx-auto max-w-3xl py-16 text-center">
+      <main className="container mx-auto px-4 py-4 sm:py-8">
+        <div className="mx-auto max-w-3xl py-6 sm:py-10 text-center space-y-4">
           <SmartInputBar
             onSearch={handleSmartSearch}
             onError={(error) => {
@@ -158,16 +158,6 @@ export default function HomePage() {
               })
             }}
           />
-
-          <div className="mt-8 flex flex-col items-center gap-4">
-            <p className="text-2xl font-bold text-foreground">To create an event, please use this button:</p>
-            <Button asChild size="lg" className="gap-2 min-w-[200px]">
-              <Link href="/add-event" className="flex items-center gap-2">
-                <Plus className="h-5 w-5" />
-                <span>Post Event</span>
-              </Link>
-            </Button>
-          </div>
 
           {drafts.length > 0 && (
             <Button

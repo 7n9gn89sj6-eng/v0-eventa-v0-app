@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { UserNav } from "@/components/auth/user-nav";
 import { LanguageSwitcher } from "@/components/language-switcher";
-import { VersionBadge } from "@/components/version-badge";
 
 import { useI18n } from "@/lib/i18n/context";
 import { useLocation } from "@/lib/location-context";
@@ -96,16 +95,11 @@ export function SiteHeader() {
 
         {/* Right side controls */}
         <div className="flex items-center gap-3">
-          {/* Version badge visible on desktop */}
-          <div className="hidden md:block">
-            <VersionBadge />
-          </div>
-
-          {/* Browse button */}
+          {/* Browse button (desktop and larger mobiles only) */}
           <Button
             variant="outline"
             size="sm"
-            className="gap-2 bg-transparent"
+            className="gap-2 bg-transparent hidden sm:inline-flex"
             asChild
           >
             <Link href="/events">
@@ -216,11 +210,6 @@ export function SiteHeader() {
           {/* User login dropdown */}
           <UserNav />
         </div>
-      </div>
-
-      {/* Version badge on mobile */}
-      <div className="md:hidden flex justify-center pb-2">
-        <VersionBadge />
       </div>
 
       {/* Single location error banner (context-driven; avoids duplicate with search bar) */}

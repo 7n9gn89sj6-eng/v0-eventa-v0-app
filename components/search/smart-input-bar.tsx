@@ -219,18 +219,12 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
     }
 
     const searchExamples = [
-      tHome("chips.berlinThisWeek"),
-      tHome("chips.romeWhileVisiting"),
-      tHome("chips.athensFoodMusic"),
-      tHome("chips.parisTripEvents"),
-      tHome("chips.weekendNearMe"),
-      tHome("chips.marketsNearby"),
-      tHome("chips.liveMusicWeekend"),
-      tHome("chips.familySaturday"),
-      tHome("chips.artExhibitions"),
-      tHome("chips.localCelebrations"),
-      tHome("chips.neighbourhoodEvents"),
-      tHome("chips.garageSalesNearby"),
+      "Music this weekend",
+      "Markets near me",
+      "Food & drinks",
+      "Art & exhibitions",
+      "Family events",
+      "Free events",
     ]
 
     const guidanceText = tHome("search.searchGuidance")

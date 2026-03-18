@@ -14,8 +14,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Remove the cookie
-  cookies().set({
+  const cookieStore = cookies();
+
+  // Remove legacy admin cookie
+  cookieStore.set({
     name: COOKIE_NAME,
     value: "",
     httpOnly: true,
@@ -23,6 +25,17 @@ export async function POST(request: NextRequest) {
     sameSite: "strict",
     path: "/",
     maxAge: 0, // forces delete
+  });
+
+  // Also remove the canonical app session cookie used by getSession()
+  cookieStore.set({
+    name: "session",
+    value: "",
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
   });
 
   return NextResponse.json({ success: true, message: "Logged out" });

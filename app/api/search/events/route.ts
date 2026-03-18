@@ -1482,7 +1482,10 @@ export async function GET(req: NextRequest) {
       console.log(`[v0] ✅ Web fallback successful: ${externalEvents.length} local web events found for event-intent query`)
     }
 
-    const allExternal = [...externalEvents, ...stubExternalEvents]
+    const allExternal =
+      process.env.NODE_ENV === "production"
+        ? externalEvents
+        : [...externalEvents, ...stubExternalEvents]
 
     const response: any = {
       events: allEvents,
