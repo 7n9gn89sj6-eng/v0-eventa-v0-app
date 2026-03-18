@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs"
 import { db } from "@/lib/db"
 import { createSession } from "@/lib/jwt"
 import { NextResponse } from "next/server"
+import { checkRateLimit, getClientIdentifier, rateLimiters } from "@/lib/rate-limit"
 
 const verifySchema = z.object({
   email: z.string().email(),
@@ -12,6 +13,17 @@ const verifySchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const clientId = getClientIdentifier(request)
+    const rateLimitResult = await checkRateLimit(clientId, rateLimiters.verify)
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        {
+          error: `Rate limit exceeded. Try again in ${rateLimitResult.reset ? Math.ceil((rateLimitResult.reset - Date.now()) / 1000) : "a few"} seconds.`,
+        },
+        { status: 429 }
+      )
+    }
+
     const body = await request.json()
     const { email, code } = verifySchema.parse(body)
 

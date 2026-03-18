@@ -4,12 +4,22 @@ import { getSession } from "@/lib/jwt";
 import { db } from "@/lib/db";
 import { createAuditLog } from "@/lib/audit-log";
 import { notifyAdminsEventUpdated } from "@/lib/admin-notifications";
+import { checkRateLimit, getClientIdentifier, rateLimiters } from "@/lib/rate-limit";
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const clientId = getClientIdentifier(request);
+    const rateLimitResult = await checkRateLimit(clientId, rateLimiters.admin);
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: `Rate limit exceeded. Try again in ${rateLimitResult.reset ? Math.ceil((rateLimitResult.reset - Date.now()) / 1000) : "a few"} seconds.` },
+        { status: 429 }
+      );
+    }
+
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

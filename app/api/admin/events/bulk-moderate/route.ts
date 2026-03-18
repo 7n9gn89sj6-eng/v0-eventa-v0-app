@@ -1,9 +1,19 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getSession } from "@/lib/jwt"
 import { db } from "@/lib/db"
+import { checkRateLimit, getClientIdentifier, rateLimiters } from "@/lib/rate-limit"
 
 export async function POST(request: NextRequest) {
   try {
+    const clientId = getClientIdentifier(request)
+    const rateLimitResult = await checkRateLimit(clientId, rateLimiters.admin)
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: `Rate limit exceeded. Try again in ${rateLimitResult.reset ? Math.ceil((rateLimitResult.reset - Date.now()) / 1000) : "a few"} seconds.` },
+        { status: 429 }
+      )
+    }
+
     const session = await getSession()
 
     if (!session) {

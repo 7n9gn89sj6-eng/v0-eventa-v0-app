@@ -69,6 +69,32 @@ export const rateLimiters = {
         prefix: "@upstash/ratelimit/api",
       })
     : null,
+
+  // Verification (code guess protection) - strict
+  verify: ratelimit
+    ? new Ratelimit({
+        redis: new Redis({
+          url: process.env.UPSTASH_REDIS_REST_URL!,
+          token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+        }),
+        limiter: Ratelimit.slidingWindow(10, "1 m"), // 10 per minute
+        analytics: true,
+        prefix: "@upstash/ratelimit/verify",
+      })
+    : null,
+
+  // Admin API - moderate
+  admin: ratelimit
+    ? new Ratelimit({
+        redis: new Redis({
+          url: process.env.UPSTASH_REDIS_REST_URL!,
+          token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+        }),
+        limiter: Ratelimit.slidingWindow(30, "1 m"), // 30 per minute
+        analytics: true,
+        prefix: "@upstash/ratelimit/admin",
+      })
+    : null,
 }
 
 /**

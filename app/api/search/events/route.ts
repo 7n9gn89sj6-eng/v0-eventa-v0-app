@@ -557,7 +557,7 @@ export async function GET(req: NextRequest) {
           "markets": ["market", "flea market", "bazaar", "fair", "fiesta"],
         }
         
-        // For each word, check if it appears in title, description, or venueName
+        // For each word, check if it appears in title, description, venueName, or city/country
         // Include synonyms for better matching (e.g., "Xmas" matches "Christmas")
         queryWords.forEach(word => {
           const wordLower = word.toLowerCase()
@@ -571,6 +571,8 @@ export async function GET(req: NextRequest) {
               { title: { contains: term, mode: "insensitive" } },
               { description: { contains: term, mode: "insensitive" } },
               { venueName: { contains: term, mode: "insensitive" } },
+              { city: { contains: term, mode: "insensitive" } },
+              { country: { contains: term, mode: "insensitive" } },
             )
           })
           
@@ -1220,6 +1222,7 @@ export async function GET(req: NextRequest) {
     // Filter web results: exclude past events ONLY if date is parseable
     // CRITICAL: Don't drop web results solely because date is missing
     // Gig guides/listing pages often don't have parseable dates but are still valid event sources
+    const currentYear = now.getFullYear()
     let filteredWebResults = webResults.filter((result) => {
       // Only filter by date if date is present and parseable
       if (result.startAt) {
@@ -1234,7 +1237,19 @@ export async function GET(req: NextRequest) {
           // Invalid date format - keep the result (don't drop for missing date)
         }
       }
-      // No date or unparseable date - keep the result (web fallback should be lenient)
+      // Additional staleness heuristic for undated pages:
+      // If title/description only mention years that are clearly in the past, drop them.
+      const text = `${result.title || ""} ${result.description || ""}`.toLowerCase()
+      const yearMatches = Array.from(text.matchAll(/\b(20\d{2})\b/g)).map(m => parseInt(m[1], 10))
+      if (yearMatches.length > 0) {
+        const maxYear = Math.max(...yearMatches)
+        // Consider pages stale if their latest referenced year is more than 1 year in the past
+        if (maxYear <= currentYear - 2) {
+          return false
+        }
+      }
+
+      // No clear staleness signal - keep the result (web fallback should be lenient)
       return true
     })
     
