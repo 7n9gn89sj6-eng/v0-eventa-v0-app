@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n/context"
-import { intentToURLParams } from "@/lib/search/query-parser"
+import { intentToURLParams, parseDateExpression } from "@/lib/search/query-parser"
 import { useRouter } from "next/navigation"
 import { useLocation } from "@/lib/location-context"
 
@@ -159,10 +159,41 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
           const fallbackParams = new URLSearchParams()
           fallbackParams.set("q", query)
           
+          // Time intent should still narrow results, even if the intent API fails.
+          const dateRange = parseDateExpression(query)
+          if (dateRange.date_from) fallbackParams.set("date_from", dateRange.date_from)
+          if (dateRange.date_to) fallbackParams.set("date_to", dateRange.date_to)
+          
           // ALWAYS add defaultLocation if available (unless user specified a different location in query)
           // Check if query contains a city name that's different from detected location
-          const cityMatch = query.match(/\b(in|at|near|around)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/i)
-          const extractedCity = cityMatch ? cityMatch[2].trim() : null
+          // Note: fallback is intentionally forgiving (case-insensitive, accepts lowercase).
+          const cityMatch = query.match(/\b(in|at|near|around)\s+([A-Za-z][A-Za-z'-]*(?:\s+[A-Za-z][A-Za-z'-]*){0,2})\b/i)
+          let extractedCity = cityMatch ? cityMatch[2].trim() : null
+          if (extractedCity) {
+            const extractedLower = extractedCity.toLowerCase()
+            const invalidTokens = new Set([
+              "me",
+              "my",
+              "here",
+              "there",
+              "near",
+              "around",
+              "in",
+              "at",
+              "to",
+              "on",
+              "tonight",
+              "today",
+              "tomorrow",
+              "weekend",
+              "week",
+              "month",
+              "year",
+            ])
+            if (invalidTokens.has(extractedLower) || extractedCity.length < 2) {
+              extractedCity = null
+            }
+          }
           const isLocationOverride = extractedCity && defaultLocation?.city && 
             extractedCity.toLowerCase() !== defaultLocation.city.toLowerCase()
           

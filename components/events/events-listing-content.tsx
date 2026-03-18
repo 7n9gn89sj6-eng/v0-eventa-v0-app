@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -80,6 +80,7 @@ export function EventsListingContent({
   const router = useRouter()
   const { t } = useI18n()
   const { defaultLocation } = useLocation()
+  const didInitUrlSync = useRef(false)
 
   const [q, setQ] = useState(initialQuery || "")
   const [loading, setLoading] = useState(false)
@@ -200,10 +201,6 @@ export function EventsListingContent({
 
       setResults(allEvents)
       setTotal(data.count ?? allEvents.length)
-
-      if (q.trim()) {
-        router.push(`/discover?q=${encodeURIComponent(q)}`, { scroll: false })
-      }
     } catch (e: any) {
       console.error(e)
       setError(e?.message || "Search failed")
@@ -245,10 +242,52 @@ export function EventsListingContent({
     runSearch()
   }, [q, cityFilter, countryFilter, selectedCategory, initialDateFrom, initialDateTo, defaultLocation])
 
+  // Mobile + desktop consistency: keep `q`, `city`, and `category` synchronized with the URL.
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    // Skip the very first run to avoid fighting the initial server-rendered URL.
+    if (!didInitUrlSync.current) {
+      didInitUrlSync.current = true
+      return
+    }
+
+    const params = new URLSearchParams()
+    const trimmedQuery = q.trim()
+    if (trimmedQuery) params.set("q", trimmedQuery)
+
+    const effectiveCity = cityFilter || defaultLocation?.city || ""
+    const effectiveCountry = countryFilter || defaultLocation?.country || ""
+    if (effectiveCity) params.set("city", effectiveCity)
+    if (effectiveCountry) params.set("country", effectiveCountry)
+
+    if (selectedCategory && selectedCategory !== "All") {
+      params.set("category", selectedCategory.toLowerCase())
+    }
+
+    if (initialDateFrom) params.set("date_from", initialDateFrom)
+    if (initialDateTo) params.set("date_to", initialDateTo)
+
+    const nextSearch = params.toString()
+    const currentSearch = window.location.search.replace(/^\?/, "")
+    if (currentSearch !== nextSearch) {
+      router.replace(`/discover?${nextSearch}`, { scroll: false })
+    }
+  }, [
+    q,
+    cityFilter,
+    countryFilter,
+    selectedCategory,
+    initialDateFrom,
+    initialDateTo,
+    defaultLocation?.city,
+    defaultLocation?.country,
+    router,
+  ])
+
   const handleSmartSearch = (query: string) => {
     setError(null)
     setQ(query)
-    router.push(`/discover?q=${encodeURIComponent(query)}`, { scroll: false })
   }
 
   const filteredResults = results

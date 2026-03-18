@@ -83,9 +83,9 @@ export async function GET(req: NextRequest) {
     
     // Patterns: "in X", "near X", "around X", "to X", "going to X", "X this weekend"
     const patterns = [
-      /\b(in|near|around|to)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/g,
-      /\bgoing\s+to\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/gi,
-      /([A-Za-z][a-zA-Z]+(?:\s+[A-Za-z][a-zA-Z]+){0,2})\s+this\s+weekend/gi,
+      /\b(in|near|around|to)\s+([A-Za-z][A-Za-z'\\-]*(?:\s+[A-Za-z][A-Za-z'\\-]*){0,2})/gi,
+      /\bgoing\s+to\s+([A-Za-z][A-Za-z'\\-]*(?:\s+[A-Za-z][A-Za-z'\\-]*){0,2})/gi,
+      /([A-Za-z][a-zA-Z'\\-]*(?:\s+[A-Za-z][a-zA-Z'\\-]*){0,2})\s+this\s+weekend/gi,
     ]
     
     for (const pattern of patterns) {
@@ -220,11 +220,15 @@ export async function GET(req: NextRequest) {
       console.log(`[v0] Query contains "near me/here/nearby" - using device/stored location`)
     } else if (city && isLikelySuburb(queryPlace, city)) {
       // Suburb/neighbourhood within selected city → treat as micro-location
+      const uiCity = city
       microLocation = queryPlace
-      effectiveLocation.city = city // Keep UI city
+      // Scope internal search to the "place" the user typed (e.g. "brunswick").
+      // Web fallback still uses effectiveLocation (UI city) for labeling + city-level querying.
+      city = queryPlace
+      effectiveLocation.city = uiCity // Keep UI city for web query labeling
       effectiveLocation.country = country || null
       effectiveLocation.source = "ui"
-      console.log(`[v0] ✅ Micro-location detected: "${queryPlace}" within "${city}" (source=ui)`)
+      console.log(`[v0] ✅ Micro-location detected: "${queryPlace}" within "${uiCity}" (source=ui)`)
     } else {
       // Query place is a destination city override
       destinationCityDetected = queryPlace
@@ -497,6 +501,9 @@ export async function GET(req: NextRequest) {
       
       // City name variations map (English -> other language variants)
       const cityVariations: Record<string, string[]> = {
+        "brunswick": ["brunswick east", "brunswick west"],
+        "brunswick east": ["brunswick", "brunswick west"],
+        "brunswick west": ["brunswick", "brunswick east"],
         "brussels": ["bruxelles", "brussel", "bruselas"],
         "athens": ["αθήνα", "athina", "athen"],
         "rome": ["roma", "rom"],
@@ -605,6 +612,10 @@ export async function GET(req: NextRequest) {
       // If there are no term groups, fall through and rely on location/date/category only.
     }
 
+    // Snapshot the current where-clause without category so we can relax category intent
+    // if strict filtering leads to empty internal results.
+    const whereWithoutCategory = structuredClone(where)
+
     // Apply category filter
     if (category && category !== "all") {
       // Map category string to EventCategory enum
@@ -666,6 +677,9 @@ export async function GET(req: NextRequest) {
     if (city) {
       const cityLower = city.toLowerCase().trim()
       const cityVariations: Record<string, string[]> = {
+        "brunswick": ["brunswick east", "brunswick west"],
+        "brunswick east": ["brunswick", "brunswick west"],
+        "brunswick west": ["brunswick", "brunswick east"],
         "brussels": ["bruxelles", "brussel", "bruselas"],
         "athens": ["αθήνα", "athina", "athen"],
         "rome": ["roma", "rom"],
@@ -714,6 +728,51 @@ export async function GET(req: NextRequest) {
       } else {
         // Some other error - rethrow
         throw error
+      }
+    }
+
+    // If category intent was too rigid (0 internal results), retry without the strict category constraint.
+    // This keeps category as an intent signal (filter/boost) without collapsing relevant results.
+    if (count === 0 && category && category !== "all" && whereWithoutCategory) {
+      console.log("[v0] ⚠️ Category filter returned 0 results; retrying without strict category constraint.")
+      try {
+        ;[events, count] = await Promise.all([
+          withLanguageColumnGuard(() =>
+            prisma.event.findMany({
+              where: whereWithoutCategory,
+              orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
+              take,
+              skip,
+            }),
+          ),
+          prisma.event.count({ where: whereWithoutCategory }),
+        ])
+      } catch (retryError: any) {
+        // Mirror initial "missing language column" fallback.
+        if (!isLanguageFilteringAvailable()) {
+          try {
+            ;[events, count] = await Promise.all([
+              prisma.event.findMany({
+                where: whereWithoutCategory,
+                select: getEventSelectWithoutLanguage(),
+                orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
+                take,
+                skip,
+              }),
+              prisma.event.count({ where: whereWithoutCategory }),
+            ])
+          } catch (retryError2: any) {
+            console.warn(
+              "[v0] Category-relax retry failed; keeping original empty results.",
+              retryError2?.message || String(retryError2),
+            )
+          }
+        } else {
+          console.warn(
+            "[v0] Category-relax retry failed; keeping original empty results.",
+            retryError?.message || String(retryError),
+          )
+        }
       }
     }
 
@@ -981,7 +1040,7 @@ export async function GET(req: NextRequest) {
           
           // Exclude generic root homepages with no listing cues
           // Very short path + no "events/calendar/whats-on/gig" cues
-          const urlPath = url.split('/').filter(p => p).length
+          const urlPath = url.split("/").filter((p: string) => p).length
           const hasListingCues = /(gig|gig-guide|whats-on|whatson|events|calendar|what-s-on|program)/i.test(url + fullText)
           if (urlPath <= 2 && !hasListingCues) {
             console.log(`[v0] 🚫 E2 EXCLUDED: Generic homepage (no listing cues) - "${result.title?.substring(0, 50)}"`)
@@ -1051,6 +1110,8 @@ export async function GET(req: NextRequest) {
                   status: "PUBLISHED" as const,
                   aiStatus: "SAFE" as const,
                   source: "web" as const,
+                  _originalUrl: result.url,
+                  _originalSnippet: result.snippet || "",
                   externalUrl: result.url,
                   imageUrl: result.imageUrl || undefined,
                   location: {
@@ -1117,7 +1178,7 @@ export async function GET(req: NextRequest) {
           
           transformedWebResults = transformedWebResults.filter((result) => {
             // Build comprehensive text from all result fields
-            const resultText = `${result.title || ""} ${result.description || ""} ${result.city || ""} ${result.country || ""} ${result.location?.city || ""} ${result.location?.country || ""} ${result.address || ""} ${result.venueName || ""} ${result.url || ""}`.toLowerCase()
+            const resultText = `${result.title || ""} ${result.description || ""} ${result.city || ""} ${result.country || ""} ${result.location?.city || ""} ${result.location?.country || ""} ${result.address || ""} ${result.venueName || ""} ${result.externalUrl || ""}`.toLowerCase()
             
             // HARD FILTER #1: If searching from Australia, exclude ANY result mentioning US cities/states
             if (countryLower && countryLower.includes("australia")) {
@@ -1377,14 +1438,14 @@ export async function GET(req: NextRequest) {
         const eventCategoryUpper = e.category ? String(e.category).toUpperCase() : null
 
         const hasMusic =
-          eventCategoryUpper === "MUSIC_NIGHTLIFE" || eventCategoriesLower.some((c) => c.includes("music"))
+          eventCategoryUpper === "MUSIC_NIGHTLIFE" || eventCategoriesLower.some((c: string) => c.includes("music"))
         const hasFood =
-          eventCategoryUpper === "FOOD_DRINK" || eventCategoriesLower.some((c) => c.includes("food"))
+          eventCategoryUpper === "FOOD_DRINK" || eventCategoriesLower.some((c: string) => c.includes("food"))
         const hasArts =
-          eventCategoryUpper === "ARTS_CULTURE" || eventCategoriesLower.some((c) => c.includes("art"))
+          eventCategoryUpper === "ARTS_CULTURE" || eventCategoriesLower.some((c: string) => c.includes("art"))
         const hasMarkets =
           eventCategoryUpper === "MARKETS_FAIRS" ||
-          eventCategoriesLower.some((c) => c.includes("market") || c.includes("fair"))
+          eventCategoriesLower.some((c: string) => c.includes("market") || c.includes("fair"))
 
         if (Array.isArray(e.categories) && e.categories.length > 0) {
           const matches = e.categories.some(

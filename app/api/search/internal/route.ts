@@ -282,6 +282,9 @@ export async function POST(request: NextRequest) {
       
       // City name variations map (English -> other language variants)
       const cityVariations: Record<string, string[]> = {
+        "brunswick": ["brunswick east", "brunswick west"],
+        "brunswick east": ["brunswick", "brunswick west"],
+        "brunswick west": ["brunswick", "brunswick east"],
         "brussels": ["bruxelles", "brussel", "bruselas"],
         "athens": ["αθήνα", "athina", "athen"],
         "rome": ["roma", "rom"],

@@ -218,6 +218,43 @@ export function parseDateExpression(dateExpr: string): {
     }
   }
 
+  // Weekday names (e.g., "Friday", "this Friday", "next Friday")
+  const weekdayToDow: Record<string, number> = {
+    sunday: 0,
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+  }
+
+  const weekdayMatch = normalized.match(/\b(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/)
+  if (weekdayMatch) {
+    const weekdayName = weekdayMatch[1].toLowerCase()
+    const targetDow = weekdayToDow[weekdayName]
+    const todayDow = today.getDay()
+
+    // How many days until the next occurrence of that weekday
+    let daysUntil = (targetDow - todayDow + 7) % 7
+
+    const isNextWeek = /\bnext\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/.test(normalized)
+    if (isNextWeek) {
+      // "next <weekday>" always means the upcoming weekday in the following week.
+      daysUntil += 7
+    }
+
+    const targetDate = addDays(today, daysUntil)
+    targetDate.setHours(0, 0, 0, 0)
+    const endOfDay = new Date(targetDate)
+    endOfDay.setHours(23, 59, 59, 999)
+
+    return {
+      date_from: targetDate.toISOString(),
+      date_to: endOfDay.toISOString(),
+    }
+  }
+
   // This weekend
   if (normalized.includes("weekend") || normalized.includes("this weekend")) {
     const weekStart = startOfWeek(today, { weekStartsOn: 1 }) // Monday
