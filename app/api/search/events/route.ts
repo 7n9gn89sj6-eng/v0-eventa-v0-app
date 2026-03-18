@@ -458,6 +458,7 @@ export async function GET(req: NextRequest) {
       /\bsunday\b/gi,
       /\bweekend\b/gi,
     ]
+    // Note: these time phrases are handled via date/ranking logic, not required text matches.
     let textQuery = cleanedQuery
     timePhrasePatterns.forEach((re) => {
       textQuery = textQuery.replace(re, " ")
