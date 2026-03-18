@@ -97,7 +97,45 @@ export async function GET(req: NextRequest) {
           const placeClean = place.split(/[.,;!?]/)[0].trim()
           if (placeClean && placeClean.length > 1) {
             // Exclude common words that aren't locations
-            const commonWords = ["this", "that", "the", "a", "an", "weekend", "week", "month", "year", "today", "tomorrow", "here", "there"]
+            // Intentionally includes category words so queries like "Music this weekend" don't accidentally
+            // treat "Music" as a location override.
+            const commonWords = [
+              "this",
+              "that",
+              "the",
+              "a",
+              "an",
+              "weekend",
+              "week",
+              "month",
+              "year",
+              "today",
+              "tomorrow",
+              "here",
+              "there",
+              // Category / intent words that should never become "places"
+              "music",
+              "markets",
+              "market",
+              "food",
+              "art",
+              "arts",
+              "family",
+              "kids",
+              "children",
+              "sports",
+              "sport",
+              "concert",
+              "live",
+              "theatre",
+              "theater",
+              "exhibition",
+              "festival",
+              "cheap",
+              "free",
+              "near",
+              "around",
+            ]
             if (!commonWords.includes(placeClean.toLowerCase())) {
               return placeClean
             }
@@ -773,6 +811,44 @@ export async function GET(req: NextRequest) {
             retryError?.message || String(retryError),
           )
         }
+      }
+    }
+
+    // Strict internal location enforcement:
+    // When the user selected/typed a city, internal results must match that city via structured `event.city`.
+    // This prevents wrong-city internal events from slipping in due to title/description text mentions.
+    if (city) {
+      const cityLower = city.toLowerCase().trim()
+      const cityVariations: Record<string, string[]> = {
+        melbourne: ["melbourne", "melb"],
+        brunswick: ["brunswick", "brunswick east", "brunswick west"],
+        "brunswick east": ["brunswick east", "brunswick", "brunswick west"],
+        "brunswick west": ["brunswick west", "brunswick", "brunswick east"],
+        // Note: keep only what we need for the current experience; other cities are handled elsewhere.
+      }
+
+      const variants = [cityLower, ...(cityVariations[cityLower] || [])].map((v) => v.toLowerCase())
+      const hasAnyNonEmptyCityField = events.some((e: any) => String(e?.city || "").trim().length > 0)
+
+      if (hasAnyNonEmptyCityField) {
+        const strictMatched = events.filter((e: any) => {
+          const eventCity = String(e?.city || "").toLowerCase()
+          if (!eventCity) return false
+          return variants.some((v) => eventCity.includes(v))
+        })
+
+        if (strictMatched.length !== events.length) {
+          console.log(
+            `[v0] 🔒 Strict internal city filtering: ${events.length} -> ${strictMatched.length} for city="${cityLower}".`,
+          )
+        }
+
+        events = strictMatched
+        count = strictMatched.length
+      } else {
+        console.log(
+          `[v0] 🔎 Skipping strict internal city filtering for "${cityLower}" because city fields are missing across results.`,
+        )
       }
     }
 
