@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
     const patterns = [
       /\b(in|near|around|to)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/g,
       /\bgoing\s+to\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})/gi,
-      /([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\s+this\s+weekend/gi,
+      /([A-Za-z][a-zA-Z]+(?:\s+[A-Za-z][a-zA-Z]+){0,2})\s+this\s+weekend/gi,
     ]
     
     for (const pattern of patterns) {
@@ -1367,18 +1367,52 @@ export async function GET(req: NextRequest) {
       if (detectedCat) {
         const enumVal = categoryToEnum[detectedCat]
         const catLower = detectedCat.toLowerCase()
+        // Mismatch-safety: gently reduce obvious category drift when query has strong category intent.
+        // This is only a small penalty (not exclusion) and only when we don't get a structured match.
+        let structuredDetectedMatch = false
+
+        const eventCategoriesLower = Array.isArray(e.categories)
+          ? e.categories.map((c: string) => String(c).toLowerCase())
+          : []
+        const eventCategoryUpper = e.category ? String(e.category).toUpperCase() : null
+
+        const hasMusic =
+          eventCategoryUpper === "MUSIC_NIGHTLIFE" || eventCategoriesLower.some((c) => c.includes("music"))
+        const hasFood =
+          eventCategoryUpper === "FOOD_DRINK" || eventCategoriesLower.some((c) => c.includes("food"))
+        const hasArts =
+          eventCategoryUpper === "ARTS_CULTURE" || eventCategoriesLower.some((c) => c.includes("art"))
+        const hasMarkets =
+          eventCategoryUpper === "MARKETS_FAIRS" ||
+          eventCategoriesLower.some((c) => c.includes("market") || c.includes("fair"))
+
         if (Array.isArray(e.categories) && e.categories.length > 0) {
           const matches = e.categories.some(
             (c: string) =>
               c?.toLowerCase().includes(catLower) ||
               (enumVal && String(c).toUpperCase() === enumVal)
           )
-          if (matches) score += 4
+          if (matches) {
+            score += 4
+            structuredDetectedMatch = true
+          }
         }
-        if (score === 0 && e.category && enumVal && e.category === enumVal) score += 4
+        if (score === 0 && e.category && enumVal && e.category === enumVal) {
+          score += 4
+          structuredDetectedMatch = true
+        }
         if (score === 0) {
           const text = [e.title, e.description, e.venueName, e.city].filter(Boolean).join(" ").toLowerCase()
           if (text.includes(catLower)) score += 2
+        }
+
+        // Apply a small penalty only if we have category intent but did NOT find a structured match.
+        // Intentionally skip "family" to avoid suppressing overlapping family/food/music events.
+        if (!structuredDetectedMatch) {
+          if (catLower === "food" && hasMusic) score -= 2
+          else if (catLower === "music" && hasFood) score -= 2
+          else if (catLower === "arts" && hasMarkets) score -= 1
+          else if (catLower === "markets" && hasArts) score -= 1
         }
       }
       if (effectiveCityLower) {
