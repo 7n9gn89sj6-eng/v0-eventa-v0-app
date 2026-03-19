@@ -316,6 +316,14 @@ export async function GET(req: NextRequest) {
   // Use effectiveLocation for all location-based operations
   const effectiveCity = effectiveLocation.city
   const effectiveCountry = effectiveLocation.country
+
+  // IMPORTANT: apply query-override to the variables used for internal filtering.
+  // Without this, the UI location picker (`city`/`country` from URL params) would continue to filter internal results,
+  // even when the user explicitly typed a different destination city (e.g., "markets in Berlin").
+  if (effectiveLocation.source === "query") {
+    city = effectiveCity || null
+    country = effectiveCountry || null
+  }
   
   if (microLocation) {
     console.log(`[v0] 🔍 Micro-location detected: "${microLocation}" within "${effectiveCity}"`)
