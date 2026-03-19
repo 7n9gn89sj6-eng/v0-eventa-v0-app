@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "[Eventa] Running search trust tests before push..."
+
+VITEST_BIN="./node_modules/.bin/vitest"
+
+if [ -x "$VITEST_BIN" ]; then
+  CMD="$VITEST_BIN run tests/eventa-search-trust"
+else
+  CMD="npx vitest run tests/eventa-search-trust"
+fi
+
+sh -c "$CMD" || {
+  echo ""
+  echo "Push blocked: Eventa search trust tests failed."
+  echo "Run: npx vitest run tests/eventa-search-trust"
+  exit 1
+}
+
+echo "[Eventa] Search trust tests passed."
+

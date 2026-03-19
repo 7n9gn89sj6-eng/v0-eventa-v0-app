@@ -21,6 +21,7 @@
     "prisma:migrate": "prisma migrate deploy",
     "smoke": "node tests/smoke.mjs",
     "smoke:prod": "node ./scripts/smoke-prod.mjs",
+    "setup:hooks": "node scripts/git-hooks/setup-git-hooks.mjs",
     "start": "next start -p $PORT",
     "test": "playwright test",
     "test:e2e": "playwright test",
