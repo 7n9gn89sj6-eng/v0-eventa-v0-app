@@ -7,8 +7,10 @@ import { withLanguageColumnGuard, getEventSelectWithoutLanguage, isLanguageFilte
 import { buildDateOverlapWhere, buildDateRangeOverlapWhere } from "@/lib/search/date-overlap"
 import { rankEventResults, isEventIntentQuery } from "@/lib/search/event-ranking"
 import { getExpandedTermGroups } from "@/lib/search/search-taxonomy"
-import { parseSearchIntent } from "@/lib/search/parse-search-intent"
+import { parseSearchIntent as parseRankingIntent } from "@/lib/search/parse-search-intent"
 import { interpretSearchIntent } from "@/lib/search/ai-intent"
+import { parseSearchIntent } from "@/app/lib/search/parseSearchIntent"
+import { resolveSearchPlan } from "@/app/lib/search/resolveSearchPlan"
 
 /**
  * Helper function to check if text contains Australian location indicators
@@ -75,30 +77,41 @@ export async function GET(req: NextRequest) {
   // Detect if this is an event-intent query
   const isEventQuery = isEventIntentQuery(q)
 
-  // Additive intent interpretation layer (rules-only by default).
-  // Goal: fill missing structured hints before the existing search pipeline runs.
+  // Intent -> Plan resolution (deterministic, query-first precedence).
+  const parsedIntent = q ? parseSearchIntent(q) : parseSearchIntent("")
+  const searchPlan = resolveSearchPlan(parsedIntent, { city: city ?? undefined, country: country ?? undefined })
+  const shouldStrictCategoryFilter = searchPlan.filters.strictCategory
+
   if (q) {
     const missingCategory = !category || category.trim().length === 0 || category === "all"
     const missingDate = !dateFrom || !dateTo
 
+    if (missingCategory && parsedIntent.interest?.length) {
+      category = parsedIntent.interest[0]
+    }
+
+    if (missingDate) {
+      if (parsedIntent.time?.date_from) dateFrom = parsedIntent.time.date_from
+      if (parsedIntent.time?.date_to) dateTo = parsedIntent.time.date_to
+    }
+
+    // Keep optional additive interpreter as low-priority augmentation.
     if (missingCategory || missingDate) {
       const threshold = 0.6
       try {
         const interpreted = await interpretSearchIntent(q, {
-          city: city ?? undefined,
-          country: country ?? undefined,
+          city: searchPlan.location.city,
+          country: searchPlan.location.country,
         })
 
-        if (
-          missingCategory &&
-          interpreted.category &&
-          (interpreted.confidence ?? 0) >= threshold
-        ) {
+        if (missingCategory && !category && interpreted.category && (interpreted.confidence ?? 0) >= threshold) {
           category = interpreted.category
         }
 
         if (
           missingDate &&
+          !dateFrom &&
+          !dateTo &&
           interpreted.date_from &&
           interpreted.date_to &&
           (interpreted.confidence ?? 0) >= threshold
@@ -107,310 +120,28 @@ export async function GET(req: NextRequest) {
           dateTo = interpreted.date_to
         }
       } catch (err) {
-        // Never block search if interpretation fails.
-        console.warn("[v0] Intent interpretation failed; continuing with existing params.", err)
+        console.warn("[v0] Intent interpretation failed; continuing with deterministic plan.", err)
       }
     }
   }
 
-  /**
-   * Extract place from query using patterns like "in X", "near X", "to X", "going to X"
-   * Returns the place name (1-3 words, trimmed, stops at punctuation)
-   */
-  function extractPlaceFromQuery(query: string): string | null {
-    if (!query) return null
-    
-    // Patterns: "in X", "near X", "around X", "to X", "going to X", "X this weekend"
-    const patterns = [
-      /\b(in|near|around|to)\s+([A-Za-z][A-Za-z'\\-]*(?:\s+[A-Za-z][A-Za-z'\\-]*){0,2})/gi,
-      /\bgoing\s+to\s+([A-Za-z][A-Za-z'\\-]*(?:\s+[A-Za-z][A-Za-z'\\-]*){0,2})/gi,
-      /([A-Za-z][a-zA-Z'\\-]*(?:\s+[A-Za-z][a-zA-Z'\\-]*){0,2})\s+this\s+weekend/gi,
-    ]
-    
-    for (const pattern of patterns) {
-      const matches = Array.from(query.matchAll(pattern))
-      for (const match of matches) {
-        const place = match[match.length - 1]?.trim() // Last capture group
-        if (place) {
-          // Stop at punctuation
-          let placeClean = place.split(/[.,;!?]/)[0].trim()
-          if (placeClean && placeClean.length > 1) {
-            // Reliability guard: for queries like "techno berlin this weekend",
-            // the weekend-place extractor can capture "techno berlin" as one place.
-            // If the first token looks like an intent/category word, strip it so
-            // the resolved destination becomes the actual location token(s).
-            const tokens = placeClean.split(/\s+/).filter(Boolean)
-            if (tokens.length >= 2) {
-              const firstTokenLower = tokens[0].toLowerCase()
-              const intentPrefixWords = [
-                "music",
-                "market",
-                "markets",
-                "food",
-                "art",
-                "arts",
-                "family",
-                "kids",
-                "children",
-                "sports",
-                "sport",
-                "concert",
-                "live",
-                "theatre",
-                "theater",
-                "exhibition",
-                "festival",
-                "cheap",
-                "free",
-                "techno",
-                "house",
-                "trance",
-              ]
-
-              if (intentPrefixWords.includes(firstTokenLower)) {
-                const stripped = tokens.slice(1).join(" ").trim()
-                if (stripped) placeClean = stripped
-              }
-            }
-
-            // Exclude common words that aren't locations
-            // Intentionally includes category words so queries like "Music this weekend" don't accidentally
-            // treat "Music" as a location override.
-            const commonWords = [
-              "this",
-              "that",
-              "the",
-              "a",
-              "an",
-              "weekend",
-              "week",
-              "month",
-              "year",
-              "today",
-              "tomorrow",
-              "here",
-              "there",
-              // Category / intent words that should never become "places"
-              "music",
-              "markets",
-              "market",
-              "food",
-              "art",
-              "arts",
-              "family",
-              "kids",
-              "children",
-              "sports",
-              "sport",
-              "concert",
-              "live",
-              "theatre",
-              "theater",
-              "exhibition",
-              "festival",
-              "cheap",
-              "free",
-              "near",
-              "around",
-            ]
-            if (!commonWords.includes(placeClean.toLowerCase())) {
-              return placeClean
-            }
-          }
-        }
-      }
-    }
-    
-    return null
+  // Query place is the single source of truth when present.
+  city = searchPlan.filters.applyLocationRestriction ? (searchPlan.location.city ?? null) : null
+  country = searchPlan.filters.applyLocationRestriction ? (searchPlan.location.country ?? null) : null
+  const effectiveLocation: { city: string | null; country: string | null; source: "query" | "ui" | "device" } = {
+    city,
+    country,
+    source: searchPlan.location.source === "query" ? "query" : searchPlan.location.source === "selected" ? "ui" : "device",
   }
-
-  /**
-   * Check if a place is likely a suburb/neighbourhood within a city
-   */
-  function isLikelySuburb(place: string, city: string | null): boolean {
-    if (!city) return false
-    
-    const placeLower = place.toLowerCase()
-    const cityLower = city.toLowerCase()
-    
-    // Melbourne suburbs (extendable list)
-    if (cityLower === "melbourne") {
-      const melbourneSuburbs = [
-        "brunswick", "fitzroy", "carlton", "south yarra", "st kilda", "richmond",
-        "collingwood", "prahran", "footscray", "south melbourne", "docklands",
-        "cbd", "downtown", "city", "inner city"
-      ]
-      if (melbourneSuburbs.some(sub => placeLower.includes(sub) || sub.includes(placeLower))) {
-        return true
-      }
-    }
-    
-    // Generic indicators of micro-locations
-    const microIndicators = ["cbd", "downtown", "inner city", "city center", "city centre"]
-    if (microIndicators.some(ind => placeLower.includes(ind))) {
-      return true
-    }
-    
-    return false
-  }
-
-  /**
-   * Country resolution for globally-known cities
-   */
-  function getCountryForCity(city: string): string | null {
-    const cityLower = city.toLowerCase()
-    const cityCountryMap: Record<string, string> = {
-      "berlin": "Germany",
-      "paris": "France",
-      "rome": "Italy",
-      "london": "United Kingdom",
-      "new york": "United States",
-      "tokyo": "Japan",
-      "sydney": "Australia",
-      "melbourne": "Australia",
-      "brisbane": "Australia",
-      "perth": "Australia",
-      "adelaide": "Australia",
-      "vienna": "Austria",
-      "madrid": "Spain",
-      "milan": "Italy",
-      "athens": "Greece",
-      "dublin": "Ireland",
-      "amsterdam": "Netherlands",
-      "brussels": "Belgium",
-      "stockholm": "Sweden",
-      "oslo": "Norway",
-      "copenhagen": "Denmark",
-      "lisbon": "Portugal",
-      "warsaw": "Poland",
-      "prague": "Czech Republic",
-      "budapest": "Hungary",
-      "zurich": "Switzerland",
-    }
-    
-    return cityCountryMap[cityLower] || null
-  }
-
-  /**
-   * COMPUTE EFFECTIVE LOCATION with strict precedence (Query place overrides location picker)
-   * 
-   * Precedence (must match product rule):
-   * 1. Query place (destination typed in query) - source: "query"
-   * 2. UI location picker - source: "ui"
-   * 3. Device/stored - source: "device"
-   * 
-   * Additionally:
-   * - If query place is a suburb/neighbourhood within selected city → set microLocation, keep effectiveLocation.city=uiCity
-   * - "near me / around here" should use device/stored location
-   */
-  let effectiveLocation: { city: string | null; country: string | null; source: "query" | "ui" | "device" } = {
-    city: city || null,
-    country: country || null,
-    source: (city || country) ? "ui" : "device",
-  }
-  
-  let microLocation: string | null = null
-  let destinationCityDetected: string | null = null
-
-  // Step 1: Check if query contains location-based keywords (nearby, near me, etc.)
-  const locationKeywords = /\b(nearby|near\s+me|around\s+me|close\s+to\s+me|local)\b/i
-  const hasLocationKeyword = q ? locationKeywords.test(q) : false
-  
-  // Step 2: Extract place from query (if any)
-  const queryPlace = extractPlaceFromQuery(q)
-  
-  if (hasLocationKeyword && !queryPlace) {
-    // Query contains "nearby" or similar but no specific place extracted
-    // Use device/stored location (already set in effectiveLocation above)
-    // If city/country are in URL params, they were set by the location picker, so use them
-    if (!city && !country) {
-      console.log(`[v0] Query contains location keyword (nearby/near me) but no location params - location may not be set`)
-    } else {
-      console.log(`[v0] Query contains location keyword (nearby/near me) - using location from params: ${city || 'none'}${country ? `, ${country}` : ""}`)
-    }
-  } else if (queryPlace) {
-    // Check if it's "near me" / "around here" - use device/stored (already set above)
-    if (queryPlace.toLowerCase().includes("me") || queryPlace.toLowerCase().includes("here") || queryPlace.toLowerCase() === "nearby") {
-      // Keep device/stored location, don't override
-      console.log(`[v0] Query contains "near me/here/nearby" - using device/stored location`)
-    } else if (city && isLikelySuburb(queryPlace, city)) {
-      // Suburb/neighbourhood within selected city → treat as micro-location
-      const uiCity = city
-      microLocation = queryPlace
-      // Scope internal search to the "place" the user typed (e.g. "brunswick").
-      // Web fallback still uses effectiveLocation (UI city) for labeling + city-level querying.
-      city = queryPlace
-      effectiveLocation.city = uiCity // Keep UI city for web query labeling
-      effectiveLocation.country = country || null
-      effectiveLocation.source = "ui"
-      console.log(`[v0] ✅ Micro-location detected: "${queryPlace}" within "${uiCity}" (source=ui)`)
-    } else {
-      // Query place is a destination city override
-      destinationCityDetected = queryPlace
-      effectiveLocation.city = queryPlace
-      effectiveLocation.source = "query"
-      
-      // Country resolution for globally-known cities
-      const resolvedCountry = getCountryForCity(queryPlace)
-      if (resolvedCountry) {
-        effectiveLocation.country = resolvedCountry
-        console.log(`[v0] ✅ Effective location from query: ${queryPlace}, ${resolvedCountry} (source=query)`)
-      } else {
-        // If uiCountry exists and destination is plausibly in that country, keep it
-        // Otherwise, set to null and rely on city + disambiguation filtering
-        if (country) {
-          // Conservative: only keep uiCountry if destination is plausibly in that country
-          // (e.g., Sydney with Australia)
-          const cityLower = queryPlace.toLowerCase()
-          const countryLower = country.toLowerCase()
-          
-          // Australian cities
-          if (countryLower.includes("australia") && 
-              (cityLower === "sydney" || cityLower === "melbourne" || cityLower === "brisbane" || 
-               cityLower === "perth" || cityLower === "adelaide" || cityLower === "canberra" || cityLower === "darwin")) {
-            effectiveLocation.country = country
-            console.log(`[v0] ✅ Effective location from query: ${queryPlace}, ${country} (source=query, kept uiCountry)`)
-          } else {
-            effectiveLocation.country = null
-            console.log(`[v0] ✅ Effective location from query: ${queryPlace} (source=query, country=null, will use city+disambiguation)`)
-          }
-        } else {
-          effectiveLocation.country = null
-          console.log(`[v0] ✅ Effective location from query: ${queryPlace} (source=query, country=null)`)
-        }
-      }
-    }
-  } else if (city || country) {
-    // No place in query, use UI location picker (from URL params)
-    effectiveLocation.source = "ui"
-    console.log(`[v0] ✅ Effective location from UI: ${city || 'none'}${country ? `, ${country}` : ""}`)
-  } else {
-    // No location in query AND no location in URL params
-    // This means search will be broad (no location filter)
-    console.log(`[v0] ⚠️ No location specified - search will be broad (no location filter)`)
-  }
-
-  // Use effectiveLocation for all location-based operations
-  const effectiveCity = effectiveLocation.city
-  const effectiveCountry = effectiveLocation.country
-
-  // IMPORTANT: apply query-override to the variables used for internal filtering.
-  // Without this, the UI location picker (`city`/`country` from URL params) would continue to filter internal results,
-  // even when the user explicitly typed a different destination city (e.g., "markets in Berlin").
-  if (effectiveLocation.source === "query") {
-    city = effectiveCity || null
-    country = effectiveCountry || null
-  }
+  const effectiveCity = city
+  const effectiveCountry = country
+  const microLocation: string | null = parsedIntent.place?.raw || null
 
   console.log("[v0] Final location used:", {
     city,
     country,
     source: effectiveLocation.source,
   })
-  
-  if (microLocation) {
-    console.log(`[v0] 🔍 Micro-location detected: "${microLocation}" within "${effectiveCity}"`)
-  }
 
   // NOTE: Location should come from URL params (city/country) set by UI location picker
   // Only extract from query as fallback if location params are not provided
@@ -499,7 +230,7 @@ export async function GET(req: NextRequest) {
       }
 
       // PRIORITY 3: CATEGORY - applied after location and date
-      if (category && category !== "all") {
+      if (shouldStrictCategoryFilter && category && category !== "all") {
         const categoryEnum = category.toUpperCase() as EventCategory
         where.category = categoryEnum
       }
@@ -747,7 +478,7 @@ export async function GET(req: NextRequest) {
     const whereWithoutCategory = structuredClone(where)
 
     // Apply category filter
-    if (category && category !== "all") {
+    if (shouldStrictCategoryFilter && category && category !== "all") {
       // Map category string to EventCategory enum
       const categoryMap: Record<string, EventCategory> = {
         food: "FOOD_DRINK",
@@ -863,7 +594,7 @@ export async function GET(req: NextRequest) {
 
     // If category intent was too rigid (0 internal results), retry without the strict category constraint.
     // This keeps category as an intent signal (filter/boost) without collapsing relevant results.
-    if (count === 0 && category && category !== "all" && whereWithoutCategory) {
+    if (count === 0 && shouldStrictCategoryFilter && category && category !== "all" && whereWithoutCategory) {
       console.log("[v0] ⚠️ Category filter returned 0 results; retrying without strict category constraint.")
       try {
         ;[events, count] = await Promise.all([
@@ -1087,7 +818,7 @@ export async function GET(req: NextRequest) {
         }
         
         // Query 2/3: Activity-specific web fallbacks (avoid always using "live music")
-        const parsedIntentForWeb = q ? parseSearchIntent(q) : {}
+        const parsedIntentForWeb = q ? parseRankingIntent(q) : {}
         const webIntentCategory = category && category !== "all" ? category : parsedIntentForWeb.detectedCategory
         const webActivity = (() => {
           switch ((webIntentCategory || "").toLowerCase()) {
@@ -1615,7 +1346,7 @@ export async function GET(req: NextRequest) {
     
     // Score internal events for ranking (categories/category/text, location, date); do not expose _score
     const effectiveCityLower = (effectiveCity || "").toLowerCase()
-    const parsedIntent = q ? parseSearchIntent(q) : {}
+    const parsedIntent = q ? parseRankingIntent(q) : {}
     const detectedCat = parsedIntent.detectedCategory
     const categoryToEnum: Record<string, EventCategory> = {
       music: "MUSIC_NIGHTLIFE",

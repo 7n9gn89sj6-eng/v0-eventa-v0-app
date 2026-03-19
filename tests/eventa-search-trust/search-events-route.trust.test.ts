@@ -701,6 +701,186 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     expect(data.emptyState).toBe(false)
   })
 
+  it("scope: `things to do` is broad and does not collapse to empty when internal events exist", async () => {
+    const future = new Date(FIXED_NOW.getTime() + 8 * 86400 * 1000).toISOString()
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "melb-community-broad",
+        title: "Neighbourhood Social Night",
+        description: "Things to do with locals in Melbourne.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: [],
+        category: null,
+      }),
+      makeEvent({
+        id: "melb-arts-broad",
+        title: "Laneway Gallery Evening",
+        description: "What is on around town this week.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: addHours(future, 3),
+        endAt: addHours(future, 5),
+        categories: [],
+        category: null,
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "things to do",
+      city: "Melbourne",
+      country: "Australia",
+    })
+
+    expect(data.internal?.length).toBeGreaterThan(0)
+    expect(data.emptyState).toBe(false)
+    // broad scope should not force strict category enum filtering
+    expect(findManyWhereHistory.length).toBeGreaterThan(0)
+    expect(deepIncludesString(findManyWhereHistory[0], "FOOD_DRINK")).toBe(false)
+    expect(deepIncludesString(findManyWhereHistory[0], "MUSIC_NIGHTLIFE")).toBe(false)
+  })
+
+  it("scope: `events worldwide` is global and ignores selected UI location restriction", async () => {
+    const future = new Date(FIXED_NOW.getTime() + 9 * 86400 * 1000).toISOString()
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "global-berlin",
+        title: "Berlin Culture Exchange",
+        description: "Worldwide events spotlight from Berlin.",
+        city: "Berlin",
+        country: "Germany",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: [],
+        category: null,
+      }),
+      makeEvent({
+        id: "global-melbourne",
+        title: "Melbourne Community Mixer",
+        description: "Worldwide events spotlight from Melbourne.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: addHours(future, 4),
+        endAt: addHours(future, 6),
+        categories: [],
+        category: null,
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "events worldwide",
+      city: "Melbourne",
+      country: "Australia",
+    })
+
+    const internalCities = (data.internal || []).map((e: any) => e.city)
+    expect(internalCities).toContain("Berlin")
+    expect(internalCities).toContain("Melbourne")
+    // Ensure no hard location filter from selected city leaked into where clause
+    expect(findManyWhereHistory.length).toBeGreaterThan(0)
+    expect(deepIncludesString(findManyWhereHistory[0], "\"city\"")).toBe(false)
+    expect(deepIncludesString(findManyWhereHistory[0], "Melbourne")).toBe(false)
+  })
+
+  it("scope: `festivals Western Europe` preserves region intent and does not fall back to selected local city", async () => {
+    const future = new Date(FIXED_NOW.getTime() + 10 * 86400 * 1000).toISOString()
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "region-berlin-festival",
+        title: "Berlin Street Festival",
+        description: "Major festivals across Western Europe.",
+        city: "Berlin",
+        country: "Germany",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["festival"],
+        category: null,
+      }),
+      makeEvent({
+        id: "region-paris-festival",
+        title: "Paris Night Festival",
+        description: "Major festivals season in Western Europe.",
+        city: "Paris",
+        country: "France",
+        startAt: addHours(future, 3),
+        endAt: addHours(future, 5),
+        categories: ["festival"],
+        category: null,
+      }),
+      makeEvent({
+        id: "region-melbourne-nonmatch",
+        title: "Melbourne Local Fair",
+        description: "Local community fair in Melbourne suburbs.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: addHours(future, 6),
+        endAt: addHours(future, 8),
+        categories: ["festival"],
+        category: null,
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "festivals Western Europe",
+      city: "Melbourne",
+      country: "Australia",
+    })
+
+    expect(data?.effectiveLocation?.source).toBe("query")
+    expect(data?.effectiveLocation?.city).toBeNull()
+    const internalCities = (data.internal || []).map((e: any) => e.city)
+    expect(internalCities).toContain("Berlin")
+    expect(internalCities).toContain("Paris")
+    expect(internalCities).not.toContain("Melbourne")
+  })
+
+  it("scope/place: `music in Camberwell UK` uses explicit UK context over selected Australia location", async () => {
+    const future = new Date(FIXED_NOW.getTime() + 6 * 86400 * 1000).toISOString()
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "camberwell-uk-music",
+        title: "Camberwell Jazz Night",
+        description: "Live music in Camberwell, UK.",
+        city: "Camberwell",
+        country: "United Kingdom",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+      makeEvent({
+        id: "camberwell-au-music",
+        title: "Camberwell Australia Music Night",
+        description: "Live music in Camberwell, Australia.",
+        city: "Camberwell",
+        country: "Australia",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "music in Camberwell UK",
+      city: "Melbourne",
+      country: "Australia",
+    })
+
+    expect(data?.effectiveLocation?.source).toBe("query")
+    expect(data?.effectiveLocation?.city).toBe("Camberwell")
+    expect(data?.effectiveLocation?.country).toBe("United Kingdom")
+    const internalCountries = (data.internal || []).map((e: any) => e.country)
+    expect(internalCountries).toContain("United Kingdom")
+    expect(internalCountries).not.toContain("Australia")
+  })
+
   it("no stale state on sequential route calls (request-scoped behavior)", async () => {
     const weekend = parseDateExpression("music this weekend")
     const start = weekend.date_from!
