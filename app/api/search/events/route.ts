@@ -994,15 +994,51 @@ export async function GET(req: NextRequest) {
           cityQuery1 = `${cityQuery1} events`
         }
         
-        // Query 2: City gig guide
-        let cityQuery2 = effectiveCity ? `${effectiveCity} gig guide live music` : ""
-        if (effectiveCountry) cityQuery2 = `${cityQuery2} ${effectiveCountry}`
-        if (cityQuery2) webQueries.push(cityQuery2.trim())
-        
-        // Query 3: City what's on
-        let cityQuery3 = effectiveCity ? `${effectiveCity} what's on live music` : ""
-        if (effectiveCountry) cityQuery3 = `${cityQuery3} ${effectiveCountry}`
-        if (cityQuery3) webQueries.push(cityQuery3.trim())
+        // Query 2/3: Activity-specific web fallbacks (avoid always using "live music")
+        const parsedIntentForWeb = q ? parseSearchIntent(q) : {}
+        const webIntentCategory = category && category !== "all" ? category : parsedIntentForWeb.detectedCategory
+        const webActivity = (() => {
+          switch ((webIntentCategory || "").toLowerCase()) {
+            case "music":
+              return { phrase: "live music", useGigGuides: true }
+            case "markets":
+            case "market":
+              return { phrase: "markets", useGigGuides: false }
+            case "food":
+              return { phrase: "food and drink", useGigGuides: false }
+            case "arts":
+              return { phrase: "arts and exhibitions", useGigGuides: false }
+            case "family":
+              return { phrase: "family events", useGigGuides: false }
+            case "community":
+              return { phrase: "community events", useGigGuides: false }
+            case "learning":
+              return { phrase: "talks and workshops", useGigGuides: false }
+            default:
+              return null
+          }
+        })()
+
+        if (effectiveCity && webActivity) {
+          if (webActivity.useGigGuides) {
+            let cityQuery2 = `${effectiveCity} gig guide ${webActivity.phrase}`
+            if (effectiveCountry) cityQuery2 = `${cityQuery2} ${effectiveCountry}`
+            webQueries.push(cityQuery2.trim())
+          } else {
+            let cityQuery2 = `${effectiveCity} ${webActivity.phrase}`
+            if (effectiveCountry) cityQuery2 = `${cityQuery2} ${effectiveCountry}`
+            webQueries.push(cityQuery2.trim())
+          }
+
+          let cityQuery3 = `${effectiveCity} what's on ${webActivity.phrase}`
+          if (effectiveCountry) cityQuery3 = `${cityQuery3} ${effectiveCountry}`
+          webQueries.push(cityQuery3.trim())
+        } else if (effectiveCity) {
+          // Generic listing fallback when we can't infer an activity category confidently.
+          let cityQuery2 = `${effectiveCity} what's on events`
+          if (effectiveCountry) cityQuery2 = `${cityQuery2} ${effectiveCountry}`
+          webQueries.push(cityQuery2.trim())
+        }
         
         // Add city-level query 1 (only if not already in micro-location queries)
         const cityQuery1Trimmed = cityQuery1.trim()
