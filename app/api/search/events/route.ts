@@ -363,6 +363,12 @@ export async function GET(req: NextRequest) {
     city = effectiveCity || null
     country = effectiveCountry || null
   }
+
+  console.log("[v0] Final location used:", {
+    city,
+    country,
+    source: effectiveLocation.source,
+  })
   
   if (microLocation) {
     console.log(`[v0] 🔍 Micro-location detected: "${microLocation}" within "${effectiveCity}"`)
@@ -371,7 +377,8 @@ export async function GET(req: NextRequest) {
   // NOTE: Location should come from URL params (city/country) set by UI location picker
   // Only extract from query as fallback if location params are not provided
   // This ensures web search uses the UI location control, not query extraction
-  if (q && isEventQuery && !city && !country) {
+  // If the user explicitly set a destination city in the query, never reintroduce URL/UI location later.
+  if (q && isEventQuery && effectiveLocation.source !== "query" && !city && !country) {
     try {
       const intentResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/search/intent`, {
         method: 'POST',
