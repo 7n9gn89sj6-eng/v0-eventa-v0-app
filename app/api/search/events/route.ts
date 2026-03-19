@@ -8,6 +8,7 @@ import { buildDateOverlapWhere, buildDateRangeOverlapWhere } from "@/lib/search/
 import { rankEventResults, isEventIntentQuery } from "@/lib/search/event-ranking"
 import { getExpandedTermGroups } from "@/lib/search/search-taxonomy"
 import { parseSearchIntent } from "@/lib/search/parse-search-intent"
+import { interpretSearchIntent } from "@/lib/search/ai-intent"
 
 /**
  * Helper function to check if text contains Australian location indicators
@@ -63,9 +64,9 @@ export async function GET(req: NextRequest) {
   const skip = (page - 1) * take
   let city = url.searchParams.get("city")
   let country = url.searchParams.get("country")
-  const category = url.searchParams.get("category")
-  const dateFrom = url.searchParams.get("date_from")
-  const dateTo = url.searchParams.get("date_to")
+  let category = url.searchParams.get("category")
+  let dateFrom = url.searchParams.get("date_from")
+  let dateTo = url.searchParams.get("date_to")
   const debug = url.searchParams.get("debug") === "1"
 
   // Define 'now' once at the top level for reuse throughout the function
@@ -73,6 +74,44 @@ export async function GET(req: NextRequest) {
 
   // Detect if this is an event-intent query
   const isEventQuery = isEventIntentQuery(q)
+
+  // Additive intent interpretation layer (rules-only by default).
+  // Goal: fill missing structured hints before the existing search pipeline runs.
+  if (q) {
+    const missingCategory = !category || category.trim().length === 0 || category === "all"
+    const missingDate = !dateFrom || !dateTo
+
+    if (missingCategory || missingDate) {
+      const threshold = 0.6
+      try {
+        const interpreted = await interpretSearchIntent(q, {
+          city: city ?? undefined,
+          country: country ?? undefined,
+        })
+
+        if (
+          missingCategory &&
+          interpreted.category &&
+          (interpreted.confidence ?? 0) >= threshold
+        ) {
+          category = interpreted.category
+        }
+
+        if (
+          missingDate &&
+          interpreted.date_from &&
+          interpreted.date_to &&
+          (interpreted.confidence ?? 0) >= threshold
+        ) {
+          dateFrom = interpreted.date_from
+          dateTo = interpreted.date_to
+        }
+      } catch (err) {
+        // Never block search if interpretation fails.
+        console.warn("[v0] Intent interpretation failed; continuing with existing params.", err)
+      }
+    }
+  }
 
   /**
    * Extract place from query using patterns like "in X", "near X", "to X", "going to X"
