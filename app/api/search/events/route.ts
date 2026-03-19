@@ -133,8 +133,46 @@ export async function GET(req: NextRequest) {
         const place = match[match.length - 1]?.trim() // Last capture group
         if (place) {
           // Stop at punctuation
-          const placeClean = place.split(/[.,;!?]/)[0].trim()
+          let placeClean = place.split(/[.,;!?]/)[0].trim()
           if (placeClean && placeClean.length > 1) {
+            // Reliability guard: for queries like "techno berlin this weekend",
+            // the weekend-place extractor can capture "techno berlin" as one place.
+            // If the first token looks like an intent/category word, strip it so
+            // the resolved destination becomes the actual location token(s).
+            const tokens = placeClean.split(/\s+/).filter(Boolean)
+            if (tokens.length >= 2) {
+              const firstTokenLower = tokens[0].toLowerCase()
+              const intentPrefixWords = [
+                "music",
+                "market",
+                "markets",
+                "food",
+                "art",
+                "arts",
+                "family",
+                "kids",
+                "children",
+                "sports",
+                "sport",
+                "concert",
+                "live",
+                "theatre",
+                "theater",
+                "exhibition",
+                "festival",
+                "cheap",
+                "free",
+                "techno",
+                "house",
+                "trance",
+              ]
+
+              if (intentPrefixWords.includes(firstTokenLower)) {
+                const stripped = tokens.slice(1).join(" ").trim()
+                if (stripped) placeClean = stripped
+              }
+            }
+
             // Exclude common words that aren't locations
             // Intentionally includes category words so queries like "Music this weekend" don't accidentally
             // treat "Music" as a location override.
