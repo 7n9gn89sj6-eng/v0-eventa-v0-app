@@ -8,6 +8,7 @@ import { buildDateOverlapWhere, buildDateRangeOverlapWhere } from "@/lib/search/
 import { isEventIntentQuery } from "@/lib/search/event-ranking"
 import { scoreSearchResult } from "@/lib/search/score-search-result"
 import { getExpandedTermGroups } from "@/lib/search/search-taxonomy"
+import { normalizeSearchUtterance, stripTextSearchStopwords } from "@/lib/search/normalize-search-utterance"
 // Two modules both export `parseSearchIntent` (different shapes): app = full planning intent for
 // `resolveSearchPlan` / execution; lib `parse-search-intent` = lightweight category hint for ranking/web only.
 import { parseSearchIntent as parseRankingIntent } from "@/lib/search/parse-search-intent"
@@ -183,7 +184,8 @@ export const runtime = "nodejs"
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
-  const q = (url.searchParams.get("query") || url.searchParams.get("q") || "").trim()
+  let q = (url.searchParams.get("query") || url.searchParams.get("q") || "").trim()
+  q = normalizeSearchUtterance(q)
   const take = Math.min(Number.parseInt(url.searchParams.get("take") || "20", 10) || 20, 50)
   const page = Math.max(Number.parseInt(url.searchParams.get("page") || "1", 10) || 1, 1)
   const skip = (page - 1) * take
@@ -573,7 +575,8 @@ export async function GET(req: NextRequest) {
       textQuery = textQuery.replace(re, " ")
     })
     textQuery = textQuery.replace(/\s+/g, " ").trim()
-    
+    textQuery = stripTextSearchStopwords(textQuery)
+
     // If cleaned query is empty but we have filters, use empty string (will search by filters only)
     // If cleaned query is not empty, use textQuery for text matching (with time words removed)
 

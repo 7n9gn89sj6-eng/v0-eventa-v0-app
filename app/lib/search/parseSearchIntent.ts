@@ -5,6 +5,7 @@ import {
   isQuerySpanNotAPlace,
   trimPlaceCaptureTail,
 } from "@/lib/search/effective-location"
+import { normalizeSearchUtterance, stripTrailingAustralianStateTokens } from "@/lib/search/normalize-search-utterance"
 import { parseDateExpression } from "@/lib/search/query-parser"
 
 export type SearchIntent = {
@@ -198,8 +199,13 @@ function extractPlace(query: string): SearchIntent["place"] {
 
   if (!city && !region && !mergedCountry && !raw) return undefined
 
+  let cityOut = city
+  if (cityOut && mergedCountry === "Australia") {
+    cityOut = stripTrailingAustralianStateTokens(cityOut)
+  }
+
   return {
-    city,
+    city: cityOut,
     region,
     country: mergedCountry,
     raw: raw || undefined,
@@ -223,12 +229,13 @@ function detectScope(query: string, place?: SearchIntent["place"]): SearchIntent
 
 export function parseSearchIntent(query: string): SearchIntent {
   const rawQuery = String(query || "").trim()
-  const interests = extractInterests(rawQuery)
-  const audience = extractAudience(rawQuery)
-  const price = extractPrice(rawQuery)
-  const time = extractTime(rawQuery)
-  const place = extractPlace(rawQuery)
-  const scope = detectScope(rawQuery, place)
+  const nq = normalizeSearchUtterance(rawQuery)
+  const interests = extractInterests(nq)
+  const audience = extractAudience(nq)
+  const price = extractPrice(nq)
+  const time = extractTime(nq)
+  const place = extractPlace(nq)
+  const scope = detectScope(nq, place)
 
   let confidence = 0.3
   if (interests.length > 0) confidence += 0.15

@@ -285,14 +285,26 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
             })
             .catch((err) => {
               clearTimeout(timeoutId)
-              if (err?.name === "AbortError") return
-              if (DEBUG) console.log("[Geolocation DEBUG] reverse geocode failure", { message: String(err?.message || err) })
-              logGeolocation("reverse_geocode_failure", { message: String(err?.message || err) })
+              if (err?.name === "AbortError") {
+                logGeolocation("reverse_geocode_failure", { message: "reverse request aborted (timeout)" })
+              } else {
+                if (DEBUG) console.log("[Geolocation DEBUG] reverse geocode failure", { message: String(err?.message || err) })
+                logGeolocation("reverse_geocode_failure", { message: String(err?.message || err) })
+              }
+              // Always resolve: AbortError previously left the Promise pending so the UI spinner never cleared.
               const fallback: DefaultLocation = { city: "Current location", lat, lng, source: "manual" }
               storeUserLocationUtil({ lat, lng, city: fallback.city, country: undefined })
               setDefaultLocationState({ ...fallback, source: "manual" })
               setLastLocationError(null)
-              if (DEBUG) console.log("[Geolocation DEBUG] final state", { success: true, note: "location set as Current location (fetch error)" })
+              if (DEBUG) {
+                console.log("[Geolocation DEBUG] final state", {
+                  success: true,
+                  note:
+                    err?.name === "AbortError"
+                      ? "location set as Current location (reverse timeout)"
+                      : "location set as Current location (fetch error)",
+                })
+              }
               resolve({ success: true, errorCode: null })
             })
         }
