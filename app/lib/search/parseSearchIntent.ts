@@ -2,6 +2,7 @@ import {
   countryForKnownCity,
   extractPlaceFromQuery,
   isCalendarMonthPlace,
+  isQuerySpanNotAPlace,
   trimInMonthTailFromPlace,
 } from "@/lib/search/effective-location"
 import { parseDateExpression } from "@/lib/search/query-parser"
@@ -164,8 +165,10 @@ function extractPlace(query: string): SearchIntent["place"] {
   if (!city) {
     const inPattern = /\b(?:in|at|near|around)\s+([A-Za-z][A-Za-z'\\-]*(?:\s+[A-Za-z][A-Za-z'\\-]*){0,3})\b/gi
     for (const m of q.matchAll(inPattern)) {
-      const captured = trimInMonthTailFromPlace(m[1]?.trim() ?? "")
+      let captured = trimInMonthTailFromPlace(m[1]?.trim() ?? "")
+      captured = captured.replace(/\s+\b(tonight|today|tomorrow)\b$/i, "").trim()
       if (!captured || isCalendarMonthPlace(captured)) continue
+      if (isQuerySpanNotAPlace(captured)) continue
 
       let cityRaw = stripCountryTokensFromPlace(captured, country)
       if (!cityRaw) continue
@@ -182,7 +185,9 @@ function extractPlace(query: string): SearchIntent["place"] {
     if (
       candidate &&
       !/\b(today|tonight|tomorrow|weekend|friday|saturday|sunday)\b/i.test(candidate) &&
-      !isCalendarMonthPlace(candidate)
+      !isCalendarMonthPlace(candidate) &&
+      !isQuerySpanNotAPlace(candidate) &&
+      countryForKnownCity(candidate) !== null
     ) {
       city = candidate
       raw = candidate

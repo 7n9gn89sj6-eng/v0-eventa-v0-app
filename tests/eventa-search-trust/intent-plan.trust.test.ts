@@ -64,5 +64,51 @@ describe("Eventa trust: intent -> plan foundation", () => {
     expect(plan.location.city).toBe("Berlin")
     expect(plan.location.country).toBe("Germany")
   })
+
+  describe("conservative query place extraction", () => {
+    it("Music this weekend uses UI location, not query city", () => {
+      const intent = parseSearchIntent("Music this weekend")
+      const plan = resolveSearchPlan(intent, { city: "Melbourne", country: "Australia" })
+
+      expect(intent.place?.city).toBeUndefined()
+      expect(plan.location.source).toBe("selected")
+      expect(plan.location.city).toBe("Melbourne")
+      expect(plan.time.date_from).toBeTruthy()
+      expect(plan.time.date_to).toBeTruthy()
+    })
+
+    it("Comedy tomorrow has no query city", () => {
+      const intent = parseSearchIntent("Comedy tomorrow")
+      const plan = resolveSearchPlan(intent, { city: "Melbourne", country: "Australia" })
+
+      expect(intent.place?.city).toBeUndefined()
+      expect(plan.location.source).toBe("selected")
+      expect(plan.location.city).toBe("Melbourne")
+      expect(intent.time?.label).toBe("tomorrow")
+      expect(intent.time?.date_from).toBeTruthy()
+    })
+
+    it("Food near me tonight must not set city to Me", () => {
+      const intent = parseSearchIntent("Food near me tonight")
+      const plan = resolveSearchPlan(intent, { city: "Melbourne", country: "Australia" })
+
+      expect(intent.place?.city).not.toBe("Me")
+      expect(intent.place?.city).toBeUndefined()
+      expect(plan.location.source).toBe("selected")
+      expect(plan.location.city).toBe("Melbourne")
+      expect(intent.time?.label).toBe("tonight")
+    })
+
+    it("live music Berlin resolves known city from query (true positive)", () => {
+      const intent = parseSearchIntent("live music Berlin")
+      const plan = resolveSearchPlan(intent, { city: "Melbourne", country: "Australia" })
+
+      expect(intent.place?.city).toBe("Berlin")
+      expect(plan.location.source).toBe("query")
+      expect(plan.location.city).toBe("Berlin")
+      expect(plan.location.country).toBe("Germany")
+      expect(intent.interest).toContain("music")
+    })
+  })
 })
 

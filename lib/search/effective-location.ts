@@ -67,6 +67,12 @@ const COMMON_NON_LOCATION_WORDS = new Set([
   "theater",
   "exhibition",
   "festival",
+  "festivals",
+  "gig",
+  "gigs",
+  "comedy",
+  "dj",
+  "events",
   "cheap",
   "free",
   "near",
@@ -142,6 +148,20 @@ export function countryForKnownCity(city: string): string | null {
 }
 
 /**
+ * True when a Title Case / trailing span is category or intent wording, not a place
+ * (e.g. "Music" in "Music this weekend").
+ */
+export function isQuerySpanNotAPlace(span: string): boolean {
+  const t = span.trim().toLowerCase()
+  if (t.length < 2) return true
+  const tokens = t.split(/\s+/).filter(Boolean)
+  if (tokens.length === 0) return true
+  return tokens.every(
+    (w) => COMMON_NON_LOCATION_WORDS.has(w) || INTENT_PREFIX_WORDS.has(w),
+  )
+}
+
+/**
  * Extract place from plain-language query using patterns like:
  * - "in X", "near X", "around X", "to X"
  * - "going to X"
@@ -173,6 +193,7 @@ export function extractPlaceFromQuery(query: string): string | null {
       }
 
       placeClean = trimInMonthTailFromPlace(placeClean)
+      placeClean = placeClean.replace(/\s+\b(tonight|today|tomorrow)\b$/i, "").trim()
       if (!placeClean || placeClean.length < 2) continue
 
       // Broad-discovery phrases before "this weekend" are not places ("what's on this weekend").
