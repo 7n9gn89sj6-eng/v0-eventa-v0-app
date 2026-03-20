@@ -80,6 +80,7 @@ export async function GET(req: NextRequest) {
   let dateFrom = url.searchParams.get("date_from")
   let dateTo = url.searchParams.get("date_to")
   const debug = url.searchParams.get("debug") === "1"
+  const searchRequestStartedAt = Date.now()
 
   // Define 'now' once at the top level for reuse throughout the function
   const now = new Date()
@@ -171,6 +172,59 @@ export async function GET(req: NextRequest) {
   const effectiveCity = city
   const effectiveCountry = country
   const microLocation: string | null = parsedIntent.place?.raw || null
+
+  const emitSearchEventsComplete = (opts: {
+    internalCount: number
+    externalCount: number
+    totalReturned: number
+    includesWeb: boolean
+    webCalled: boolean
+    emptyState: boolean
+    isEventIntent: boolean
+  }) => {
+    console.log(
+      JSON.stringify({
+        event: "search.events.complete",
+        query: q,
+        scope: effectiveLocation.scope,
+        effectiveLocation: {
+          city: effectiveLocation.city,
+          country: effectiveLocation.country,
+          region: effectiveLocation.region,
+          source: effectiveLocation.source,
+          scope: effectiveLocation.scope,
+        },
+        internalCount: opts.internalCount,
+        externalCount: opts.externalCount,
+        totalReturned: opts.totalReturned,
+        includesWeb: opts.includesWeb,
+        webCalled: opts.webCalled,
+        emptyState: opts.emptyState,
+        isEventIntent: opts.isEventIntent,
+        durationMs: Date.now() - searchRequestStartedAt,
+      }),
+    )
+  }
+
+  const emitSearchEventsError = (err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err)
+    console.log(
+      JSON.stringify({
+        event: "search.events.error",
+        query: q,
+        scope: effectiveLocation.scope,
+        effectiveLocation: {
+          city: effectiveLocation.city,
+          country: effectiveLocation.country,
+          region: effectiveLocation.region,
+          source: effectiveLocation.source,
+          scope: effectiveLocation.scope,
+        },
+        durationMs: Date.now() - searchRequestStartedAt,
+        error: message,
+      }),
+    )
+  }
 
   const hasWebGeoContext =
     Boolean(effectiveCity || effectiveCountry) ||
@@ -315,6 +369,15 @@ export async function GET(req: NextRequest) {
       ])
           } catch (retryError: any) {
             console.error("[SEARCH FALLBACK] Retry query also failed:", retryError?.message)
+            emitSearchEventsComplete({
+              internalCount: 0,
+              externalCount: 0,
+              totalReturned: 0,
+              includesWeb: false,
+              webCalled: false,
+              emptyState: false,
+              isEventIntent: false,
+            })
             return NextResponse.json({
               events: [],
               count: 0,
@@ -335,6 +398,15 @@ export async function GET(req: NextRequest) {
         source: "internal" as const,
         isEventaEvent: true,
       }))
+      emitSearchEventsComplete({
+        internalCount: noQueryInternal.length,
+        externalCount: 0,
+        totalReturned: count,
+        includesWeb: false,
+        webCalled: false,
+        emptyState: false,
+        isEventIntent: false,
+      })
       return NextResponse.json({
         events: noQueryInternal,
         count,
@@ -636,6 +708,15 @@ export async function GET(req: NextRequest) {
     ])
         } catch (retryError: any) {
           console.error("[SEARCH FALLBACK] Retry query also failed:", retryError?.message)
+          emitSearchEventsComplete({
+            internalCount: 0,
+            externalCount: 0,
+            totalReturned: 0,
+            includesWeb: false,
+            webCalled: false,
+            emptyState: false,
+            isEventIntent: isEventQuery,
+          })
           return NextResponse.json({
             events: [],
             count: 0,
@@ -1624,8 +1705,19 @@ export async function GET(req: NextRequest) {
       response.debugTrace = debugTrace
     }
 
+    emitSearchEventsComplete({
+      internalCount: internalEvents.length,
+      externalCount: allExternal.length,
+      totalReturned: allEvents.length,
+      includesWeb: externalEvents.length > 0,
+      webCalled: debugTrace.webCalled,
+      emptyState: isEmptyState,
+      isEventIntent: isEventQuery,
+    })
+
     return NextResponse.json(response)
   } catch (e: any) {
+    emitSearchEventsError(e)
     const errorMessage = e?.message || String(e)
     const errorStack = e?.stack
     console.error("[v0] search/events error:", errorMessage)
