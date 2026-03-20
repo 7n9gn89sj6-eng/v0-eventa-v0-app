@@ -28,9 +28,7 @@
     "test:e2e:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
-    "typecheck": "tsc --noEmit",
-    "vercel:logs": "vercel logs --prod --since=1h",
-    "vercel:promote": "node ./scripts/promote-prev.mjs"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@ai-sdk/openai": "latest",

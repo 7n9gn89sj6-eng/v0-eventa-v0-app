@@ -60,7 +60,7 @@ Run with `city`/`country` set to your default test market (e.g. Melbourne / Aust
 
 ## 4. Logs (optional)
 
-In Vercel (or your host), filter for `[v0]` lines from `app/api/search/events/route.ts` when debugging a single query: final where clause, location, web decision.
+In **production logs** (host dashboard or CLI — e.g. Render **Logs**), filter for `[v0]` lines from `app/api/search/events/route.ts` when debugging a single query: final where clause, location, web decision.
 
 ---
 

@@ -157,84 +157,59 @@ npm run dev
 
 Visit [http://localhost:3000](http://localhost:3000)
 
-## Deployment to Vercel
+## Deployment (Render)
 
-1. **Push to GitHub**: Push your code to a GitHub repository
+Production is deployed from GitHub via [Render](https://render.com) (or any Node host that can run `next build` / `next start`).
 
-2. **Import to Vercel**: Go to https://vercel.com and import your repository
+1. **Connect the repository**: In the Render dashboard, create a **Web Service** linked to this GitHub repo.
+2. **Build & start**: Use defaults for Next.js or set **Build Command** to `npm run build` and **Start Command** to `npm start` (Render sets `PORT`; the repo uses `next start -p $PORT`).
+3. **Environment variables**: In the Render service **Environment** tab, add the same variables described in [Getting Started](#getting-started) (database, auth, optional Google/OpenAI/Upstash, etc.). Set `NEXT_PUBLIC_APP_URL` to your public site URL if you use server-side absolute links.
+4. **Database migrations**: Run `prisma migrate deploy` as part of your release process (e.g. Render **Shell** after deploy, or a one-off job). The `postinstall` script runs `prisma generate` only.
+5. **Smoke test after deploy**: See [docs/ops/post-publish-checklist.md](docs/ops/post-publish-checklist.md).
 
-3. **Configure Environment Variables**: In your Vercel project settings, add environment variables:
-   - Go to Settings → Environment Variables (or use the Vars section in v0 sidebar)
-   - **Required**: Add `NEON_DATABASE_URL` with your database connection string
-   - **For authentication**: Add all Resend email service variables:
-     - `EMAIL_SERVER_HOST="smtp.resend.com"`
-     - `EMAIL_SERVER_PORT="465"`
-     - `EMAIL_SERVER_USER="resend"`
-     - `EMAIL_SERVER_PASSWORD="re_YourResendAPIKey"`
-     - `EMAIL_FROM="onboarding@resend.dev"` (or your verified domain)
-     - `SMTP_FROM="onboarding@resend.dev"` (same as EMAIL_FROM)
-     - `ADMIN_NOTIFICATION_EMAIL="admin@yourdomain.com"`
-     - Set `NEXT_PUBLIC_AUTH_ENABLED="true"`
-   - **Optional**: Add Mapbox, Google PSE, and OpenAI keys for enhanced features
-     - `OPENAI_API_KEY`: Required for `/api/search/intent` AI-powered intent extraction AND AI moderation
-     - `UPSTASH_KV_KV_REST_API_URL` and `UPSTASH_KV_KV_REST_API_TOKEN`: Required for rate limiting
+**Test email in production**
 
-4. **Deploy**: Vercel will automatically deploy your app
-   - The `postinstall` script will automatically run `prisma generate` and `prisma migrate deploy`
-   - Migrations will be applied to your production database before each deployment
+- Visit `https://yourdomain.com/api/test-email?email=your-email@example.com` and confirm delivery.
 
-5. **Test Email Delivery**: After deployment, test that emails work in production:
-   - Visit `https://yourdomain.com/api/test-email?email=your-email@example.com`
-   - Check your inbox for the test email
-   - If successful, authentication and notifications are ready to use
+**Important notes**
 
-**Important Notes**:
-- Migrations run automatically during Vercel deployments via the `postinstall` script
-- The app works in **browse-only mode** by default (authentication disabled)
-- To enable user sign-in and event posting:
-  1. Configure all Resend email service environment variables
-  2. Set `NEXT_PUBLIC_AUTH_ENABLED="true"` in Vercel environment variables
-  3. Redeploy the app
-  4. Test email delivery using the `/api/test-email` endpoint
-- Users will see a disabled "Sign in" button when authentication is not configured
-- Use Resend's free shared domain (`onboarding@resend.dev`) for testing before verifying your own domain
+- The app works in **browse-only mode** by default (authentication disabled).
+- To enable sign-in and event posting: configure Resend (and related) env vars, set `NEXT_PUBLIC_AUTH_ENABLED="true"` in the host dashboard, redeploy, then test `/api/test-email`.
+- Users see a disabled **Sign in** button when auth is not configured.
+- Use Resend’s shared domain (`onboarding@resend.dev`) for testing before verifying your own domain.
 
 ## Automated Event Maintenance
 
-The app includes an automated cron job that runs hourly to maintain event data:
+The app exposes a maintenance endpoint you should call on a schedule (cron). It is **not** wired automatically by any file in this repo.
 
-**What it does:**
-- **Archives** published events that have ended (status changes from PUBLISHED to ARCHIVED)
-- **Deletes** archived events older than 30 days (permanent removal)
+**What it does**
 
-**Setup on Vercel:**
+- **Archives** published events that have ended (PUBLISHED → ARCHIVED)
+- **Deletes** archived events older than 30 days
 
-1. The cron schedule is configured in `vercel.json` to run hourly
-2. Add `CRON_SECRET` environment variable in Vercel project settings:
-   \`\`\`bash
-   # Generate a secure random secret
-   openssl rand -base64 32
-   \`\`\`
-3. Vercel will automatically call the endpoint with proper authentication
+**Setup on Render**
 
-**Setup on other hosts:**
+1. Add `CRON_SECRET` in the service environment (generate e.g. `openssl rand -base64 32`).
+2. Schedule a **Cron Job** on Render (or an external scheduler) that runs hourly (or as needed) and calls the endpoint below with the secret.
 
-For non-Vercel deployments, set up a cron job or scheduled task to call:
+**HTTP request**
 
 \`\`\`bash
 curl -X GET https://yourdomain.com/api/cron/events-maintenance \
   -H "Authorization: Bearer YOUR_CRON_SECRET"
 \`\`\`
 
-**Cron schedule examples:**
-- Hourly: `0 * * * *` (recommended for timezone tolerance)
+**Schedule examples**
+
+- Hourly: `0 * * * *` (good for timezone tolerance)
 - Daily at 2 AM: `0 2 * * *`
 - Every 6 hours: `0 */6 * * *`
 
-**Security:**
-- The endpoint requires `Authorization: Bearer ${CRON_SECRET}` header
-- Returns 401 for unauthorized requests
-- Never commit `CRON_SECRET` to version control
+**Security**
+
+- The endpoint requires `Authorization: Bearer ${CRON_SECRET}`.
+- Returns **401** when unauthorized.
+- Never commit `CRON_SECRET` to version control.
 
 ## Multilingual Support
 

@@ -16,6 +16,7 @@ Quick reference for verifying and monitoring production deployments.
 6. Monitor the results - all checks should pass ✓
 
 **What it tests:**
+
 - `/api/status` returns healthy JSON
 - Homepage is accessible (200 or 302)
 - `/api/health/env` is protected (NOT 200)
@@ -31,6 +32,7 @@ npm run smoke:prod
 \`\`\`
 
 **Expected output:**
+
 \`\`\`
 ✓ /api/status is healthy
 ✓ Homepage is accessible
@@ -50,9 +52,8 @@ Use this to verify Sunday edge cases and DST handling are working correctly.
 
 ### Enable Diagnostic Endpoint
 
-1. Go to Vercel Dashboard → Your Project → Settings → Environment Variables
-2. Add: `DIAG_ENDPOINT=1` (Production scope)
-3. Redeploy or wait for next deployment
+1. In your host dashboard (e.g. **Render** → your Web Service → **Environment**), add: `DIAG_ENDPOINT=1` for the production environment.
+2. Redeploy or wait for the service to restart with the new variable.
 
 ### Test the Endpoint
 
@@ -61,6 +62,7 @@ curl https://eventa.example.com/api/diag/date | jq
 \`\`\`
 
 **What to verify:**
+
 - `currentMelbourneTime` shows correct timezone (UTC+10 or UTC+11)
 - `parsedDates.thisWeekend` is reasonable (next Saturday if today is Sunday)
 - `parsedDates.nextMonday` is correct
@@ -68,10 +70,9 @@ curl https://eventa.example.com/api/diag/date | jq
 
 ### Disable Diagnostic Endpoint
 
-1. Go back to Vercel Environment Variables
-2. **Delete** `DIAG_ENDPOINT` variable
-3. Redeploy or wait for next deployment
-4. Verify endpoint returns 404: `curl -I https://eventa.example.com/api/diag/date`
+1. Remove `DIAG_ENDPOINT` from environment variables in the host dashboard.
+2. Redeploy or restart.
+3. Verify endpoint returns 404: `curl -I https://eventa.example.com/api/diag/date`
 
 **⚠️ Important:** Don't leave this enabled long-term - it's for debugging only.
 
@@ -79,69 +80,22 @@ curl https://eventa.example.com/api/diag/date | jq
 
 ## 3. Monitor Production Logs
 
-### Tail Recent Logs
+Use your hosting provider’s log viewer (e.g. **Render Dashboard** → your service → **Logs**, or `render logs` from the [Render CLI](https://render.com/docs/cli) if installed).
 
-\`\`\`bash
-# View last hour of production logs
-npm run vercel:logs
-
-# Or use Vercel CLI directly
-vercel logs --prod --since=1h
-\`\`\`
-
-### Follow Live Logs
-
-\`\`\`bash
-vercel logs --prod --follow
-\`\`\`
-
-### Filter Logs
-
-\`\`\`bash
-# Show only errors
-vercel logs --prod --since=1h | grep ERROR
-
-# Show specific endpoint
-vercel logs --prod --since=1h | grep "/api/status"
-\`\`\`
+- Filter by time range and search for errors or a specific path (e.g. `/api/status`).
+- For deep debugging of search, see [production-search-confidence.md](./production-search-confidence.md) §4.
 
 ---
 
-## 4. Rollback Deployment (If Needed)
+## 4. Rollback or Redeploy (If Needed)
 
-### Find Previous Deployment
+On **Render** (and similar Git-based hosts):
 
-\`\`\`bash
-# Shows previous deployment URL and promote command
-npm run vercel:promote
-\`\`\`
+1. Open the service **Events** / **Deploy** history.
+2. **Redeploy** a known-good commit or the previous successful deploy.
+3. Re-run smoke tests: `PROD_URL=https://... npm run smoke:prod`
 
-**Example output:**
-\`\`\`
-Previous production deployment:
-  URL: https://eventa-abc123.vercel.app
-  Created: 2025-01-15 10:30:00
-
-To promote this deployment to production, run:
-  vercel promote https://eventa-abc123.vercel.app
-\`\`\`
-
-### Promote Previous Deployment
-
-\`\`\`bash
-# Copy the command from above and run it
-vercel promote https://eventa-abc123.vercel.app
-\`\`\`
-
-**⚠️ Confirmation required:** Vercel will ask you to confirm before promoting.
-
-### Verify Rollback
-
-\`\`\`bash
-# Run smoke tests again
-export PROD_URL=https://eventa.example.com
-npm run smoke:prod
-\`\`\`
+If you use preview environments or multiple services, follow your provider’s docs for promoting a specific build.
 
 ---
 
@@ -171,12 +125,11 @@ The **Production Ping** workflow runs automatically every 15 minutes.
 
 ## Quick Reference
 
-| Task | Command |
-|------|---------|
+| Task | Command / location |
+|------|-------------------|
 | Smoke test (local) | `PROD_URL=https://... npm run smoke:prod` |
-| View logs | `npm run vercel:logs` |
-| Find previous deployment | `npm run vercel:promote` |
-| Rollback | `vercel promote <url>` |
+| Production logs | Host dashboard (e.g. Render → Logs) |
+| Rollback | Redeploy previous build in host dashboard |
 | Check diagnostic endpoint | `curl https://.../api/diag/date` |
 
 ---
@@ -185,9 +138,9 @@ The **Production Ping** workflow runs automatically every 15 minutes.
 
 ### Smoke tests fail
 
-1. Check Vercel deployment status
-2. Tail logs: `npm run vercel:logs`
-3. Check environment variables in Vercel dashboard
+1. Check latest deploy status in the host dashboard
+2. Tail logs for errors around the failure time
+3. Verify environment variables (database, auth, optional APIs)
 4. Verify database connection (Neon)
 5. Check Upstash Redis connection
 
@@ -199,14 +152,12 @@ The **Production Ping** workflow runs automatically every 15 minutes.
 4. Check for DST transition dates
 5. Review logs for parsing errors
 
-### Need to rollback
+### Need to roll back
 
-1. Run `npm run vercel:promote` to find previous deployment
-2. Verify the previous deployment URL in Vercel dashboard
-3. Run `vercel promote <url>` to rollback
-4. Run smoke tests to verify
-5. Investigate the issue in the rolled-back deployment
+1. Redeploy a previous successful release in the host dashboard
+2. Run smoke tests to verify
+3. Investigate the failing deploy separately
 
 ---
 
-**Last Updated:** 2025-01-15
+**Last Updated:** 2026-03-20
