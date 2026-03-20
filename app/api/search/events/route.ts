@@ -977,6 +977,10 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    if (ambientParentExpansionApplied && effectiveCity) {
+      effectiveLocation.city = effectiveCity
+    }
+
     console.log("[v0] Search query:", q, "filters:", { city, country, category, dateFrom, dateTo }, "found:", count, "internal events")
     if (count === 0 && q) {
       console.log("[v0] ⚠️ No internal events found for query. Possible reasons:")

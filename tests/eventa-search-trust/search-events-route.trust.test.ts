@@ -104,6 +104,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     query: string
     city?: string
     country?: string
+    category?: string
     debug?: boolean
     date_from?: string
     date_to?: string
@@ -112,6 +113,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     url.searchParams.set("query", opts.query)
     if (opts.city) url.searchParams.set("city", opts.city)
     if (opts.country) url.searchParams.set("country", opts.country)
+    if (opts.category) url.searchParams.set("category", opts.category)
     if (opts.debug) url.searchParams.set("debug", "1")
     if (opts.date_from) url.searchParams.set("date_from", opts.date_from)
     if (opts.date_to) url.searchParams.set("date_to", opts.date_to)
@@ -255,7 +257,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     })
 
     expect(data?.effectiveLocation?.source).toBe("ui")
-    expect(data?.effectiveLocation?.city).toBe("Brunswick")
+    expect(data?.effectiveLocation?.city).toBe("Melbourne")
     expect((data.internal || []).map((e: any) => e.city)).toContain("Melbourne")
     expect(findManyWhereHistory.length).toBeGreaterThanOrEqual(2)
   })
@@ -287,7 +289,37 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     })
 
     expect(data?.effectiveLocation?.source).toBe("ui")
-    expect(data?.effectiveLocation?.city).toBe("Brunswick")
+    expect(data?.effectiveLocation?.city).toBe("Melbourne")
+    expect((data.internal || []).map((e: any) => e.city)).toContain("Melbourne")
+    expect(findManyWhereHistory.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it("ambient suburb: UI Brunswick + `Music near me` exposes Melbourne in effectiveLocation after widening", async () => {
+    const future = new Date(FIXED_NOW.getTime() + 6 * 86400 * 1000).toISOString()
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "melb-music-near-me",
+        title: "CBD Jazz Night",
+        description: "Live music near the river — jazz and more.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "Music near me",
+      city: "Brunswick",
+      country: "Australia",
+      category: "music",
+    })
+
+    expect(data?.effectiveLocation?.source).toBe("ui")
+    expect(data?.effectiveLocation?.city).toBe("Melbourne")
     expect((data.internal || []).map((e: any) => e.city)).toContain("Melbourne")
     expect(findManyWhereHistory.length).toBeGreaterThanOrEqual(2)
   })

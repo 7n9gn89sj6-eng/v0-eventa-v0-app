@@ -147,13 +147,9 @@ export function EventsListingContent({
         sampleExternal: data.external?.[0],
       })
 
-      // If the backend resolved an explicit query destination (effectiveLocation.source === "query"),
-      // use that city for client-side external filtering so query-specific results aren't discarded
-      // just because the URL/UI location picker still shows a different city.
-      const externalCityFilter =
-        data?.effectiveLocation?.source === "query" && data?.effectiveLocation?.city
-          ? data.effectiveLocation.city
-          : cityFilter
+      // Prefer API execution city (includes ambient suburb→metro widening). Fall back to UI picker when absent.
+      const apiExecutionCity = data?.effectiveLocation?.city?.trim() || ""
+      const externalCityFilter = apiExecutionCity || cityFilter
 
       // Filter external results by city if city filter is active
       // External web search can return results from anywhere, so we filter client-side
