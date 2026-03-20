@@ -105,12 +105,16 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     city?: string
     country?: string
     debug?: boolean
+    date_from?: string
+    date_to?: string
   }) {
     const url = new URL("http://localhost/api/search/events")
     url.searchParams.set("query", opts.query)
     if (opts.city) url.searchParams.set("city", opts.city)
     if (opts.country) url.searchParams.set("country", opts.country)
     if (opts.debug) url.searchParams.set("debug", "1")
+    if (opts.date_from) url.searchParams.set("date_from", opts.date_from)
+    if (opts.date_to) url.searchParams.set("date_to", opts.date_to)
 
     const req = { url: url.toString() } as any
     const res = await GET(req)
@@ -225,6 +229,150 @@ describe("Eventa trust: /api/search/events regression suite", () => {
 
     const internalTopCategories = (data.internal?.[0]?.categories ?? []) as string[]
     expect(internalTopCategories.join(",").toLowerCase()).toContain("food")
+  })
+
+  it("ambient suburb: UI Brunswick + `music` broadens to Melbourne when suburb is empty", async () => {
+    const future = new Date(FIXED_NOW.getTime() + 6 * 86400 * 1000).toISOString()
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "melb-music-ambient",
+        title: "Northside Jazz",
+        description: "Live music in the CBD.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "music",
+      city: "Brunswick",
+      country: "Australia",
+    })
+
+    expect(data?.effectiveLocation?.source).toBe("ui")
+    expect(data?.effectiveLocation?.city).toBe("Brunswick")
+    expect((data.internal || []).map((e: any) => e.city)).toContain("Melbourne")
+    expect(findManyWhereHistory.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it("ambient suburb: UI Brunswick + `music this weekend` broadens when suburb is empty", async () => {
+    const weekend = parseDateExpression("music this weekend")
+    expect(weekend.date_from).toBeTruthy()
+    const start = weekend.date_from!
+    const end = addHours(start, 4)
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "melb-music-weekend-ambient",
+        title: "Weekend Sessions",
+        description: "DJ sets and live music — local acts.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: start,
+        endAt: end,
+        categories: ["music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "music this weekend",
+      city: "Brunswick",
+      country: "Australia",
+    })
+
+    expect(data?.effectiveLocation?.source).toBe("ui")
+    expect(data?.effectiveLocation?.city).toBe("Brunswick")
+    expect((data.internal || []).map((e: any) => e.city)).toContain("Melbourne")
+    expect(findManyWhereHistory.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it("explicit query `music Berlin` stays Berlin-only with UI Brunswick", async () => {
+    const future = new Date(FIXED_NOW.getTime() + 7 * 86400 * 1000).toISOString()
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "berlin-music-explicit",
+        title: "Kreuzberg Live",
+        description: "Electronic music night.",
+        city: "Berlin",
+        country: "Germany",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+      makeEvent({
+        id: "melb-music-leak",
+        title: "Fed Square Gig",
+        description: "Outdoor music.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "music Berlin",
+      city: "Brunswick",
+      country: "Australia",
+    })
+
+    expect(data?.effectiveLocation?.source).toBe("query")
+    expect(data?.effectiveLocation?.city).toBe("Berlin")
+    const internalCities = (data.internal || []).map((e: any) => e.city)
+    expect(internalCities).toContain("Berlin")
+    expect(internalCities).not.toContain("Melbourne")
+  })
+
+  it("global `music festivals anywhere` does not apply suburb parent expansion", async () => {
+    const future = new Date(FIXED_NOW.getTime() + 8 * 86400 * 1000).toISOString()
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "fest-melb-global",
+        title: "Melbourne Winter Music Festival",
+        description: "Music festivals showcase.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["festival", "music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+      makeEvent({
+        id: "fest-berlin-global",
+        title: "Berlin Open Air",
+        description: "International music festival.",
+        city: "Berlin",
+        country: "Germany",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["festival", "music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "music festivals anywhere",
+      city: "Brunswick",
+      country: "Australia",
+    })
+
+    expect(data?.effectiveLocation?.scope).toBe("global")
+    expect(data?.effectiveLocation?.city).toBeNull()
+    const internalCities = (data.internal || []).map((e: any) => e.city)
+    expect(internalCities).toContain("Melbourne")
+    expect(internalCities).toContain("Berlin")
+    expect(findManyWhereHistory.length).toBe(1)
   })
 
   it("no cross-city leakage + time phrase interpreted (`music this weekend`)", async () => {
