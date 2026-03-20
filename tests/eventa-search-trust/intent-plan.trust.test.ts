@@ -46,6 +46,23 @@ describe("Eventa trust: intent -> plan foundation", () => {
     expect(intent.scope).toBe("region")
     expect(plan.location.region).toBe("Western Europe")
     expect(plan.location.source).toBe("query")
+    expect(plan.location.city).toBeUndefined()
+    expect(plan.location.country).toBeUndefined()
+    expect(plan.location.countries).toEqual(
+      expect.arrayContaining(["Germany", "France", "Netherlands", "Belgium", "Luxembourg"]),
+    )
+  })
+
+  it("travelling to Berlin in May resolves to Berlin (not month May)", () => {
+    const q = "I am travelling to Berlin in May what festivals are on"
+    const intent = parseSearchIntent(q)
+    const plan = resolveSearchPlan(intent, { city: "Melbourne", country: "Australia" })
+
+    expect(intent.place?.city).toBe("Berlin")
+    expect(intent.place?.city).not.toBe("May")
+    expect(plan.location.source).toBe("query")
+    expect(plan.location.city).toBe("Berlin")
+    expect(plan.location.country).toBe("Germany")
   })
 })
 

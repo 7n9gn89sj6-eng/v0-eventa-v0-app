@@ -1,3 +1,9 @@
+import {
+  countryForKnownCity,
+  extractPlaceFromQuery,
+  isCalendarMonthPlace,
+  trimInMonthTailFromPlace,
+} from "@/lib/search/effective-location"
 import { parseDateExpression } from "@/lib/search/query-parser"
 
 export type SearchIntent = {
@@ -108,12 +114,24 @@ function extractTime(query: string): SearchIntent["time"] {
   }
 }
 
+function titleCaseTokens(s: string): string {
+  return s
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((t) => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase())
+    .join(" ")
+}
+
+function stripCountryTokensFromPlace(cityRaw: string, countryLabel: string | undefined): string {
+  if (!countryLabel) return cityRaw
+  return cityRaw
+    .replace(/\b(united\s+kingdom|uk|united\s+states|usa|us|australia|germany|france|italy|spain|greece|portugal)\b/gi, "")
+    .trim()
+}
+
 function extractPlace(query: string): SearchIntent["place"] {
   const q = query.trim()
   const lower = q.toLowerCase()
-
-  const inMatch = q.match(/\b(?:in|at|near|around)\s+([A-Za-z][A-Za-z'\\-]*(?:\s+[A-Za-z][A-Za-z'\\-]*){0,3})\b/i)
-  const raw = inMatch?.[1]?.trim()
 
   let region: string | undefined
   for (const { pattern, value } of REGION_PATTERNS) {
@@ -132,36 +150,54 @@ function extractPlace(query: string): SearchIntent["place"] {
   }
 
   let city: string | undefined
-  if (raw) {
-    let cityRaw = raw
-    if (country) {
-      cityRaw = cityRaw
-        .replace(/\b(united\s+kingdom|uk|united\s+states|usa|us|australia|germany|france|italy|spain|greece|portugal)\b/gi, "")
-        .trim()
-    }
+  let raw: string | undefined
 
-    const tokens = raw.split(/\s+/).filter(Boolean)
-    const cityTokens = (cityRaw || raw).split(/\s+/).filter(Boolean)
-    if (tokens.length > 0 && cityTokens.length > 0) {
-      city = cityTokens
-        .map((t) => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase())
-        .join(" ")
-    }
-  } else if (!region && !country) {
-    // Lightweight fallback for plain "garage sale Berlin" style queries.
-    const trailing = q.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\b/g)
-    const candidate = trailing?.[trailing.length - 1]
-    if (candidate && !/\b(today|tonight|tomorrow|weekend|friday|saturday|sunday)\b/i.test(candidate)) {
-      city = candidate
+  const fromPhrase = extractPlaceFromQuery(q)
+  if (fromPhrase) {
+    let cityRaw = stripCountryTokensFromPlace(fromPhrase, country)
+    if (cityRaw) {
+      city = titleCaseTokens(cityRaw)
+      raw = city
     }
   }
 
-  if (!city && !region && !country && !raw) return undefined
+  if (!city) {
+    const inPattern = /\b(?:in|at|near|around)\s+([A-Za-z][A-Za-z'\\-]*(?:\s+[A-Za-z][A-Za-z'\\-]*){0,3})\b/gi
+    for (const m of q.matchAll(inPattern)) {
+      const captured = trimInMonthTailFromPlace(m[1]?.trim() ?? "")
+      if (!captured || isCalendarMonthPlace(captured)) continue
+
+      let cityRaw = stripCountryTokensFromPlace(captured, country)
+      if (!cityRaw) continue
+
+      city = titleCaseTokens(cityRaw)
+      raw = captured
+      break
+    }
+  }
+
+  if (!city && !region && !country) {
+    const trailing = q.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\b/g)
+    const candidate = trailing?.[trailing.length - 1]
+    if (
+      candidate &&
+      !/\b(today|tonight|tomorrow|weekend|friday|saturday|sunday)\b/i.test(candidate) &&
+      !isCalendarMonthPlace(candidate)
+    ) {
+      city = candidate
+      raw = candidate
+    }
+  }
+
+  const inferredCountry = city ? countryForKnownCity(city) : null
+  const mergedCountry = country ?? inferredCountry ?? undefined
+
+  if (!city && !region && !mergedCountry && !raw) return undefined
 
   return {
     city,
     region,
-    country,
+    country: mergedCountry,
     raw: raw || undefined,
   }
 }

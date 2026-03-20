@@ -252,6 +252,17 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         category: "MUSIC_NIGHTLIFE",
       }),
       makeEvent({
+        id: "melb-music-weekend-weaker",
+        title: "Community Social",
+        description: "A friendly social meetup in Melbourne with quiet background music.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: start,
+        endAt: end,
+        categories: ["music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+      makeEvent({
         id: "tville-music-weekend-should-not-leak",
         title: "Queensland After Dark",
         description: "Melbourne inspired after dark music. (Still Townsville.)",
@@ -286,6 +297,9 @@ describe("Eventa trust: /api/search/events regression suite", () => {
 
     const fromMs = new Date(weekend.date_from!).getTime()
     const toMs = new Date(weekend.date_to!).getTime()
+
+    expect((data.internal || []).length).toBeGreaterThanOrEqual(2)
+    expect(data.internal[0].id).toBe("melb-music-weekend")
 
     for (const e of data.internal || []) {
       expect(e.city).toBe("Melbourne")
@@ -741,6 +755,8 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     expect(findManyWhereHistory.length).toBeGreaterThan(0)
     expect(deepIncludesString(findManyWhereHistory[0], "FOOD_DRINK")).toBe(false)
     expect(deepIncludesString(findManyWhereHistory[0], "MUSIC_NIGHTLIFE")).toBe(false)
+
+    expect(data.internal[0].city).toBe("Melbourne")
   })
 
   it("scope: `events worldwide` is global and ignores selected UI location restriction", async () => {
@@ -776,6 +792,10 @@ describe("Eventa trust: /api/search/events regression suite", () => {
       city: "Melbourne",
       country: "Australia",
     })
+
+    expect(data?.effectiveLocation?.scope).toBe("global")
+    expect(data?.effectiveLocation?.city).toBeNull()
+    expect(data?.effectiveLocation?.country).toBeNull()
 
     const internalCities = (data.internal || []).map((e: any) => e.city)
     expect(internalCities).toContain("Berlin")
@@ -832,11 +852,20 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     })
 
     expect(data?.effectiveLocation?.source).toBe("query")
+    expect(data?.effectiveLocation?.scope).toBe("region")
     expect(data?.effectiveLocation?.city).toBeNull()
+    expect(data?.effectiveLocation?.countries).toEqual(
+      expect.arrayContaining(["Germany", "France", "Netherlands", "Belgium", "Luxembourg"]),
+    )
+    expect(findManyWhereHistory.length).toBeGreaterThan(0)
+    expect(deepIncludesString(findManyWhereHistory[0], "Melbourne")).toBe(false)
     const internalCities = (data.internal || []).map((e: any) => e.city)
     expect(internalCities).toContain("Berlin")
     expect(internalCities).toContain("Paris")
     expect(internalCities).not.toContain("Melbourne")
+
+    expect(data.internal.some((e: any) => e.city === "Berlin")).toBe(true)
+    expect(data.internal.some((e: any) => e.city === "Paris")).toBe(true)
   })
 
   it("scope/place: `music in Camberwell UK` uses explicit UK context over selected Australia location", async () => {
@@ -879,6 +908,427 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     const internalCountries = (data.internal || []).map((e: any) => e.country)
     expect(internalCountries).toContain("United Kingdom")
     expect(internalCountries).not.toContain("Australia")
+  })
+
+  it("trust batch: `what's on this weekend` is broad + weekend window (Melbourne UI)", async () => {
+    const weekend = parseDateExpression("what's on this weekend")
+    const start = weekend.date_from!
+    const end = weekend.date_to!
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "trust-weekend-melb",
+        title: "What's On: Laneway Social",
+        description: "What's on in the neighbourhood this weekend.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: start,
+        endAt: addHours(start, 3),
+        categories: [],
+        category: null,
+      }),
+      makeEvent({
+        id: "trust-weekend-melb-later",
+        title: "Sunday Park Meetup",
+        description: "Casual meetup — see what's on nearby.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: addHours(end, -4),
+        endAt: end,
+        categories: [],
+        category: null,
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "what's on this weekend",
+      city: "Melbourne",
+      country: "Australia",
+    })
+
+    expect(data?.effectiveLocation?.scope).toBe("broad")
+    expect(data.internal?.length).toBeGreaterThan(0)
+    expect(data.emptyState).toBe(false)
+    expect(findManyWhereHistory.length).toBeGreaterThan(0)
+    expect(deepIncludesString(findManyWhereHistory[0], "MUSIC_NIGHTLIFE")).toBe(false)
+    expect((data.internal || []).every((e: any) => e.city === "Melbourne")).toBe(true)
+  })
+
+  it("trust batch: `live music tonight` keeps Melbourne + music + tonight window", async () => {
+    const range = parseDateExpression("live music tonight")
+    const start = range.date_from!
+    const end = range.date_to!
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "trust-tonight-music",
+        title: "Live music at the Corner",
+        description: "Bands tonight in Melbourne.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: addHours(start, 1),
+        endAt: addHours(start, 3),
+        categories: ["music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+      makeEvent({
+        id: "trust-afternoon-music",
+        title: "Afternoon acoustic set",
+        description: "Live music earlier today.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: new Date(FIXED_NOW.getTime() + 9 * 86400 * 1000).toISOString(),
+        endAt: new Date(FIXED_NOW.getTime() + 9 * 86400 * 1000 + 2 * 3600 * 1000).toISOString(),
+        categories: ["music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "live music tonight",
+      city: "Melbourne",
+      country: "Australia",
+    })
+
+    const titles = (data.internal || []).map((e: any) => e.title)
+    expect(titles.some((t: string) => t.includes("Corner"))).toBe(true)
+    expect(titles.some((t: string) => t.includes("Afternoon"))).toBe(false)
+    expect(deepIncludesString(findManyWhereHistory[0], "MUSIC_NIGHTLIFE")).toBe(true)
+  })
+
+  it("trust batch: `comedy tomorrow` targets tomorrow + comedy category signal", async () => {
+    const range = parseDateExpression("comedy tomorrow")
+    const dayStart = range.date_from!
+    const dayEnd = range.date_to!
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "trust-comedy-tomorrow",
+        title: "Stand-up at the Club",
+        description: "Comedy showcase tomorrow night.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: addHours(dayStart, 10),
+        endAt: addHours(dayStart, 12),
+        categories: ["comedy"],
+        category: "COMMUNITY_CAUSES",
+      }),
+      makeEvent({
+        id: "trust-music-tomorrow",
+        title: "DJ Night",
+        description: "Electronic music tomorrow.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: addHours(dayStart, 14),
+        endAt: addHours(dayStart, 16),
+        categories: ["music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "comedy tomorrow",
+      city: "Melbourne",
+      country: "Australia",
+    })
+
+    const titles = (data.internal || []).map((e: any) => e.title)
+    expect(titles.some((t: string) => t.includes("Stand-up"))).toBe(true)
+    expect(titles.some((t: string) => t.includes("DJ Night"))).toBe(false)
+  })
+
+  it("trust batch: `garage sale Saturday` uses markets intent + Saturday window", async () => {
+    const range = parseDateExpression("garage sale saturday")
+    const dayStart = range.date_from!
+    const dayEnd = range.date_to!
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "trust-garage-sat",
+        title: "Neighbourhood garage sale",
+        description: "Household goods and books Saturday.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: addHours(dayStart, 2),
+        endAt: addHours(dayStart, 5),
+        categories: ["markets"],
+        category: "MARKETS_FAIRS",
+      }),
+      makeEvent({
+        id: "trust-garage-sun",
+        title: "Sunday market stall",
+        description: "Garage sale style tables Sunday only.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: addHours(dayEnd, 4),
+        endAt: addHours(dayEnd, 8),
+        categories: ["markets"],
+        category: "MARKETS_FAIRS",
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "garage sale Saturday",
+      city: "Melbourne",
+      country: "Australia",
+    })
+
+    const titles = (data.internal || []).map((e: any) => e.title)
+    expect(titles.some((t: string) => t.includes("garage sale"))).toBe(true)
+    expect(titles.some((t: string) => t.includes("Sunday"))).toBe(false)
+    expect(deepIncludesString(findManyWhereHistory[0], "MARKETS_FAIRS")).toBe(true)
+  })
+
+  it("trust batch: `live music Melbourne` overrides UI city (Sydney selected)", async () => {
+    const future = new Date(FIXED_NOW.getTime() + 5 * 86400 * 1000).toISOString()
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "trust-melb-music",
+        title: "Melbourne live music hall",
+        description: "Gigs in Melbourne CBD.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+      makeEvent({
+        id: "trust-sydney-music",
+        title: "Sydney harbour jazz",
+        description: "Live music by the water.",
+        city: "Sydney",
+        country: "Australia",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "live music Melbourne",
+      city: "Sydney",
+      country: "Australia",
+    })
+
+    expect(data?.effectiveLocation?.source).toBe("query")
+    expect(data?.effectiveLocation?.city).toBe("Melbourne")
+    const cities = (data.internal || []).map((e: any) => e.city)
+    expect(cities).toContain("Melbourne")
+    expect(cities).not.toContain("Sydney")
+  })
+
+  it("trust batch: `book fair Athens` overrides UI + matches Athens / markets", async () => {
+    const future = new Date(FIXED_NOW.getTime() + 7 * 86400 * 1000).toISOString()
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "trust-athens-book",
+        title: "Athens international book fair",
+        description: "Publishers and readers in Athens.",
+        city: "Athens",
+        country: "Greece",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["fair", "markets"],
+        category: "MARKETS_FAIRS",
+      }),
+      makeEvent({
+        id: "trust-berlin-book",
+        title: "Berlin book weekend",
+        description: "Book fair stalls in Berlin.",
+        city: "Berlin",
+        country: "Germany",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["markets"],
+        category: "MARKETS_FAIRS",
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "book fair Athens",
+      city: "Berlin",
+      country: "Germany",
+    })
+
+    expect(data?.effectiveLocation?.source).toBe("query")
+    expect(data?.effectiveLocation?.city).toBe("Athens")
+    const cities = (data.internal || []).map((e: any) => e.city)
+    expect(cities).toContain("Athens")
+    expect(cities).not.toContain("Berlin")
+  })
+
+  it("trust batch: `music Southern Europe` is region-scoped (not UI Melbourne)", async () => {
+    const future = new Date(FIXED_NOW.getTime() + 8 * 86400 * 1000).toISOString()
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "trust-rome-music",
+        title: "Rome live music night",
+        description: "Southern Europe tour stop — live music in Rome.",
+        city: "Rome",
+        country: "Italy",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+      makeEvent({
+        id: "trust-melb-music-south",
+        title: "Melbourne jazz club",
+        description: "Live music downtown.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "music Southern Europe",
+      city: "Melbourne",
+      country: "Australia",
+    })
+
+    expect(data?.effectiveLocation?.scope).toBe("region")
+    expect(data?.effectiveLocation?.region).toBe("Southern Europe")
+    expect(findManyWhereHistory.length).toBeGreaterThan(0)
+    expect(deepIncludesString(findManyWhereHistory[0], "Melbourne")).toBe(false)
+    const countries = (data.internal || []).map((e: any) => e.country)
+    expect(countries).toContain("Italy")
+    expect(countries).not.toContain("Australia")
+  })
+
+  it("trust batch: `art events Northern Europe` is region-scoped + art signal", async () => {
+    const future = new Date(FIXED_NOW.getTime() + 9 * 86400 * 1000).toISOString()
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "trust-stockholm-art",
+        title: "Nordic art events weekend",
+        description: "Contemporary art events across Northern Europe.",
+        city: "Stockholm",
+        country: "Sweden",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["art", "exhibition"],
+        category: "ARTS_CULTURE",
+      }),
+      makeEvent({
+        id: "trust-melb-art-north",
+        title: "Melbourne gallery night",
+        description: "Art events in the laneways.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["art"],
+        category: "ARTS_CULTURE",
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "art events Northern Europe",
+      city: "Melbourne",
+      country: "Australia",
+    })
+
+    expect(data?.effectiveLocation?.scope).toBe("region")
+    expect(data?.effectiveLocation?.region).toBe("Northern Europe")
+    expect(deepIncludesString(findManyWhereHistory[0], "Melbourne")).toBe(false)
+    const cities = (data.internal || []).map((e: any) => e.city)
+    expect(cities).toContain("Stockholm")
+    expect(cities).not.toContain("Melbourne")
+  })
+
+  it("trust batch: `events Eastern Europe` is region-scoped without UI city leak", async () => {
+    const future = new Date(FIXED_NOW.getTime() + 11 * 86400 * 1000).toISOString()
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "trust-warsaw-events",
+        title: "Warsaw community night",
+        description: "Local community events across Eastern Europe.",
+        city: "Warsaw",
+        country: "Poland",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: [],
+        category: null,
+      }),
+      makeEvent({
+        id: "trust-melb-events-ee",
+        title: "Melbourne trivia",
+        description: "Weekly events in Melbourne.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: [],
+        category: null,
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "events Eastern Europe",
+      city: "Melbourne",
+      country: "Australia",
+    })
+
+    expect(data?.effectiveLocation?.scope).toBe("region")
+    expect(data?.effectiveLocation?.region).toBe("Eastern Europe")
+    expect(deepIncludesString(findManyWhereHistory[0], "Melbourne")).toBe(false)
+    const countries = (data.internal || []).map((e: any) => e.country)
+    expect(countries).toContain("Poland")
+    expect(countries).not.toContain("Australia")
+  })
+
+  it("trust batch: `music festivals anywhere` is global and returns multiple countries", async () => {
+    const future = new Date(FIXED_NOW.getTime() + 12 * 86400 * 1000).toISOString()
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "trust-fest-berlin",
+        title: "Berlin open-air music festival",
+        description: "Music festivals in the park.",
+        city: "Berlin",
+        country: "Germany",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["festival", "music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+      makeEvent({
+        id: "trust-fest-melb",
+        title: "Melbourne summer music festival",
+        description: "Outdoor music festival weekend.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: addHours(future, 3),
+        endAt: addHours(future, 5),
+        categories: ["festival", "music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "music festivals anywhere",
+      city: "Melbourne",
+      country: "Australia",
+    })
+
+    expect(data?.effectiveLocation?.scope).toBe("global")
+    expect(data?.effectiveLocation?.city).toBeNull()
+    expect(findManyWhereHistory.length).toBeGreaterThan(0)
+    expect(deepIncludesString(findManyWhereHistory[0], "Melbourne")).toBe(false)
+    const countries = new Set((data.internal || []).map((e: any) => e.country))
+    expect(countries.has("Germany")).toBe(true)
+    expect(countries.has("Australia")).toBe(true)
   })
 
   it("no stale state on sequential route calls (request-scoped behavior)", async () => {

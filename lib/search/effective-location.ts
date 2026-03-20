@@ -73,6 +73,8 @@ const COMMON_NON_LOCATION_WORDS = new Set([
   "around",
   "me",
   "nearby",
+  "do",
+  "see",
 ])
 
 const INTENT_PREFIX_WORDS = new Set([
@@ -100,6 +102,45 @@ const INTENT_PREFIX_WORDS = new Set([
   "trance",
 ])
 
+const CALENDAR_MONTH_NAMES = new Set([
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+])
+
+/** True when the captured span is a single calendar month (not a multi-word place). */
+export function isCalendarMonthPlace(placeClean: string): boolean {
+  const tokens = placeClean.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  if (tokens.length !== 1) return false
+  return CALENDAR_MONTH_NAMES.has(tokens[0])
+}
+
+/** Drop a trailing ` in <month>` so `to Berlin in May` does not become one place span. */
+export function trimInMonthTailFromPlace(placeClean: string): string {
+  const idx = placeClean.toLowerCase().lastIndexOf(" in ")
+  if (idx === -1) return placeClean
+  const after = placeClean.slice(idx + 4).trim()
+  if (!after) return placeClean.slice(0, idx).trim()
+  const headToken = after.split(/\s+/)[0] ?? ""
+  if (isCalendarMonthPlace(headToken) || isCalendarMonthPlace(after)) {
+    return placeClean.slice(0, idx).trim()
+  }
+  return placeClean
+}
+
+export function countryForKnownCity(city: string): string | null {
+  return COUNTRY_BY_CITY[city.toLowerCase()] || null
+}
+
 /**
  * Extract place from plain-language query using patterns like:
  * - "in X", "near X", "around X", "to X"
@@ -110,8 +151,8 @@ export function extractPlaceFromQuery(query: string): string | null {
   if (!query) return null
 
   const patterns = [
-    /\b(in|near|around|to)\s+([A-Za-z][A-Za-z'\\-]*(?:\s+[A-Za-z][A-Za-z'\\-]*){0,2})/gi,
     /\bgoing\s+to\s+([A-Za-z][A-Za-z'\\-]*(?:\s+[A-Za-z][A-Za-z'\\-]*){0,2})/gi,
+    /\b(in|near|around|to)\s+([A-Za-z][A-Za-z'\\-]*(?:\s+[A-Za-z][A-Za-z'\\-]*){0,2})/gi,
     /([A-Za-z][a-zA-Z'\\-]*(?:\s+[A-Za-z][a-zA-Z'\\-]*){0,2})\s+this\s+weekend/gi,
   ]
 
@@ -131,9 +172,17 @@ export function extractPlaceFromQuery(query: string): string | null {
         if (stripped) placeClean = stripped
       }
 
-      if (!COMMON_NON_LOCATION_WORDS.has(placeClean.toLowerCase())) {
-        return placeClean
-      }
+      placeClean = trimInMonthTailFromPlace(placeClean)
+      if (!placeClean || placeClean.length < 2) continue
+
+      // Broad-discovery phrases before "this weekend" are not places ("what's on this weekend").
+      if (/^what['\u2019]s\s+on$/i.test(placeClean)) continue
+      if (/^things\s+to\s+do$/i.test(placeClean)) continue
+
+      if (COMMON_NON_LOCATION_WORDS.has(placeClean.toLowerCase())) continue
+      if (isCalendarMonthPlace(placeClean)) continue
+
+      return placeClean
     }
   }
 
@@ -141,7 +190,7 @@ export function extractPlaceFromQuery(query: string): string | null {
 }
 
 function resolveCountryForCity(city: string): string | null {
-  return COUNTRY_BY_CITY[city.toLowerCase()] || null
+  return countryForKnownCity(city)
 }
 
 /**

@@ -38,6 +38,10 @@ npm run smoke:prod
 All checks passed!
 \`\`\`
 
+### Search (`/api/search/events`)
+
+After deploy, use **[production-search-confidence.md](./production-search-confidence.md)** for doctrine-aligned manual checks (global scope wording, broad queries, trust-suite gate).
+
 ---
 
 ## 2. Verify Date Parsing (Temporary Diagnostic)

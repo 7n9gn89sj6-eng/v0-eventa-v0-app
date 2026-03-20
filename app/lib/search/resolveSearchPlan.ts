@@ -1,10 +1,12 @@
 import type { SearchIntent } from "./parseSearchIntent"
+import { resolveRegionCountries } from "@/lib/search/region-map"
 
 export type SearchPlan = {
   location: {
-    city?: string
-    country?: string
-    region?: string
+    city?: string | null
+    country?: string | null
+    region?: string | null
+    countries?: string[]
     source: "query" | "selected" | "fallback" | "none"
   }
   scope: SearchIntent["scope"]
@@ -24,10 +26,12 @@ export type SearchPlan = {
 
 /**
  * Resolve intent + ambient context into one search plan.
+ *
  * Rules:
- * 1) Query place overrides selected location.
- * 2) Scope controls breadth.
- * 3) Broad scope should rank by category instead of strict filtering.
+ * - Explicit query place (city / country / region) overrides selected UI location.
+ * - Region scope: resolve to `location.countries`; never use selected UI city/country.
+ * - Global scope: no structured location restriction at execution time.
+ * - Broad / local / city / metro / country: query wins when present; else UI ambient.
  */
 export function resolveSearchPlan(
   intent: SearchIntent,
@@ -36,6 +40,7 @@ export function resolveSearchPlan(
     country?: string
   } | null,
 ): SearchPlan {
+  const scope = intent.scope
   const queryCity = intent.place?.city?.trim()
   const queryCountry = intent.place?.country?.trim()
   const queryRegion = intent.place?.region?.trim()
@@ -44,29 +49,52 @@ export function resolveSearchPlan(
   const selectedCountry = selectedLocation?.country?.trim()
 
   const hasQueryPlace = Boolean(queryCity || queryCountry || queryRegion)
-  const locationSource: SearchPlan["location"]["source"] = hasQueryPlace
+
+  let source: SearchPlan["location"]["source"] = hasQueryPlace
     ? "query"
     : selectedCity || selectedCountry
       ? "selected"
       : "none"
 
-  // Explicit query place fully overrides ambient selected location.
-  const city = hasQueryPlace ? queryCity : selectedCity
-  const country = hasQueryPlace ? queryCountry : selectedCountry
+  let city: string | null | undefined
+  let country: string | null | undefined
+  let region: string | null | undefined
+  let countries: string[] | undefined
 
-  const location: SearchPlan["location"] = {
-    city: city || undefined,
-    country: country || undefined,
-    region: queryRegion || undefined,
-    source: locationSource,
+  if (scope === "global") {
+    city = undefined
+    country = undefined
+    region = undefined
+    countries = undefined
+  } else if (scope === "region") {
+    region = queryRegion || undefined
+    countries = queryRegion ? resolveRegionCountries(queryRegion) ?? undefined : undefined
+    city = undefined
+    country = undefined
+    source = queryRegion ? "query" : "none"
+  } else if (hasQueryPlace) {
+    city = queryCity || undefined
+    country = queryCountry || undefined
+    region = queryRegion || undefined
+    countries = queryRegion ? resolveRegionCountries(queryRegion) ?? undefined : undefined
+    source = "query"
+  } else {
+    city = selectedCity || undefined
+    country = selectedCountry || undefined
+    source = selectedCity || selectedCountry ? "selected" : "none"
   }
 
-  const scope = intent.scope
   const strictCategory = scope !== "broad"
   const applyLocationRestriction = scope !== "global"
 
   return {
-    location,
+    location: {
+      city: city ?? undefined,
+      country: country ?? undefined,
+      region: region ?? undefined,
+      countries,
+      source,
+    },
     scope,
     interests: intent.interest ?? [],
     time: {
@@ -82,4 +110,3 @@ export function resolveSearchPlan(
     },
   }
 }
-

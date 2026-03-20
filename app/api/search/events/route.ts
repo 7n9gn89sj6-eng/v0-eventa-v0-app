@@ -5,7 +5,8 @@ import type { EventCategory } from "@prisma/client"
 import { searchWeb } from "@/lib/search/web-search"
 import { withLanguageColumnGuard, getEventSelectWithoutLanguage, isLanguageFilteringAvailable } from "@/lib/db-runtime-guard"
 import { buildDateOverlapWhere, buildDateRangeOverlapWhere } from "@/lib/search/date-overlap"
-import { rankEventResults, isEventIntentQuery } from "@/lib/search/event-ranking"
+import { isEventIntentQuery } from "@/lib/search/event-ranking"
+import { scoreSearchResult } from "@/lib/search/score-search-result"
 import { getExpandedTermGroups } from "@/lib/search/search-taxonomy"
 import { parseSearchIntent as parseRankingIntent } from "@/lib/search/parse-search-intent"
 import { interpretSearchIntent } from "@/lib/search/ai-intent"
@@ -21,6 +22,15 @@ function hasAustraliaIndicators(text: string): boolean {
   if (!text) return false
   const lower = text.toLowerCase()
   return /\b(australia|australian|au|melbourne|sydney|brisbane|perth|adelaide|canberra|darwin|vic|victoria|naarm|tasmania|queensland|nsw|new south wales|western australia|wa|south australia|sa|northern territory|nt|australian capital territory|act)\b/i.test(lower)
+}
+
+/** Structured OR filter: event.country matches any resolved region member. */
+function applyRegionCountriesWhere(where: any, countries: string[]) {
+  if (!countries.length) return
+  where.AND = where.AND || []
+  where.AND.push({
+    OR: countries.map((c) => ({ country: { contains: c, mode: "insensitive" as const } })),
+  })
 }
 
 const EXTERNAL_STUB_EVENTS = [
@@ -125,17 +135,51 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Query place is the single source of truth when present.
+  // Execution location comes only from the resolved search plan (never raw URL after this point).
   city = searchPlan.filters.applyLocationRestriction ? (searchPlan.location.city ?? null) : null
   country = searchPlan.filters.applyLocationRestriction ? (searchPlan.location.country ?? null) : null
-  const effectiveLocation: { city: string | null; country: string | null; source: "query" | "ui" | "device" } = {
+
+  const regionCountriesForFilter: string[] | null =
+    searchPlan.filters.applyLocationRestriction &&
+    searchPlan.scope === "region" &&
+    Array.isArray(searchPlan.location.countries) &&
+    searchPlan.location.countries.length > 0
+      ? searchPlan.location.countries
+      : null
+
+  const effectiveLocation: {
+    city: string | null
+    country: string | null
+    region: string | null
+    countries: string[] | null
+    scope: (typeof searchPlan)["scope"]
+    source: "query" | "ui" | "device"
+  } = {
     city,
     country,
-    source: searchPlan.location.source === "query" ? "query" : searchPlan.location.source === "selected" ? "ui" : "device",
+    region: searchPlan.filters.applyLocationRestriction ? (searchPlan.location.region ?? null) : null,
+    countries: regionCountriesForFilter,
+    scope: searchPlan.scope,
+    source:
+      searchPlan.location.source === "query"
+        ? "query"
+        : searchPlan.location.source === "selected"
+          ? "ui"
+          : "device",
   }
+
   const effectiveCity = city
   const effectiveCountry = country
   const microLocation: string | null = parsedIntent.place?.raw || null
+
+  const hasWebGeoContext =
+    Boolean(effectiveCity || effectiveCountry) ||
+    (searchPlan.scope === "region" &&
+      Boolean(
+        searchPlan.location.region ||
+          (searchPlan.location.countries && searchPlan.location.countries.length > 0),
+      )) ||
+    searchPlan.scope === "global"
 
   console.log("[v0] Final location used:", {
     city,
@@ -147,7 +191,14 @@ export async function GET(req: NextRequest) {
   // Only extract from query as fallback if location params are not provided
   // This ensures web search uses the UI location control, not query extraction
   // If the user explicitly set a destination city in the query, never reintroduce URL/UI location later.
-  if (q && isEventQuery && effectiveLocation.source !== "query" && !city && !country) {
+  if (
+    q &&
+    isEventQuery &&
+    effectiveLocation.source !== "query" &&
+    !city &&
+    !country &&
+    searchPlan.scope !== "region"
+  ) {
     try {
       const intentResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/search/intent`, {
         method: 'POST',
@@ -198,7 +249,9 @@ export async function GET(req: NextRequest) {
       if (city) {
         where.city = { contains: city, mode: "insensitive" }
       }
-      if (country) {
+      if (regionCountriesForFilter && regionCountriesForFilter.length > 0) {
+        applyRegionCountriesWhere(where, regionCountriesForFilter)
+      } else if (country) {
         where.country = { contains: country, mode: "insensitive" }
       }
 
@@ -323,9 +376,14 @@ export async function GET(req: NextRequest) {
       /\bsunday\b/gi,
       /\bweekend\b/gi,
     ]
+    // Scope-only tokens (handled via search plan / detectScope); must not constrain text matching.
+    const scopePhrasePatterns = [/\b(worldwide|anywhere|global)\b/gi]
     // Note: these time phrases are handled via date/ranking logic, not required text matches.
     let textQuery = cleanedQuery
     timePhrasePatterns.forEach((re) => {
+      textQuery = textQuery.replace(re, " ")
+    })
+    scopePhrasePatterns.forEach((re) => {
       textQuery = textQuery.replace(re, " ")
     })
     textQuery = textQuery.replace(/\s+/g, " ").trim()
@@ -402,8 +460,10 @@ export async function GET(req: NextRequest) {
       
       console.log(`[v0] City filter with variations: ${city} → [${allCityNames.join(", ")}]`)
     }
-    
-    if (country) {
+
+    if (regionCountriesForFilter && regionCountriesForFilter.length > 0) {
+      applyRegionCountriesWhere(where, regionCountriesForFilter)
+    } else if (country) {
       where.country = { contains: country, mode: "insensitive" }
     }
 
@@ -709,17 +769,16 @@ export async function GET(req: NextRequest) {
       topDomains: [] as string[],
     }
     
-    // LOCality Contract C3: Web fallback MUST run when internal=0 + effectiveLocation exists
-    // Rule: If internalCount === 0 AND effectiveLocation.city || effectiveLocation.country exists, 
-    //       web search MUST run for event-intent queries.
-    const shouldSearchWeb = q.trim().length > 0 && (
-      !isEventQuery || // Non-event queries: always search web
-      (isEventQuery && events.length === 0 && (effectiveCity || effectiveCountry)) // Event-intent with no internal events AND effectiveLocation set: auto-fallback
-    )
-    
-    // CRITICAL: If internal is 0 and effectiveLocation is set, web search MUST be called
-    if (events.length === 0 && (effectiveCity || effectiveCountry) && q.trim().length > 0 && !shouldSearchWeb) {
-      console.warn(`[v0] ⚠️ WARNING: Internal results empty, effectiveLocation set (${effectiveCity || ''}, ${effectiveCountry || ''}), but web search not triggered!`)
+    // Web fallback: event-intent needs geo context (city/country, region label/countries, or global scope).
+    const shouldSearchWeb =
+      q.trim().length > 0 &&
+      (!isEventQuery || (isEventQuery && events.length === 0 && hasWebGeoContext))
+
+    // CRITICAL: If internal is 0 and geo context exists, web search MUST be called
+    if (events.length === 0 && hasWebGeoContext && q.trim().length > 0 && !shouldSearchWeb) {
+      console.warn(
+        `[v0] ⚠️ WARNING: Internal results empty, geo context set (${effectiveCity || ""}, ${effectiveCountry || ""}, region=${effectiveLocation.region || ""}), but web search not triggered!`,
+      )
       // Force web search
       debugTrace.webCalled = true
     }
@@ -808,8 +867,17 @@ export async function GET(req: NextRequest) {
           }
         } else if (effectiveCountry && !cityQuery1.toLowerCase().includes(effectiveCountry.toLowerCase())) {
           cityQuery1 = `${cityQuery1} ${effectiveCountry}`
+        } else if (searchPlan.scope === "region" && (searchPlan.location.region || regionCountriesForFilter?.length)) {
+          const parts = [searchPlan.location.region, regionCountriesForFilter?.join(" ")].filter(Boolean)
+          const tail = parts.join(" ").trim()
+          if (tail) {
+            const alreadyCovered = parts.some(
+              (p) => p && cityQuery1.toLowerCase().includes(String(p).toLowerCase()),
+            )
+            if (!alreadyCovered) cityQuery1 = `${cityQuery1} ${tail}`.trim()
+          }
         }
-        
+
         if (category && category !== "all" && !cityQuery1.toLowerCase().includes(category.toLowerCase())) {
           cityQuery1 = `${cityQuery1} ${category}`
         }
@@ -861,6 +929,14 @@ export async function GET(req: NextRequest) {
           let cityQuery2 = `${effectiveCity} what's on events`
           if (effectiveCountry) cityQuery2 = `${cityQuery2} ${effectiveCountry}`
           webQueries.push(cityQuery2.trim())
+        } else if (searchPlan.scope === "region" && searchPlan.location.region) {
+          const r = searchPlan.location.region
+          if (webActivity) {
+            webQueries.push(`${r} ${webActivity.phrase} events`.trim())
+            webQueries.push(`${r} what's on ${webActivity.phrase}`.trim())
+          } else {
+            webQueries.push(`${r} what's on events`.trim())
+          }
         }
         
         // Add city-level query 1 (only if not already in micro-location queries)
@@ -873,11 +949,15 @@ export async function GET(req: NextRequest) {
         
         // E1: Execute web searches in parallel and merge/dedupe by canonical URL
         console.log(`[v0] Running ${webQueries.length} web queries in parallel...`)
-        const webSearchPromises = webQueries.map(query => 
-          searchWeb({ query, limit: 10 }).catch(err => {
-            console.error(`[v0] Web search failed for query "${query}":`, err)
+        const webSearchPromises = webQueries.map((webQuery) =>
+          searchWeb({
+            query: webQuery,
+            limit: 10,
+            searchCountryName: effectiveCountry,
+          }).catch((err) => {
+            console.error(`[v0] Web search failed for query "${webQuery}":`, err)
             return []
-          })
+          }),
         )
         
         const webSearchResultsArrays = await Promise.all(webSearchPromises)
@@ -1026,6 +1106,7 @@ export async function GET(req: NextRequest) {
               const fallbackResults = await searchWeb({
                 query: cityQuery,
                 limit: 10,
+                searchCountryName: effectiveCountry,
               })
               
               transformedWebResults = fallbackResults.map((result, index) => {
@@ -1311,8 +1392,8 @@ export async function GET(req: NextRequest) {
         // Trust Google's search relevance since we searched for "query city events"
         
         // Only exclude if explicitly mentions a different major city AND it's clearly wrong
-        const otherMajorCities = ["sydney", "brisbane", "perth", "adelaide", "canberra", "darwin", 
-          "new york", "los angeles", "london", "paris", "tokyo", "toronto"]
+        const otherMajorCities = ["sydney", "brisbane", "perth", "adelaide", "canberra", "darwin",
+          "new york", "los angeles", "london", "paris", "berlin", "tokyo", "toronto"]
         if (cityLower !== "melbourne" || countryLower?.includes("australia")) {
           // Only check for other cities if it's NOT about the target city at all
           const mentionsOtherCity = otherMajorCities.some(otherCity => {
@@ -1344,97 +1425,51 @@ export async function GET(req: NextRequest) {
     // External web results come AFTER, regardless of date or city match
     // This ensures user satisfaction with accurate, curated events
     
-    // Score internal events for ranking (categories/category/text, location, date); do not expose _score
-    const effectiveCityLower = (effectiveCity || "").toLowerCase()
-    const parsedIntent = q ? parseRankingIntent(q) : {}
-    const detectedCat = parsedIntent.detectedCategory
-    const categoryToEnum: Record<string, EventCategory> = {
-      music: "MUSIC_NIGHTLIFE",
-      markets: "MARKETS_FAIRS",
-      arts: "ARTS_CULTURE",
-      food: "FOOD_DRINK",
-      sports: "SPORTS_OUTdoors",
-      family: "FAMILY_KIDS",
-      community: "COMMUNITY_CAUSES",
-      learning: "LEARNING_TALKS",
-    }
-    const scoredInternal = events.map((e: any) => {
-      let score = 0
-      if (detectedCat) {
-        const enumVal = categoryToEnum[detectedCat]
-        const catLower = detectedCat.toLowerCase()
-        // Mismatch-safety: gently reduce obvious category drift when query has strong category intent.
-        // This is only a small penalty (not exclusion) and only when we don't get a structured match.
-        let structuredDetectedMatch = false
+    // Deterministic ranking (lib/search/score-search-result): internal-first order unchanged; scores explain relevance.
+    const parsedRanking = q ? parseRankingIntent(q) : {}
+    const detectedCat = parsedRanking.detectedCategory
 
-        const eventCategoriesLower = Array.isArray(e.categories)
-          ? e.categories.map((c: string) => String(c).toLowerCase())
-          : []
-        const eventCategoryUpper = e.category ? String(e.category).toUpperCase() : null
+    const scoredInternal = events
+      .map((e: any) => {
+        const breakdown = scoreSearchResult({
+          result: e,
+          intent: parsedIntent,
+          searchPlan,
+          now,
+          kind: "internal",
+          rankingCategory: detectedCat,
+          webListingBoost: 0,
+        })
+        if (!breakdown) return null
+        return { ...e, _score: breakdown.total, _rankBreakdown: breakdown }
+      })
+      .filter(Boolean) as any[]
 
-        const hasMusic =
-          eventCategoryUpper === "MUSIC_NIGHTLIFE" || eventCategoriesLower.some((c: string) => c.includes("music"))
-        const hasFood =
-          eventCategoryUpper === "FOOD_DRINK" || eventCategoriesLower.some((c: string) => c.includes("food"))
-        const hasArts =
-          eventCategoryUpper === "ARTS_CULTURE" || eventCategoriesLower.some((c: string) => c.includes("art"))
-        const hasMarkets =
-          eventCategoryUpper === "MARKETS_FAIRS" ||
-          eventCategoriesLower.some((c: string) => c.includes("market") || c.includes("fair"))
-
-        if (Array.isArray(e.categories) && e.categories.length > 0) {
-          const matches = e.categories.some(
-            (c: string) =>
-              c?.toLowerCase().includes(catLower) ||
-              (enumVal && String(c).toUpperCase() === enumVal)
-          )
-          if (matches) {
-            score += 4
-            structuredDetectedMatch = true
-          }
-        }
-        if (score === 0 && e.category && enumVal && e.category === enumVal) {
-          score += 4
-          structuredDetectedMatch = true
-        }
-        if (score === 0) {
-          const text = [e.title, e.description, e.venueName, e.city].filter(Boolean).join(" ").toLowerCase()
-          if (text.includes(catLower)) score += 2
-        }
-
-        // Apply a small penalty only if we have category intent but did NOT find a structured match.
-        // Intentionally skip "family" to avoid suppressing overlapping family/food/music events.
-        if (!structuredDetectedMatch) {
-          if (catLower === "food" && hasMusic) score -= 2
-          else if (catLower === "music" && hasFood) score -= 2
-          else if (catLower === "arts" && hasMarkets) score -= 1
-          else if (catLower === "markets" && hasArts) score -= 1
-        }
-      }
-      if (effectiveCityLower) {
-        const ec = (e.city || "").toLowerCase()
-        if (ec && (ec.includes(effectiveCityLower) || effectiveCityLower.includes(ec))) score += 3
-      }
-      try {
-        if (e.startAt && new Date(e.startAt) > now) {
-          const days = (new Date(e.startAt).getTime() - now.getTime()) / (86400 * 1000)
-          if (days <= 7) score += 2
-          else if (days <= 30) score += 1
-        }
-      } catch {
-        // ignore
-      }
-      return { ...e, _score: score }
-    })
     scoredInternal.sort((a: any, b: any) => {
       if ((b._score ?? 0) !== (a._score ?? 0)) return (b._score ?? 0) - (a._score ?? 0)
-      return new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
+      const ta = new Date(a.startAt).getTime()
+      const tb = new Date(b.startAt).getTime()
+      if (ta !== tb) return ta - tb
+      return String(a.id ?? "").localeCompare(String(b.id ?? ""))
     })
-    const internalEvents = scoredInternal.map(({ _score, ...e }: any) => ({
-      ...e,
-      source: "internal" as const,
-      isEventaEvent: true,
-    }))
+
+    const internalEvents = scoredInternal.map((row: any) => {
+      const { _score, _rankBreakdown, ...e } = row
+      return {
+        ...e,
+        source: "internal" as const,
+        isEventaEvent: true,
+        ...(debug && _rankBreakdown ? { _rankBreakdown } : {}),
+      }
+    })
+
+    if (debug && scoredInternal.length > 0) {
+      debugTrace.rankingInternalSample = scoredInternal.slice(0, 5).map((r: any) => ({
+        id: r.id,
+        title: r.title?.slice(0, 80),
+        breakdown: r._rankBreakdown,
+      }))
+    }
 
     // Mark external events with source
     const externalEventsUnranked = filteredWebResults.map((e: any) => ({
@@ -1488,29 +1523,47 @@ export async function GET(req: NextRequest) {
       return { ...result, _eventnessBoost: boost }
     })
     
-    // Sort by boost first, then apply event-first ranking
-    scoredWebResults.sort((a: any, b: any) => (b._eventnessBoost || 0) - (a._eventnessBoost || 0))
-    
-    // Rank external events using event-first scoring
-    // This will:
-    // - Boost specific events with dates, venues, locations (+5, +4, +3)
-    // - Penalize aggregators/directories (-5)
-    // - Penalize wrong country (-6)
-    // - Penalize venue homepages without events (-3)
-    // Use effectiveLocation for ranking (not stored default location)
-    const externalEvents = rankEventResults(
-      scoredWebResults,
-      q,
-      effectiveCity || undefined,
-      effectiveCountry || undefined
-    )
-    
+    const scoredWebRanked = scoredWebResults
+      .map((result: any) => {
+        const breakdown = scoreSearchResult({
+          result,
+          intent: parsedIntent,
+          searchPlan,
+          now,
+          kind: "web",
+          rankingCategory: detectedCat,
+          webListingBoost: result._eventnessBoost || 0,
+        })
+        if (!breakdown) return null
+        return { ...result, _score: breakdown.total, _rankBreakdown: breakdown }
+      })
+      .filter(Boolean) as any[]
+
+    scoredWebRanked.sort((a: any, b: any) => {
+      if ((b._score ?? 0) !== (a._score ?? 0)) return (b._score ?? 0) - (a._score ?? 0)
+      try {
+        const ta = new Date(a.startAt).getTime()
+        const tb = new Date(b.startAt).getTime()
+        if (ta !== tb) return ta - tb
+      } catch {
+        /* ignore */
+      }
+      return String(a.title ?? a.externalUrl ?? "").localeCompare(String(b.title ?? b.externalUrl ?? ""))
+    })
+
+    const externalEvents = scoredWebRanked
+
     debugTrace.webAfterEventinessCount = externalEvents.length
-    
+
+    if (debug && externalEvents.length > 0) {
+      debugTrace.rankingWebSample = externalEvents.slice(0, 5).map((r: any) => ({
+        title: r.title?.slice(0, 80),
+        breakdown: r._rankBreakdown,
+      }))
+    }
+
     if (isEventQuery && externalEvents.length > 0) {
-      console.log(`[v0] ✅ Event-first ranking applied to ${externalEvents.length} web results`)
-      // Enable detailed ranking logs
-      process.env.LOG_RANKING = 'true'
+      console.log(`[v0] ✅ Deterministic ranking applied to ${externalEvents.length} web results`)
     }
     
     // EVENT-INTENT QUERY BEHAVIOR:
@@ -1537,7 +1590,8 @@ export async function GET(req: NextRequest) {
     }
 
     const stripDebug = (e: any) => {
-      const { _eventnessBoost, _score, ...rest } = e
+      const { _eventnessBoost, _score, _rankBreakdown, ...rest } = e
+      if (debug && _rankBreakdown) return { ...rest, _rankBreakdown }
       return rest
     }
     const allExternal = (

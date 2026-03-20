@@ -4,10 +4,36 @@ export interface WebSearchOptions {
   query: string
   limit?: number
   signal?: AbortSignal
+  /** Bias Custom Search toward this country (full English name, e.g. "Germany"). */
+  searchCountryName?: string | null
+}
+
+const GOOGLE_GL_BY_COUNTRY_NAME: Record<string, string> = {
+  germany: "de",
+  "united kingdom": "gb",
+  "united states": "us",
+  australia: "au",
+  france: "fr",
+  italy: "it",
+  spain: "es",
+  greece: "gr",
+  portugal: "pt",
+  japan: "jp",
+  netherlands: "nl",
+  belgium: "be",
+  austria: "at",
+  ireland: "ie",
+  sweden: "se",
+  norway: "no",
+  denmark: "dk",
+  poland: "pl",
+  "czech republic": "cz",
+  hungary: "hu",
+  switzerland: "ch",
 }
 
 export async function searchWeb(options: WebSearchOptions): Promise<SearchResult[]> {
-  const { query, limit = 10, signal } = options
+  const { query, limit = 10, signal, searchCountryName } = options
 
   const key = process.env.GOOGLE_API_KEY
   const cx = process.env.GOOGLE_PSE_ID
@@ -26,6 +52,14 @@ export async function searchWeb(options: WebSearchOptions): Promise<SearchResult
     url.searchParams.set("cx", cx)
     url.searchParams.set("q", `${query} events`)
     url.searchParams.set("num", Math.min(limit, 10).toString())
+
+    const gl =
+      searchCountryName &&
+      GOOGLE_GL_BY_COUNTRY_NAME[searchCountryName.trim().toLowerCase()]
+    if (gl) {
+      url.searchParams.set("gl", gl)
+      url.searchParams.set("cr", `country${gl.toUpperCase()}`)
+    }
 
     const response = await fetch(url.toString(), { signal })
 

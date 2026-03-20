@@ -23,6 +23,8 @@ export const WORD_SYNONYMS: Record<string, string[]> = {
   concert: ["music", "gig", "live music"],
   exhibition: ["art", "art show", "gallery"],
   gallery: ["art", "art show", "exhibition"],
+  festival: ["festivals", "fest"],
+  festivals: ["festival", "fest"],
 }
 
 /**
