@@ -31,7 +31,7 @@ export type SearchPlan = {
  * - Explicit query place (city / country / region) overrides selected UI location.
  * - Region scope: resolve to `location.countries`; never use selected UI city/country.
  * - Global scope: no structured location restriction at execution time.
- * - Broad / local / city / metro / country: query wins when present; else UI ambient.
+ * - Broad / local / city / country: query wins when present; else UI ambient.
  */
 export function resolveSearchPlan(
   intent: SearchIntent,

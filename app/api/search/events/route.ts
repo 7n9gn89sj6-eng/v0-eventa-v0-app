@@ -8,6 +8,8 @@ import { buildDateOverlapWhere, buildDateRangeOverlapWhere } from "@/lib/search/
 import { isEventIntentQuery } from "@/lib/search/event-ranking"
 import { scoreSearchResult } from "@/lib/search/score-search-result"
 import { getExpandedTermGroups } from "@/lib/search/search-taxonomy"
+// Two modules both export `parseSearchIntent` (different shapes): app = full planning intent for
+// `resolveSearchPlan` / execution; lib `parse-search-intent` = lightweight category hint for ranking/web only.
 import { parseSearchIntent as parseRankingIntent } from "@/lib/search/parse-search-intent"
 import { interpretSearchIntent } from "@/lib/search/ai-intent"
 import { parseSearchIntent } from "@/app/lib/search/parseSearchIntent"

@@ -24,7 +24,7 @@ export type SearchIntent = {
     raw?: string
   }
 
-  scope: "local" | "city" | "metro" | "region" | "country" | "global" | "broad"
+  scope: "local" | "city" | "region" | "country" | "global" | "broad"
 
   audience?: string[]
   price?: string[]

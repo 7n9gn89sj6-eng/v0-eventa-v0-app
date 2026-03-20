@@ -1,12 +1,3 @@
-export type EffectiveLocationSource = "query" | "ui" | "fallback" | "none"
-
-export type EffectiveLocationResolution = {
-  city: string | null
-  country: string | null
-  source: EffectiveLocationSource
-  queryPlace: string | null
-}
-
 const COUNTRY_BY_CITY: Record<string, string> = {
   berlin: "Germany",
   paris: "France",
@@ -214,72 +205,5 @@ export function extractPlaceFromQuery(query: string): string | null {
   }
 
   return null
-}
-
-function resolveCountryForCity(city: string): string | null {
-  return countryForKnownCity(city)
-}
-
-/**
- * Generic location precedence model (single source of truth):
- * 1) explicit query location
- * 2) selected UI location
- * 3) fallback/default location
- */
-export function resolveEffectiveLocation(args: {
-  query: string
-  selectedCity?: string | null
-  selectedCountry?: string | null
-  fallbackCity?: string | null
-  fallbackCountry?: string | null
-}): EffectiveLocationResolution {
-  const selectedCity = args.selectedCity?.trim() || null
-  const selectedCountry = args.selectedCountry?.trim() || null
-  const fallbackCity = args.fallbackCity?.trim() || null
-  const fallbackCountry = args.fallbackCountry?.trim() || null
-
-  const locationKeywords = /\b(nearby|near\s+me|around\s+me|close\s+to\s+me|local)\b/i
-  const hasLocationKeyword = locationKeywords.test(args.query || "")
-  const queryPlace = extractPlaceFromQuery(args.query)
-
-  // Explicit query location always wins, unless it's effectively "near me/here".
-  if (queryPlace) {
-    const lower = queryPlace.toLowerCase()
-    const nearMeToken = lower.includes("me") || lower.includes("here") || lower === "nearby"
-
-    if (!nearMeToken) {
-      return {
-        city: queryPlace,
-        country: resolveCountryForCity(queryPlace),
-        source: "query",
-        queryPlace,
-      }
-    }
-  }
-
-  if (selectedCity || selectedCountry) {
-    return {
-      city: selectedCity,
-      country: selectedCountry,
-      source: "ui",
-      queryPlace,
-    }
-  }
-
-  if (fallbackCity || fallbackCountry || hasLocationKeyword) {
-    return {
-      city: fallbackCity,
-      country: fallbackCountry,
-      source: "fallback",
-      queryPlace,
-    }
-  }
-
-  return {
-    city: null,
-    country: null,
-    source: "none",
-    queryPlace,
-  }
 }
 
