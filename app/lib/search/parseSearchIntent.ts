@@ -3,7 +3,7 @@ import {
   extractPlaceFromQuery,
   isCalendarMonthPlace,
   isQuerySpanNotAPlace,
-  trimInMonthTailFromPlace,
+  trimPlaceCaptureTail,
 } from "@/lib/search/effective-location"
 import { parseDateExpression } from "@/lib/search/query-parser"
 
@@ -165,8 +165,7 @@ function extractPlace(query: string): SearchIntent["place"] {
   if (!city) {
     const inPattern = /\b(?:in|at|near|around)\s+([A-Za-z][A-Za-z'\\-]*(?:\s+[A-Za-z][A-Za-z'\\-]*){0,3})\b/gi
     for (const m of q.matchAll(inPattern)) {
-      let captured = trimInMonthTailFromPlace(m[1]?.trim() ?? "")
-      captured = captured.replace(/\s+\b(tonight|today|tomorrow)\b$/i, "").trim()
+      const captured = trimPlaceCaptureTail(m[1]?.trim() ?? "")
       if (!captured || isCalendarMonthPlace(captured)) continue
       if (isQuerySpanNotAPlace(captured)) continue
 

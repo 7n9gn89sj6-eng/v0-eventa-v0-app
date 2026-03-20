@@ -161,6 +161,12 @@ export function isQuerySpanNotAPlace(span: string): boolean {
   )
 }
 
+/** Shared A4 / extractPlaceFromQuery: month-tail trim then strip trailing today|tonight|tomorrow. */
+export function trimPlaceCaptureTail(span: string): string {
+  const afterMonth = trimInMonthTailFromPlace(span.trim())
+  return afterMonth.replace(/\s+\b(tonight|today|tomorrow)\b$/i, "").trim()
+}
+
 /**
  * Extract place from plain-language query using patterns like:
  * - "in X", "near X", "around X", "to X"
@@ -192,8 +198,7 @@ export function extractPlaceFromQuery(query: string): string | null {
         if (stripped) placeClean = stripped
       }
 
-      placeClean = trimInMonthTailFromPlace(placeClean)
-      placeClean = placeClean.replace(/\s+\b(tonight|today|tomorrow)\b$/i, "").trim()
+      placeClean = trimPlaceCaptureTail(placeClean)
       if (!placeClean || placeClean.length < 2) continue
 
       // Broad-discovery phrases before "this weekend" are not places ("what's on this weekend").
@@ -202,6 +207,7 @@ export function extractPlaceFromQuery(query: string): string | null {
 
       if (COMMON_NON_LOCATION_WORDS.has(placeClean.toLowerCase())) continue
       if (isCalendarMonthPlace(placeClean)) continue
+      if (isQuerySpanNotAPlace(placeClean)) continue
 
       return placeClean
     }
