@@ -35,6 +35,14 @@ function logGeolocation(
   console.warn("[Geolocation]", { type, ...details })
 }
 
+/** Maps GeolocationPositionError.code to a stable label for logs. */
+function geolocationErrorName(code: number): string {
+  if (code === 1) return "PERMISSION_DENIED"
+  if (code === 2) return "POSITION_UNAVAILABLE"
+  if (code === 3) return "TIMEOUT"
+  return `UNKNOWN(${code})`
+}
+
 interface LocationContextType {
   defaultLocation: DefaultLocation | null
   isLocationReady: boolean
@@ -76,7 +84,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
         console.log(`[LocationContext] Geolocation success: ${lat}, ${lng}`)
 
         try {
-          // Reverse geocode to get city/country
+          // Reverse geocode to get city/country (align boot fallback with tryReverseGeocode)
           const controller = new AbortController()
           const timeoutId = setTimeout(() => controller.abort(), 10000)
 
@@ -88,41 +96,62 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
 
           if (response.ok) {
             const data = await response.json()
-            const city = data.city
-            const country = data.country
+            const rawCity = data.city
+            const countryRaw = data.country
 
-            if (city && city !== "Unknown location") {
-              // Store location
-              storeUserLocationUtil({ lat, lng, city, country: country || undefined })
-
-              // Update context
+            if (rawCity && rawCity !== "Unknown location") {
+              storeUserLocationUtil({ lat, lng, city: rawCity, country: countryRaw || undefined })
               const location: DefaultLocation = {
-                city,
-                country: country || undefined,
+                city: rawCity,
+                country: countryRaw || undefined,
                 lat,
                 lng,
                 source: "device",
               }
               setDefaultLocationState(location)
               setIsLocationReady(true)
-              console.log(`[LocationContext] ✅ Location established from device: ${city}${country ? `, ${country}` : ""}`)
+              console.log(`[LocationContext] ✅ Location established from device: ${rawCity}${countryRaw ? `, ${countryRaw}` : ""}`)
             } else {
-              console.warn("[LocationContext] Reverse geocoding returned no valid city")
+              const country = countryRaw || undefined
+              storeUserLocationUtil({ lat, lng, city: "Current location", country })
+              setDefaultLocationState({ city: "Current location", country, lat, lng, source: "manual" })
+              setIsLocationReady(true)
+              console.warn("[LocationContext] Boot: reverse returned no usable city; using Current location fallback", {
+                lat,
+                lng,
+              })
             }
           } else {
-            console.warn(`[LocationContext] Reverse geocoding failed: ${response.status}`)
+            logGeolocation("reverse_geocode_failure", { status: response.status, message: response.statusText })
+            const fallback: DefaultLocation = { city: "Current location", lat, lng, source: "manual" }
+            storeUserLocationUtil({ lat, lng, city: fallback.city, country: undefined })
+            setDefaultLocationState(fallback)
+            setIsLocationReady(true)
+            console.warn(`[LocationContext] Boot: reverse HTTP ${response.status}; using Current location fallback`)
           }
         } catch (error: any) {
-          if (error.name !== 'AbortError') {
+          if (error?.name === "AbortError") {
+            logGeolocation("reverse_geocode_failure", { message: "reverse request aborted (timeout)" })
+          } else {
+            logGeolocation("reverse_geocode_failure", { message: String(error?.message || error) })
             console.warn("[LocationContext] Reverse geocoding error:", error)
           }
-          // Silently fail - user can still search by city
+          const fallback: DefaultLocation = { city: "Current location", lat, lng, source: "manual" }
+          storeUserLocationUtil({ lat, lng, city: fallback.city, country: undefined })
+          setDefaultLocationState(fallback)
+          setIsLocationReady(true)
+          console.warn("[LocationContext] Boot: reverse geocode error; using Current location fallback")
         } finally {
           setIsLoadingLocation(false)
         }
       },
       (error) => {
         // Boot attempt only: do not set lastLocationError; the visible banner is only for user-initiated requestUserLocation.
+        console.warn("[Geolocation] Boot getCurrentPosition failed", {
+          code: error.code,
+          name: geolocationErrorName(error.code),
+          message: error.message || undefined,
+        })
         if (DEBUG) {
           const type = error.code === error.PERMISSION_DENIED ? "permission_denied" : error.code === error.TIMEOUT ? "timeout" : "position_unavailable"
           console.log("[LocationContext] Boot geolocation failed (silent, no user banner):", { type, code: error.code, message: error.message || undefined })
@@ -281,6 +310,13 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
               tryReverseGeocode(lat, lng)
             },
             (error: GeolocationPositionError) => {
+              console.warn("[Geolocation] getCurrentPosition failed", {
+                code: error.code,
+                name: geolocationErrorName(error.code),
+                message: error.message || undefined,
+                attempt,
+                maxRetries,
+              })
               if (DEBUG) console.log("[Geolocation DEBUG] raw geolocation error", { code: error.code, message: error.message || undefined })
               if (error.code === error.PERMISSION_DENIED) {
                 logGeolocation("permission_denied", { code: error.code, message: error.message || undefined })
