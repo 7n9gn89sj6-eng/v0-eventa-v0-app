@@ -227,6 +227,10 @@ export function EventsListingContent({
   }, [initialQuery])
 
   useEffect(() => {
+    setSelectedCategory(initialCategory || "All")
+  }, [initialCategory])
+
+  useEffect(() => {
     // Update cityFilter from URL params, or use defaultLocation if no URL param
     if (initialCity !== undefined) {
       setCityFilter(initialCity || defaultLocation?.city || "")
