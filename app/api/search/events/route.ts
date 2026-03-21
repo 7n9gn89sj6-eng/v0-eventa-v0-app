@@ -1206,21 +1206,17 @@ export async function GET(req: NextRequest) {
         console.log(`[v0] Merged ${webSearchResults.length} unique web results from ${webQueries.length} queries`)
         
         // Transform web results to match expected format (both internal and external formats)
-        // Use effectiveLocation for labeling (not stored default location) - Locality Contract F
+        // Do not label web rows with effectiveCity/effectiveCountry — CSE does not give per-result locality;
+        // injecting scope would falsely imply the hit is in that city and pollutes text-based filters.
         let transformedWebResults = webSearchResults.map((result, index) => {
-          // Use effectiveLocation for city/country (not extracted from snippet)
-          // This ensures results are labeled with the effective search location, not default location
-          const extractedCity = effectiveCity || ""
-          const extractedCountry = effectiveCountry || ""
-          
           return {
             id: `web-${Date.now()}-${index}`,
             title: result.title,
             description: result.snippet || "",
             startAt: result.startAt,
             endAt: result.startAt, // Use same as start if no end date
-            city: extractedCity,
-            country: extractedCountry,
+            city: "",
+            country: "",
             address: "",
             venueName: "",
             categories: category && category !== "all" ? [category] : [],
@@ -1233,8 +1229,8 @@ export async function GET(req: NextRequest) {
             imageUrl: result.imageUrl || undefined, // Preserve imageUrl from web search
             // Also include location object for compatibility with external format
             location: {
-              city: extractedCity,
-              country: extractedCountry,
+              city: "",
+              country: "",
               address: "",
             },
             // Store original URL for eventness scoring
@@ -1308,7 +1304,8 @@ export async function GET(req: NextRequest) {
           const beforeMicroFilter = transformedWebResults.length
           
           transformedWebResults = transformedWebResults.filter((result) => {
-            const resultText = `${result.title || ""} ${result.description || ""} ${result.externalUrl || ""}`.toLowerCase()
+            const orig = (result as { _originalSnippet?: string })._originalSnippet || ""
+            const resultText = `${result.title || ""} ${result.description || ""} ${orig} ${result.externalUrl || ""}`.toLowerCase()
             return resultText.includes(microLocLower)
           })
           
@@ -1345,8 +1342,8 @@ export async function GET(req: NextRequest) {
                   description: result.snippet || "",
                   startAt: result.startAt,
                   endAt: result.startAt,
-                  city: effectiveCity || "",
-                  country: effectiveCountry || "",
+                  city: "",
+                  country: "",
                   address: "",
                   venueName: "",
                   categories: category && category !== "all" ? [category] : [],
@@ -1360,8 +1357,8 @@ export async function GET(req: NextRequest) {
                   externalUrl: result.url,
                   imageUrl: result.imageUrl || undefined,
                   location: {
-                    city: effectiveCity || "",
-                    country: effectiveCountry || "",
+                    city: "",
+                    country: "",
                     address: "",
                   },
                 }
@@ -1422,8 +1419,8 @@ export async function GET(req: NextRequest) {
           const countryLower = country ? country.toLowerCase().trim() : null
           
           transformedWebResults = transformedWebResults.filter((result) => {
-            // Build comprehensive text from all result fields
-            const resultText = `${result.title || ""} ${result.description || ""} ${result.city || ""} ${result.country || ""} ${result.location?.city || ""} ${result.location?.country || ""} ${result.address || ""} ${result.venueName || ""} ${result.externalUrl || ""}`.toLowerCase()
+            const orig = (result as { _originalSnippet?: string })._originalSnippet || ""
+            const resultText = `${result.title || ""} ${result.description || ""} ${orig} ${result.externalUrl || ""}`.toLowerCase()
             
             // HARD FILTER #1: If searching from Australia, exclude ANY result mentioning US cities/states
             if (countryLower && countryLower.includes("australia")) {
@@ -1581,8 +1578,8 @@ export async function GET(req: NextRequest) {
       ]
       
       filteredWebResults = filteredWebResults.filter((result) => {
-        // Build comprehensive text from all result fields for strict checking
-        const resultText = `${result.title || ""} ${result.description || ""} ${result.city || ""} ${result.country || ""} ${result.location?.city || ""} ${result.location?.country || ""} ${result.address || ""} ${result.venueName || ""}`.toLowerCase()
+        const orig = (result as { _originalSnippet?: string })._originalSnippet || ""
+        const resultText = `${result.title || ""} ${result.description || ""} ${orig} ${result.externalUrl || ""}`.toLowerCase()
         
         // STRICT FILTER #1: If searching from Australia, exclude ANY result mentioning US cities/states
         if (countryLower && countryLower.includes("australia")) {

@@ -138,6 +138,7 @@ export const translations = {
         free: "Free",
         viewDetails: "View Details",
         viewOn: "View on {source}",
+        locationNotVerified: "Location not verified",
       },
     },
     form: {
@@ -374,6 +375,7 @@ export const translations = {
         free: "Gratuito",
         viewDetails: "Vedi Dettagli",
         viewOn: "Visualizza su {source}",
+        locationNotVerified: "Posizione non verificata",
       },
     },
     form: {
@@ -613,6 +615,7 @@ export const translations = {
         free: "Δωρεάν",
         viewDetails: "Προβολή Λεπτομερειών",
         viewOn: "Προβολή στο {source}",
+        locationNotVerified: "Η τοποθεσία δεν έχει επαληθευτεί",
       },
     },
     form: {
@@ -852,6 +855,7 @@ export const translations = {
         free: "Gratis",
         viewDetails: "Ver Detalles",
         viewOn: "Ver en {source}",
+        locationNotVerified: "Ubicación no verificada",
       },
     },
     form: {
@@ -1091,6 +1095,7 @@ export const translations = {
         free: "Gratuit",
         viewDetails: "Voir les Détails",
         viewOn: "Voir sur {source}",
+        locationNotVerified: "Lieu non vérifié",
       },
     },
     form: {

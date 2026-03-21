@@ -141,13 +141,14 @@ export function EventsListingContent({
       const apiExecutionCity = data?.effectiveLocation?.city?.trim() || ""
       const externalCityFilter = apiExecutionCity || cityFilter
 
-      // Filter external results by city if city filter is active
-      // External web search can return results from anywhere, so we filter client-side
+      // Filter external results by city if city filter is active (non-web only).
+      // Web rows are locality-gated on the server; per-row city is not authoritative for CSE hits.
       const filteredExternal = (data.external || []).filter((ext: any) => {
-        if (!externalCityFilter || externalCityFilter.trim() === "") return true // No filter = show all
+        if (!externalCityFilter || externalCityFilter.trim() === "") return true
+        const isWeb = ext.source === "web" || ext.isWebResult
+        if (isWeb) return true
         const extCity = (ext.location?.city || ext.city || "").toLowerCase().trim()
         const filterCity = externalCityFilter.toLowerCase().trim()
-        // Match if city field contains the filter city or vice versa (handles "Melbourne, Australia" vs "Melbourne")
         return extCity.includes(filterCity) || filterCity.includes(extCity) || extCity === ""
       })
 
@@ -554,6 +555,11 @@ export function EventsListingContent({
           {filteredResults.map((event) => {
             const eventCity = event.city || event.location?.city || ""
             const eventCountry = event.country || event.location?.country || ""
+            const isWebWithoutVerifiedPlace =
+              Boolean(event.isWebResult) && !eventCity.trim() && !eventCountry.trim()
+            const locationPlaceLine = isWebWithoutVerifiedPlace
+              ? tEvents("card.locationNotVerified")
+              : [eventCity, eventCountry].filter(Boolean).join(", ")
             const eventImageUrl = event.imageUrls?.[0] || event.imageUrl || "/placeholder.svg"
 
             return (
@@ -616,10 +622,12 @@ export function EventsListingContent({
                     <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
                     <div>
                       {event.venueName && <p className="font-medium text-foreground">{event.venueName}</p>}
-                      <p className="text-xs">
-                        {eventCity}
-                        {eventCity && eventCountry ? ", " : ""}
-                        {eventCountry}
+                      <p
+                        className={
+                          isWebWithoutVerifiedPlace ? "text-xs text-muted-foreground" : "text-xs"
+                        }
+                      >
+                        {locationPlaceLine}
                       </p>
                     </div>
                   </div>
