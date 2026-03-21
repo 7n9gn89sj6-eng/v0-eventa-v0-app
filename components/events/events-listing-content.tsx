@@ -324,9 +324,36 @@ export function EventsListingContent({
     countryFilter !== ""
 
   const tEvents = t("events")
-  const showingText = (tEvents("results.showing") || "Showing {filtered} of {total} events")
-    .replace("{filtered}", filteredResults.length.toString())
-    .replace("{total}", results.length.toString())
+  const showingText = tEvents("results.showing", {
+    filtered: filteredResults.length,
+    total: results.length,
+  })
+
+  const emptyStateConstraintSummary = (() => {
+    const parts: string[] = []
+    if (q.trim()) parts.push(`“${q.trim()}”`)
+    if (cityFilter.trim() || countryFilter.trim()) {
+      parts.push([cityFilter.trim(), countryFilter.trim()].filter(Boolean).join(", "))
+    }
+    if (selectedCategory && selectedCategory !== "All") parts.push(selectedCategory)
+    if (initialDateFrom?.trim()) {
+      const d1 = new Date(initialDateFrom)
+      if (!Number.isNaN(d1.getTime())) {
+        const s1 = d1.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+        if (initialDateTo?.trim()) {
+          const d2 = new Date(initialDateTo)
+          parts.push(
+            !Number.isNaN(d2.getTime())
+              ? `${s1}–${d2.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+              : s1,
+          )
+        } else {
+          parts.push(s1)
+        }
+      }
+    }
+    return parts.length > 0 ? parts.join(" · ") : ""
+  })()
 
   return (
     <div className="space-y-6">
@@ -495,6 +522,11 @@ export function EventsListingContent({
                 <p className="text-lg font-medium text-foreground">
                   No events found in {cityFilter}{countryFilter ? `, ${countryFilter}` : ""} right now
                 </p>
+                {emptyStateConstraintSummary ? (
+                  <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                    Active scope: {emptyStateConstraintSummary}
+                  </p>
+                ) : null}
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
                   Try expanding your search area, changing dates, or searching another city.
                 </p>
@@ -502,6 +534,11 @@ export function EventsListingContent({
             ) : (
               <>
                 <p className="text-lg text-muted-foreground mb-2">{tEvents("results.noEvents")}</p>
+                {emptyStateConstraintSummary ? (
+                  <p className="text-sm text-muted-foreground max-w-md mx-auto mb-2">
+                    Active scope: {emptyStateConstraintSummary}
+                  </p>
+                ) : null}
                 <p className="text-sm text-muted-foreground mb-4">{tEvents("results.noEventsHint")}</p>
               </>
             )}
