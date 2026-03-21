@@ -9,6 +9,12 @@ import { isEventIntentQuery } from "@/lib/search/event-ranking"
 import { scoreSearchResult } from "@/lib/search/score-search-result"
 import { getExpandedTermGroups } from "@/lib/search/search-taxonomy"
 import { normalizeSearchUtterance, stripTextSearchStopwords } from "@/lib/search/normalize-search-utterance"
+import {
+  buildPlaceResolveInput,
+  isResolvedPlaceCompatibleWithParsed,
+  resolvePlace,
+  shouldAttemptPlaceResolve,
+} from "@/lib/search/resolve-place"
 // Two modules both export `parseSearchIntent` (different shapes): app = full planning intent for
 // `resolveSearchPlan` / execution; lib `parse-search-intent` = lightweight category hint for ranking/web only.
 import { parseSearchIntent as parseRankingIntent } from "@/lib/search/parse-search-intent"
@@ -206,7 +212,32 @@ export async function GET(req: NextRequest) {
 
   // Intent -> Plan resolution (deterministic, query-first precedence).
   const parsedIntent = q ? parseSearchIntent(q) : parseSearchIntent("")
-  const searchPlan = resolveSearchPlan(parsedIntent, { city: city ?? undefined, country: country ?? undefined })
+
+  let intentForPlan: SearchIntent = parsedIntent
+  const placeResolveInput = parsedIntent.place ? buildPlaceResolveInput(parsedIntent.place) : null
+  if (shouldAttemptPlaceResolve(parsedIntent, placeResolveInput) && placeResolveInput) {
+    console.log("[v0] place.resolve raw input:", placeResolveInput)
+    try {
+      const resolved = await resolvePlace(placeResolveInput)
+      if (resolved && isResolvedPlaceCompatibleWithParsed(parsedIntent.place!, resolved)) {
+        console.log("[v0] place.resolve output:", JSON.stringify(resolved))
+        const prevCountry = parsedIntent.place?.country?.trim()
+        intentForPlan = {
+          ...parsedIntent,
+          place: {
+            ...parsedIntent.place!,
+            city: resolved.city,
+            country: prevCountry || resolved.country,
+            region: resolved.region ?? parsedIntent.place?.region,
+          },
+        }
+      }
+    } catch {
+      // Fallback: keep parsedIntent unchanged
+    }
+  }
+
+  const searchPlan = resolveSearchPlan(intentForPlan, { city: city ?? undefined, country: country ?? undefined })
   const shouldStrictCategoryFilter = searchPlan.filters.strictCategory
 
   if (q) {
@@ -255,6 +286,7 @@ export async function GET(req: NextRequest) {
   // Execution location comes only from the resolved search plan (never raw URL after this point).
   city = searchPlan.filters.applyLocationRestriction ? (searchPlan.location.city ?? null) : null
   country = searchPlan.filters.applyLocationRestriction ? (searchPlan.location.country ?? null) : null
+  console.log("[v0] place.resolve final city used:", city ?? "(none)")
 
   const regionCountriesForFilter: string[] | null =
     searchPlan.filters.applyLocationRestriction &&
