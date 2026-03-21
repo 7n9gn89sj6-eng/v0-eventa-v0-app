@@ -29,6 +29,7 @@ import {
   replaceExecutionCityInWhere,
 } from "@/lib/search/search-location-clause"
 import { microLocationForWebSearch } from "@/lib/search/micro-location-for-web"
+import { topicQueryForCityLevelWeb } from "@/lib/search/topic-query-for-city-level-web"
 
 /**
  * Helper function to check if text contains Australian location indicators
@@ -1062,7 +1063,7 @@ export async function GET(req: NextRequest) {
         }
         
         // Always add city-level queries (fallback if micro-location query returns 0)
-        let cityQuery1 = q
+        let cityQuery1 = topicQueryForCityLevelWeb(q, parsedIntent, searchPlan.location.source)
         if (effectiveCity) {
           const cityLower = effectiveCity.toLowerCase().trim()
           if (!cityQuery1.toLowerCase().includes(cityLower)) {
