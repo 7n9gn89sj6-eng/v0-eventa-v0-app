@@ -130,6 +130,8 @@ model Event {
   region               String?
   parentCity           String?
   formattedAddress     String?
+  placeProvider        String?
+  externalPlaceId      String?
   priceFree            Boolean                @default(false)
   priceAmount          Int?
   websiteUrl           String?

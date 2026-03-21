@@ -6,10 +6,10 @@ import { Calendar, MapPin, List, Loader2, AlertCircle, Check } from "lucide-reac
 
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Input } from "@/components/ui/input";
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { UserNav } from "@/components/auth/user-nav";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { PlaceAutocomplete } from "@/components/places/place-autocomplete";
 
 import { useI18n } from "@/lib/i18n/context";
 import { useLocation } from "@/lib/location-context";
@@ -24,27 +24,20 @@ export function SiteHeader() {
   const { defaultLocation, isLoadingLocation: contextLoadingLocation, clearDefaultLocation, setDefaultLocation, requestUserLocation, lastLocationError, setLastLocationError } = useLocation();
   const [manualLoadingLocation, setManualLoadingLocation] = useState(false);
   const [enterCityOpen, setEnterCityOpen] = useState(false);
-  const [cityInput, setCityInput] = useState("");
-  const [citySearchLoading, setCitySearchLoading] = useState(false);
-  const [citySearchError, setCitySearchError] = useState<string | null>(null);
-  const cityInputRef = useRef<HTMLInputElement>(null);
+  const [headerPlacePrefill, setHeaderPlacePrefill] = useState("");
   const lastAutoOpenedForErrorRef = useRef<string | null>(null);
 
   const isLoadingLocation = manualLoadingLocation;
 
   const openManualLocationEntry = useCallback((source: "banner_cta" | "auto_after_failure") => {
     console.log("[LocationUX] manual_entry_opened", { source });
-    setEnterCityOpen(true);
-    setCitySearchError(null);
     const stored = getUserLocation();
-    if (stored?.city && stored.city !== "Unknown location" && stored.city !== "Current location") {
-      setCityInput((prev) =>
-        prev.trim() ? prev : `${stored.city}${stored.country ? `, ${stored.country}` : ""}`,
-      );
-    }
-    requestAnimationFrame(() => {
-      window.setTimeout(() => cityInputRef.current?.focus(), 150);
-    });
+    const seed =
+      stored?.city && stored.city !== "Unknown location" && stored.city !== "Current location"
+        ? `${stored.city}${stored.country ? `, ${stored.country}` : ""}`
+        : "";
+    setHeaderPlacePrefill(seed);
+    setEnterCityOpen(true);
   }, []);
 
   useEffect(() => {
@@ -76,46 +69,6 @@ export function SiteHeader() {
     }
   };
 
-  const handleEnterCity = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const query = cityInput.trim();
-    if (!query) return;
-    setCitySearchError(null);
-    setCitySearchLoading(true);
-    try {
-      const res = await fetch(`/api/geocode/forward?q=${encodeURIComponent(query)}`);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const code = data.code as string | undefined;
-        const message =
-          res.status === 503 || code === "SERVICE_UNAVAILABLE"
-            ? "Location search is not available right now. Please try again later."
-            : res.status === 404 || code === "NO_RESULTS"
-              ? "No results found. Try another city or place name."
-              : (data.error as string) || `Search failed (${res.status})`;
-        setCitySearchError(message);
-        return;
-      }
-      setDefaultLocation(
-        {
-          city: data.city,
-          country: data.country,
-          lat: data.lat,
-          lng: data.lng,
-          source: "manual",
-        },
-        "manual"
-      );
-      setLastLocationError(null);
-      setCityInput("");
-      setEnterCityOpen(false);
-    } catch (err) {
-      setCitySearchError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
-    } finally {
-      setCitySearchLoading(false);
-    }
-  };
-
   return (
     <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
@@ -141,7 +94,13 @@ export function SiteHeader() {
           </Button>
 
           {/* Location: detect or enter city (popover anchors to map control for banner-driven open on mobile) */}
-          <Popover open={enterCityOpen} onOpenChange={setEnterCityOpen}>
+          <Popover
+            open={enterCityOpen}
+            onOpenChange={(open) => {
+              setEnterCityOpen(open);
+              if (!open) setHeaderPlacePrefill("");
+            }}
+          >
             <div className="flex items-center gap-1">
               <PopoverAnchor className="inline-flex shrink-0">
                 <Button
@@ -199,6 +158,7 @@ export function SiteHeader() {
                     size="sm"
                     className="min-h-[44px] text-muted-foreground hover:text-foreground"
                     aria-label="Enter city"
+                    onClick={() => setHeaderPlacePrefill("")}
                   >
                     Enter city
                   </Button>
@@ -206,39 +166,30 @@ export function SiteHeader() {
               </PopoverTrigger>
             </div>
             <PopoverContent className="w-80" align="end">
-                <form onSubmit={handleEnterCity} className="space-y-3">
-                  <label htmlFor="header-city-input" className="text-sm font-medium">
-                    City or place
-                  </label>
-                  <Input
-                    ref={cityInputRef}
-                    id="header-city-input"
-                    type="text"
-                    placeholder="e.g. Berlin, London"
-                    value={cityInput}
-                    onChange={(e) => {
-                      setCityInput(e.target.value);
-                      setCitySearchError(null);
-                    }}
-                    disabled={citySearchLoading}
-                    autoFocus={enterCityOpen}
-                    className="h-9"
-                  />
-                  {citySearchError && (
-                    <p className="text-xs text-destructive">{citySearchError}</p>
-                  )}
-                  <Button type="submit" size="sm" disabled={citySearchLoading || !cityInput.trim()}>
-                    {citySearchLoading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Searching…
-                      </>
-                    ) : (
-                      "Set location"
-                    )}
-                  </Button>
-                </form>
-              </PopoverContent>
+              <PlaceAutocomplete
+                key={headerPlacePrefill || "header-place"}
+                testId="header-place-autocomplete"
+                label="City or place"
+                description="Search, then pick one result to set your location."
+                initialQuery={headerPlacePrefill}
+                autoFocus={enterCityOpen}
+                onResolved={(place) => {
+                  setDefaultLocation(
+                    {
+                      city: place.city,
+                      country: place.country,
+                      lat: place.lat ?? undefined,
+                      lng: place.lng ?? undefined,
+                      source: "manual",
+                    },
+                    "manual",
+                  );
+                  setLastLocationError(null);
+                  setEnterCityOpen(false);
+                }}
+                onClear={() => {}}
+              />
+            </PopoverContent>
           </Popover>
 
           {/* Language selector */}

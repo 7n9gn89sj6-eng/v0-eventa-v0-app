@@ -8,6 +8,12 @@ export type SubmitLocationPayload = {
   state?: string
   country?: string
   postcode?: string
+  /** Canonical fields from verify-then-select (Mapbox wire); used when server retrieve fails. */
+  parentCity?: string | null
+  lat?: number
+  lng?: number
+  formattedAddress?: string | null
+  mapboxPlaceId?: string
 } | undefined
 
 /** Fields written to `Event` from place resolution (plus existing venue/address strings). */
@@ -48,6 +54,26 @@ export function buildSubmitPlaceResolveInput(location: SubmitLocationPayload): s
  * Merge resolver output with form fallbacks. When `resolved` is null, keeps submit defaults
  * (including user `state` as `region` when present).
  */
+/**
+ * When the client submitted a verified Mapbox id but server retrieve failed, persist structured
+ * fields from the payload only (no forward-geocode from free-text address).
+ */
+export function mergeClientVerifiedLocation(
+  location: NonNullable<SubmitLocationPayload>,
+): PersistedSubmitLocation {
+  return {
+    city: location.city?.trim() || "Unknown",
+    country: location.country?.trim() || "Australia",
+    region: location.state?.trim() || null,
+    parentCity: location.parentCity?.trim() || null,
+    lat:
+      typeof location.lat === "number" && Number.isFinite(location.lat) ? location.lat : null,
+    lng:
+      typeof location.lng === "number" && Number.isFinite(location.lng) ? location.lng : null,
+    formattedAddress: location.formattedAddress?.trim() || null,
+  }
+}
+
 export function mergeSubmitLocationAfterResolve(args: {
   resolved: ResolvedPlace | null
   fallbackCity: string

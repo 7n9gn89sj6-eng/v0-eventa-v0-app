@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import {
   buildSubmitPlaceResolveInput,
+  mergeClientVerifiedLocation,
   mergeSubmitLocationAfterResolve,
 } from "@/lib/events/submit-place-resolution"
 
@@ -121,5 +122,39 @@ describe("mergeSubmitLocationAfterResolve", () => {
       fallbackState: "Victoria",
     })
     expect(persisted.region).toBe("Victoria")
+  })
+})
+
+describe("mergeClientVerifiedLocation", () => {
+  it("maps wire-shaped payload to persisted fields", () => {
+    const persisted = mergeClientVerifiedLocation({
+      city: "Brunswick",
+      country: "Australia",
+      state: "Victoria",
+      parentCity: "Melbourne",
+      lat: -37.77,
+      lng: 144.96,
+      formattedAddress: "Brunswick, Melbourne, Victoria, Australia",
+    })
+    expect(persisted).toEqual({
+      city: "Brunswick",
+      country: "Australia",
+      region: "Victoria",
+      parentCity: "Melbourne",
+      lat: -37.77,
+      lng: 144.96,
+      formattedAddress: "Brunswick, Melbourne, Victoria, Australia",
+    })
+  })
+
+  it("drops non-finite coordinates", () => {
+    const persisted = mergeClientVerifiedLocation({
+      city: "Sydney",
+      country: "Australia",
+      lat: Number.NaN,
+      lng: Number.NaN,
+    })
+    expect(persisted.lat).toBeNull()
+    expect(persisted.lng).toBeNull()
   })
 })

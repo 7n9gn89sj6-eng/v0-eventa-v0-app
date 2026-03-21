@@ -117,13 +117,13 @@ function nominatimStructuredFromAddress(addr: NominatimSearchItem["address"]): P
 }
 
 /** Mapbox forward geocode feature (subset). */
-interface MapboxContext {
+export interface MapboxContext {
   id: string
   text: string
   short_code?: string
 }
 
-interface MapboxFeature {
+export interface MapboxFeature {
   id: string
   type: string
   place_type: string[]
@@ -138,7 +138,7 @@ function mapboxContextByPrefix(context: MapboxContext[] | undefined, prefix: str
   return context?.find((c) => c.id.startsWith(`${prefix}.`))
 }
 
-function mapboxStructuredFromFeature(feature: MapboxFeature): Pick<
+export function mapboxStructuredFromFeature(feature: MapboxFeature): Pick<
   GeocodingResult,
   "locality" | "parentCity" | "region" | "country" | "placeType"
 > {
@@ -302,6 +302,81 @@ export async function geocodeAddress(query: string): Promise<GeocodingResult | n
   }
 
   return null
+}
+
+/** Map a Mapbox Geocoding feature to the shared {@link GeocodingResult} shape. */
+export function geocodingResultFromMapboxFeature(feature: MapboxFeature): GeocodingResult {
+  const structured = mapboxStructuredFromFeature(feature)
+  return {
+    address: feature.place_name,
+    lat: feature.center[1],
+    lng: feature.center[0],
+    venueName: feature.text,
+    locality: structured.locality,
+    region: structured.region,
+    country: structured.country,
+    parentCity: structured.parentCity,
+    placeType: structured.placeType,
+  }
+}
+
+/**
+ * Autocomplete suggestions (Mapbox Geocoding API). Server-only; requires MAPBOX_TOKEN.
+ */
+export async function mapboxPlacesAutocomplete(
+  query: string,
+  opts?: { limit?: number },
+): Promise<MapboxFeature[]> {
+  const token = process.env.MAPBOX_TOKEN
+  if (!token) {
+    throw new GeocodingConfigError("Geocoding service is not configured (MAPBOX_TOKEN missing).")
+  }
+
+  const q = query.trim()
+  if (q.length < 2) return []
+
+  const limit = Math.min(Math.max(opts?.limit ?? 6, 1), 10)
+  const path = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json`
+  const url = new URL(path)
+  url.searchParams.set("access_token", token)
+  url.searchParams.set("autocomplete", "true")
+  url.searchParams.set("limit", String(limit))
+  url.searchParams.set("types", "address,poi,place,locality,neighborhood")
+
+  const response = await fetch(url.toString())
+  if (!response.ok) {
+    console.error("[geocoding] Mapbox autocomplete error:", response.status, await response.text())
+    throw new Error("Mapbox autocomplete request failed")
+  }
+
+  const data = await response.json()
+  if (!data.features || !Array.isArray(data.features)) return []
+  return data.features as MapboxFeature[]
+}
+
+/**
+ * Retrieve a single feature by permanent Mapbox feature id (for verify-after-select).
+ */
+export async function mapboxPlaceFeatureById(mapboxId: string): Promise<MapboxFeature | null> {
+  const token = process.env.MAPBOX_TOKEN
+  if (!token) {
+    throw new GeocodingConfigError("Geocoding service is not configured (MAPBOX_TOKEN missing).")
+  }
+
+  const id = mapboxId.trim()
+  if (!id.length) return null
+
+  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(id)}.json?access_token=${encodeURIComponent(token)}`
+
+  const response = await fetch(url)
+  if (!response.ok) {
+    console.warn("[geocoding] Mapbox retrieve-by-id failed:", response.status)
+    return null
+  }
+
+  const data = await response.json()
+  if (!data.features || !Array.isArray(data.features) || data.features.length === 0) return null
+  return data.features[0] as MapboxFeature
 }
 
 /**

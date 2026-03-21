@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -14,6 +14,10 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Loader2, Plus } from "lucide-react"
 import { DateTime } from "luxon"
+
+import { PlaceAutocomplete } from "@/components/places/place-autocomplete"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import type { SelectedPlaceWire } from "@/lib/places/selected-place"
 
 // ----------------------
 // CONSTANTS
@@ -80,6 +84,7 @@ type EventFormValues = z.infer<typeof eventFormSchema>
 
 export function EventForm({ initialData, draftId }: any = {}) {
   const router = useRouter()
+  const [selectedPlace, setSelectedPlace] = useState<SelectedPlaceWire | null>(null)
 
   const {
     register,
@@ -115,6 +120,16 @@ export function EventForm({ initialData, draftId }: any = {}) {
 
   const onSubmit = async (values: EventFormValues) => {
     try {
+      const placeId = selectedPlace?.placeId?.trim()
+      if (
+        !placeId ||
+        !selectedPlace?.city?.trim() ||
+        !selectedPlace?.country?.trim()
+      ) {
+        alert("Choose a location from the suggestions list and confirm it before publishing.")
+        return
+      }
+
       const payload = {
         title: values.title,
         description: values.description,
@@ -127,6 +142,14 @@ export function EventForm({ initialData, draftId }: any = {}) {
         location: {
           name: values.venueName || "",
           address: values.address || "",
+          city: selectedPlace.city,
+          country: selectedPlace.country,
+          state: selectedPlace.region ?? undefined,
+          parentCity: selectedPlace.parentCity ?? null,
+          lat: selectedPlace.lat ?? undefined,
+          lng: selectedPlace.lng ?? undefined,
+          formattedAddress: selectedPlace.formattedAddress,
+          mapboxPlaceId: placeId,
         },
 
         externalUrl: values.websiteUrl || "",
@@ -276,16 +299,51 @@ export function EventForm({ initialData, draftId }: any = {}) {
             </div>
           </div>
 
+          <PlaceAutocomplete
+            disabled={isSubmitting}
+            id="event-location-search"
+            allowEditQueryWhileSelected
+            onResolved={(place) => {
+              setSelectedPlace(place)
+              setValue("venueName", place.venueName?.trim() || "")
+              setValue("address", place.formattedAddress)
+            }}
+            onClear={() => {
+              setSelectedPlace(null)
+              setValue("venueName", "")
+              setValue("address", "")
+            }}
+          />
+
+          {!selectedPlace?.placeId ? (
+            <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+              <AlertDescription className="text-sm text-amber-900 dark:text-amber-100">
+                Choose a location from the suggestions and confirm your selection before publishing.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
           {/* Venue */}
           <div className="space-y-2">
-            <Label htmlFor="venueName">Venue Name</Label>
-            <Input id="venueName" {...register("venueName")} />
+            <Label htmlFor="venueName">Venue name</Label>
+            <Input
+              id="venueName"
+              placeholder="Shown on the event page"
+              disabled={isSubmitting}
+              {...register("venueName")}
+            />
+            <p className="text-xs text-muted-foreground">You can edit how the venue appears after selecting a place.</p>
           </div>
 
           {/* Address */}
           <div className="space-y-2">
-            <Label htmlFor="address">Address</Label>
-            <Input id="address" {...register("address")} />
+            <Label htmlFor="address">Address (full line)</Label>
+            <Input
+              id="address"
+              placeholder="Filled when you pick a location from the list"
+              disabled={isSubmitting}
+              {...register("address")}
+            />
           </div>
 
           {/* Website */}

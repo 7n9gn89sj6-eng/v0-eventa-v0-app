@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
 import { Calendar, MapPin, SlidersHorizontal, X } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -14,6 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import ClientOnly from "@/components/ClientOnly"
 import { useI18n } from "@/lib/i18n/context"
 import { SmartInputBar } from "@/components/search/smart-input-bar"
+import { PlaceAutocomplete } from "@/components/places/place-autocomplete"
 
 const CATEGORIES = [
   "All",
@@ -312,6 +312,7 @@ export function EventsListingContent({
     setQ("")
     setSortBy("date-asc")
     setCityFilter("")
+    setCountryFilter("")
   }
 
   const hasActiveFilters =
@@ -319,7 +320,8 @@ export function EventsListingContent({
     selectedPriceFilter !== "all" ||
     q.trim() !== "" ||
     sortBy !== "date-asc" ||
-    cityFilter !== ""
+    cityFilter !== "" ||
+    countryFilter !== ""
 
   const tEvents = t("events")
   const showingText = (tEvents("results.showing") || "Showing {filtered} of {total} events")
@@ -339,11 +341,21 @@ export function EventsListingContent({
 
       {(cityFilter || (selectedCategory && selectedCategory !== "All") || initialDateFrom) && (
         <div className="flex flex-wrap gap-2">
-          {cityFilter && (
+          {(cityFilter || countryFilter) && (
             <Badge variant="secondary" className="gap-1.5 pl-2 pr-1.5">
               <MapPin className="h-3 w-3" />
-              <span>{cityFilter}</span>
-              <button onClick={() => setCityFilter("")} className="ml-0.5 rounded-sm hover:bg-secondary-foreground/20">
+              <span>
+                {cityFilter}
+                {countryFilter ? `, ${countryFilter}` : ""}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setCityFilter("")
+                  setCountryFilter("")
+                }}
+                className="ml-0.5 rounded-sm hover:bg-secondary-foreground/20"
+              >
                 <X className="h-3 w-3" />
               </button>
             </Badge>
@@ -391,15 +403,26 @@ export function EventsListingContent({
         {showFilters && (
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-2">
-                <Label htmlFor="city">City</Label>
-                <Input
-                  id="city"
-                  placeholder="Enter city name"
-                  value={cityFilter}
-                  onChange={(e) => setCityFilter(e.target.value)}
+              <div className="space-y-2 sm:col-span-2">
+                <PlaceAutocomplete
+                  testId="discover-place-autocomplete"
+                  label="City / place"
+                  description="Pick a place to set city and country on the URL (Discover source of truth)."
+                  initialQuery={
+                    [initialCity, initialCountry]
+                      .map((s) => s?.trim())
+                      .filter((s): s is string => Boolean(s))
+                      .join(", ") || ""
+                  }
+                  onResolved={(place) => {
+                    setCityFilter(place.city)
+                    setCountryFilter(place.country || "")
+                  }}
+                  onClear={() => {
+                    setCityFilter("")
+                    setCountryFilter("")
+                  }}
                 />
-                <p className="text-xs text-muted-foreground">Filter events by city</p>
               </div>
 
               <div className="space-y-2">

@@ -19,6 +19,7 @@ export function GET() {
   if (!process.env.UPSTASH_KV_REST_API_TOKEN) optionalMissing.push("UPSTASH_KV_REST_API_TOKEN")
   if (!process.env.GOOGLE_API_KEY) optionalMissing.push("GOOGLE_API_KEY")
   if (!process.env.GOOGLE_PSE_ID) optionalMissing.push("GOOGLE_PSE_ID")
+  if (!process.env.MAPBOX_ACCESS_TOKEN) optionalMissing.push("MAPBOX_ACCESS_TOKEN")
   if (!process.env.MAPBOX_TOKEN) optionalMissing.push("MAPBOX_TOKEN")
   if (!process.env.OPENAI_API_KEY) optionalMissing.push("OPENAI_API_KEY")
 

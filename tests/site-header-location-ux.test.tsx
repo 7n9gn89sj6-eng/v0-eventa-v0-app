@@ -56,10 +56,19 @@ describe("SiteHeader location failure UX", () => {
     getUserLocationMock.mockReturnValue(null)
     mockUseLocation.mockReturnValue(baseLocationMock())
     vi.spyOn(console, "log").mockImplementation(() => {})
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        json: () => Promise.resolve({ code: "PLACES_CONFIG", error: "not configured" }),
+      }),
+    )
   })
 
   afterEach(() => {
     cleanup()
+    vi.unstubAllGlobals()
     vi.restoreAllMocks()
   })
 
@@ -78,7 +87,7 @@ describe("SiteHeader location failure UX", () => {
     expect(hint.textContent).toMatch(/unreliable on some desktops/i)
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText(/Berlin, London/i)).toBeTruthy()
+      expect(screen.getByTestId("header-place-autocomplete")).toBeTruthy()
     })
   })
 
@@ -100,8 +109,9 @@ describe("SiteHeader location failure UX", () => {
     render(<SiteHeader />)
 
     await waitFor(() => {
-      const input = screen.getByPlaceholderText(/Berlin, London/i) as HTMLInputElement
-      expect(input.value).toContain("Melbourne")
+      const root = screen.getByTestId("header-place-autocomplete")
+      const input = root.querySelector('[role="combobox"]') as HTMLInputElement
+      expect(input?.value).toContain("Melbourne")
     })
   })
 
@@ -118,7 +128,8 @@ describe("SiteHeader location failure UX", () => {
     const enterInBanner = within(banner).getByRole("button", { name: /^Enter city$/i })
     fireEvent.click(enterInBanner)
 
-    const input = (await screen.findByPlaceholderText(/Berlin, London/i)) as HTMLInputElement
+    const root = await screen.findByTestId("header-place-autocomplete")
+    const input = root.querySelector('[role="combobox"]') as HTMLInputElement
     await waitFor(() => {
       expect(document.activeElement).toBe(input)
     })

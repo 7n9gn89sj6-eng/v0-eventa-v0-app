@@ -12,9 +12,11 @@ import { checkRateLimit, getClientIdentifier, rateLimiters } from "@/lib/rate-li
 import { logger } from "@/lib/logger";
 import {
   buildSubmitPlaceResolveInput,
+  mergeClientVerifiedLocation,
   mergeSubmitLocationAfterResolve,
 } from "@/lib/events/submit-place-resolution";
-import { resolvePlace } from "@/lib/search/resolve-place";
+import { geocodingResultFromMapboxFeature, mapboxPlaceFeatureById } from "@/lib/geocoding";
+import { mapGeocodingResultToResolvedPlace, resolvePlace } from "@/lib/search/resolve-place";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,6 +40,12 @@ const EventSubmitSchema = z
         state: z.string().optional(),
         country: z.string().optional(),
         postcode: z.string().optional(),
+        parentCity: z.union([z.string(), z.null()]).optional(),
+        lat: z.number().finite().optional(),
+        lng: z.number().finite().optional(),
+        formattedAddress: z.string().optional(),
+        /** Mapbox Geocoding permanent feature id — server re-resolves to prevent tampering. */
+        mapboxPlaceId: z.string().optional(),
       })
       .optional(),
 
@@ -52,6 +60,24 @@ const EventSubmitSchema = z
   .refine((d) => !d.end || d.end > d.start, {
     path: ["end"],
     message: "End must be after start",
+  })
+  .superRefine((data, ctx) => {
+    const id = data.location?.mapboxPlaceId?.trim();
+    if (!id) return;
+    if (!data.location?.city?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "City is required when a verified Mapbox place id is provided",
+        path: ["location", "city"],
+      });
+    }
+    if (!data.location?.country?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Country is required when a verified Mapbox place id is provided",
+        path: ["location", "country"],
+      });
+    }
   });
 
 /* ------------------------- ROUTE HANDLER ------------------------- */
@@ -110,28 +136,65 @@ export async function POST(request: NextRequest) {
     const fallbackCountry = validated.location?.country?.trim() || "Australia";
     const postcode = validated.location?.postcode?.trim() || null;
 
-    let address = validated.location?.address ?? "";
-    if (!address && validated.location) {
-      const parts: string[] = [];
-      if (validated.location.name) parts.push(validated.location.name);
-      if (fallbackCity && fallbackCity !== "Unknown") parts.push(fallbackCity);
-      if (fallbackState) parts.push(fallbackState);
-      if (postcode) parts.push(postcode);
-      if (fallbackCountry) parts.push(fallbackCountry);
-      address = parts.join(", ");
+    const mapboxId = validated.location?.mapboxPlaceId?.trim() || "";
+
+    let address = "";
+    if (mapboxId && validated.location?.formattedAddress?.trim()) {
+      address = validated.location.formattedAddress.trim();
+    } else {
+      address = validated.location?.address ?? "";
+      if (!address && validated.location) {
+        const parts: string[] = [];
+        if (validated.location.name) parts.push(validated.location.name);
+        if (fallbackCity && fallbackCity !== "Unknown") parts.push(fallbackCity);
+        if (fallbackState) parts.push(fallbackState);
+        if (postcode) parts.push(postcode);
+        if (fallbackCountry) parts.push(fallbackCountry);
+        address = parts.join(", ");
+      }
     }
 
-    /** Geocode query: full `location.address` if present (≥2 chars), else "city, state, country" (skips placeholder Unknown). */
-    const placeResolveInput = buildSubmitPlaceResolveInput(validated.location);
-    const resolvedPlace = placeResolveInput ? await resolvePlace(placeResolveInput) : null;
-    const persistedLoc = mergeSubmitLocationAfterResolve({
-      resolved: resolvedPlace,
-      fallbackCity,
-      fallbackCountry,
-      fallbackState,
-    });
+    let resolvedPlace: Awaited<ReturnType<typeof resolvePlace>> = null;
+    let resolvedViaMapboxId = false;
+    let canonicalMapboxId = "";
+
+    if (mapboxId) {
+      try {
+        const feature = await mapboxPlaceFeatureById(mapboxId);
+        if (feature) {
+          const geo = geocodingResultFromMapboxFeature(feature);
+          const fromMapbox = mapGeocodingResultToResolvedPlace(geo);
+          if (fromMapbox) {
+            resolvedPlace = fromMapbox;
+            resolvedViaMapboxId = true;
+            canonicalMapboxId = feature.id;
+          }
+        }
+      } catch (e) {
+        logger.warn("[submit] mapboxPlaceId resolve failed; falling back to text geocode", { mapboxId, e });
+      }
+    }
+
+    /** Geocode only when no verified Mapbox id — never use free-text geocode to override verify-then-select. */
+    const placeResolveInput =
+      resolvedPlace || mapboxId ? null : buildSubmitPlaceResolveInput(validated.location);
+    if (!resolvedPlace && placeResolveInput) {
+      resolvedPlace = await resolvePlace(placeResolveInput);
+    }
+
+    const persistedLoc =
+      mapboxId && !resolvedPlace && validated.location
+        ? mergeClientVerifiedLocation(validated.location)
+        : mergeSubmitLocationAfterResolve({
+            resolved: resolvedPlace,
+            fallbackCity,
+            fallbackCountry,
+            fallbackState,
+          });
 
     logger.info("[submit] place.resolve", {
+      mapboxPlaceId: mapboxId || null,
+      usedMapboxRetrieve: resolvedViaMapboxId,
       rawInput: placeResolveInput ?? null,
       resolved: resolvedPlace
         ? {
@@ -187,6 +250,9 @@ export async function POST(request: NextRequest) {
         formattedAddress: persistedLoc.formattedAddress,
         ...(persistedLoc.lat != null && persistedLoc.lng != null
           ? { lat: persistedLoc.lat, lng: persistedLoc.lng }
+          : {}),
+        ...(mapboxId
+          ? { placeProvider: "mapbox", externalPlaceId: canonicalMapboxId || mapboxId }
           : {}),
 
         imageUrl: validated.imageUrl || null,
