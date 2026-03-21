@@ -4,6 +4,8 @@ export type FixtureInternalEvent = {
   description: string
   city: string
   country: string
+  parentCity?: string | null
+  region?: string | null
   venueName?: string | null
   startAt: string | Date
   endAt: string | Date
@@ -38,6 +40,10 @@ function getEventField(event: FixtureInternalEvent, key: string): unknown {
       return event.city
     case "country":
       return event.country
+    case "parentCity":
+      return event.parentCity ?? null
+    case "region":
+      return event.region ?? null
     default:
       return undefined
   }
@@ -99,7 +105,17 @@ function matchesCondition(event: FixtureInternalEvent, cond: any): boolean {
     return cond.AND.every((c: any) => matchesCondition(event, c))
   }
 
-  const knownKeys = ["title", "description", "venueName", "city", "country", "category", "categories"]
+  const knownKeys = [
+    "title",
+    "description",
+    "venueName",
+    "city",
+    "country",
+    "parentCity",
+    "region",
+    "category",
+    "categories",
+  ]
   const keysInCond = knownKeys.filter((k) => Object.prototype.hasOwnProperty.call(cond, k))
 
   // If it's not one of our supported primitives, don't block matching.

@@ -31,6 +31,9 @@ const prismaCount = vi.fn(async (args: any) => {
   return matched.length
 })
 
+/** Default: no stored parent sample (ambient falls back to minimal map). */
+const prismaFindFirst = vi.fn(async () => null)
+
 const searchWeb = vi.fn(async () => fixtureWebResults)
 
 vi.mock("@/lib/db", () => {
@@ -39,6 +42,7 @@ vi.mock("@/lib/db", () => {
       event: {
         findMany: prismaFindMany,
         count: prismaCount,
+        findFirst: prismaFindFirst,
       },
     },
   }
@@ -77,6 +81,8 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     findManyWhereHistory.length = 0
     prismaFindMany.mockClear()
     prismaCount.mockClear()
+    prismaFindFirst.mockClear()
+    prismaFindFirst.mockResolvedValue(null)
     searchWeb.mockClear()
   })
 
@@ -322,6 +328,64 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     expect(data?.effectiveLocation?.city).toBe("Melbourne")
     expect((data.internal || []).map((e: any) => e.city)).toContain("Melbourne")
     expect(findManyWhereHistory.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it("UI Melbourne retrieves suburb events via stored event.parentCity", async () => {
+    const future = new Date(FIXED_NOW.getTime() + 7 * 86400 * 1000).toISOString()
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "brunswick-parent-melb",
+        title: "Westside Jazz Music Night",
+        description: "Live music in the inner north.",
+        city: "Brunswick",
+        parentCity: "Melbourne",
+        country: "Australia",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "music",
+      city: "Melbourne",
+      country: "Australia",
+    })
+
+    expect(data?.effectiveLocation?.source).toBe("ui")
+    expect(data?.effectiveLocation?.city).toBe("Melbourne")
+    expect((data.internal || []).map((e: any) => e.city)).toContain("Brunswick")
+  })
+
+  it("ambient thin internal uses findFirst parentCity before hardcoded suburb map", async () => {
+    const future = new Date(FIXED_NOW.getTime() + 6 * 86400 * 1000).toISOString()
+    prismaFindFirst.mockResolvedValueOnce({ parentCity: "Melbourne" })
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "melb-cbd-from-richmond-ambient",
+        title: "CBD Jazz",
+        description: "Live music downtown.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+    ]
+
+    const data = await callSearchEvents({
+      query: "music",
+      city: "Richmond",
+      country: "Australia",
+    })
+
+    expect(prismaFindFirst).toHaveBeenCalled()
+    expect(data?.effectiveLocation?.city).toBe("Melbourne")
+    expect((data.internal || []).map((e: any) => e.city)).toContain("Melbourne")
   })
 
   it("explicit query `music Berlin` stays Berlin-only with UI Brunswick", async () => {

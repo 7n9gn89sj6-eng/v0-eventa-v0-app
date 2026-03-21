@@ -21,6 +21,13 @@ import { parseSearchIntent as parseRankingIntent } from "@/lib/search/parse-sear
 import { interpretSearchIntent } from "@/lib/search/ai-intent"
 import { parseSearchIntent, type SearchIntent } from "@/app/lib/search/parseSearchIntent"
 import { resolveSearchPlan } from "@/app/lib/search/resolveSearchPlan"
+import { EXECUTION_CITY_VARIATIONS } from "@/lib/search/city-variations"
+import { fetchParentMetroFromStoredEvents } from "@/lib/search/ambient-parent-metro"
+import {
+  applyStrictInternalCityFilter,
+  buildStructuredCityLocationOrClause,
+  replaceExecutionCityInWhere,
+} from "@/lib/search/search-location-clause"
 
 /**
  * Helper function to check if text contains Australian location indicators
@@ -45,112 +52,25 @@ function applyRegionCountriesWhere(where: any, countries: string[]) {
 /** Max internal rows (after strict city filter) before broadening a UI-selected suburb to its parent metro. */
 const AMBIENT_SUBURB_INTERNAL_THRESHOLD = 2
 
-/** Lowercase suburb key → parent city (ambient UI execution only; explicit query places never use this). */
+/** Secondary fallback when no published event supplies `parentCity` for this locality (ambient UI only). */
 const AMBIENT_SUBURB_PARENT_CITY: Record<string, string> = {
   brunswick: "Melbourne",
 }
 
-/**
- * City name variants for Prisma `contains` OR (must stay aligned with strict internal filter list where they overlap).
- */
-const EXECUTION_CITY_VARIATIONS: Record<string, string[]> = {
-  melbourne: ["melb"],
-  brunswick: ["brunswick east", "brunswick west"],
-  "brunswick east": ["brunswick", "brunswick west"],
-  "brunswick west": ["brunswick", "brunswick east"],
-  brussels: ["bruxelles", "brussel", "bruselas"],
-  athens: ["αθήνα", "athina", "athen"],
-  rome: ["roma", "rom"],
-  paris: ["paris"],
-  milan: ["milano"],
-  florence: ["firenze"],
-  naples: ["napoli"],
-  venice: ["venezia"],
-  vienna: ["wien"],
-  copenhagen: ["københavn", "kobenhavn"],
-  prague: ["praha"],
-  warsaw: ["warszawa"],
-  budapest: ["budapest"],
-  bucharest: ["bucurești", "bucuresti"],
-}
-
-const STRICT_INTERNAL_CITY_VARIANTS: Record<string, string[]> = {
-  melbourne: ["melbourne", "melb"],
-  brunswick: ["brunswick", "brunswick east", "brunswick west"],
-  "brunswick east": ["brunswick east", "brunswick", "brunswick west"],
-  "brunswick west": ["brunswick west", "brunswick", "brunswick east"],
-}
-
-function isPrismaCityLocationOrClause(clause: any): boolean {
-  if (!clause?.OR || !Array.isArray(clause.OR)) return false
-  return clause.OR.every((o: any) => {
-    const keys = Object.keys(o || {})
-    if (keys.length !== 1) return false
-    const k = keys[0]
-    return k === "city" || k === "title" || k === "description"
-  })
-}
-
-function buildCityLocationAndClause(executionCity: string) {
-  const cityLower = executionCity.toLowerCase().trim()
-  const variations = EXECUTION_CITY_VARIATIONS[cityLower] || []
-  const allCityNames = [cityLower, ...variations]
-  return {
-    OR: [
-      ...allCityNames.map((cityName) => ({
-        city: { contains: cityName, mode: "insensitive" as const },
-      })),
-      { title: { contains: cityLower, mode: "insensitive" as const } },
-      { description: { contains: cityLower, mode: "insensitive" as const } },
-    ],
-  }
-}
-
-function replaceExecutionCityInWhere(whereRoot: any, newCity: string): boolean {
-  const and = whereRoot?.AND
-  if (!Array.isArray(and)) return false
-  const idx = and.findIndex((c: any) => isPrismaCityLocationOrClause(c))
-  if (idx < 0) return false
-  and[idx] = buildCityLocationAndClause(newCity)
-  return true
-}
-
-function applyStrictInternalCityFilter(eventsIn: any[], cityName: string | null): { events: any[]; count: number } {
-  if (!cityName) return { events: eventsIn, count: eventsIn.length }
-  const cityLower = cityName.toLowerCase().trim()
-  const variants = [cityLower, ...(STRICT_INTERNAL_CITY_VARIANTS[cityLower] || [])].map((v) => v.toLowerCase())
-  const hasAnyNonEmptyCityField = eventsIn.some((e: any) => String(e?.city || "").trim().length > 0)
-  if (!hasAnyNonEmptyCityField) {
-    return { events: eventsIn, count: eventsIn.length }
-  }
-  const strictMatched = eventsIn.filter((e: any) => {
-    const eventCity = String(e?.city || "").toLowerCase()
-    if (!eventCity) return false
-    return variants.some((v) => eventCity.includes(v))
-  })
-  if (strictMatched.length !== eventsIn.length) {
-    console.log(
-      `[v0] 🔒 Strict internal city filtering: ${eventsIn.length} -> ${strictMatched.length} for city="${cityLower}".`,
-    )
-  }
-  return { events: strictMatched, count: strictMatched.length }
-}
-
-function ambientSuburbParentCityEligibility(opts: {
+function ambientSuburbParentExpansionEligible(opts: {
   q: string
   executionCity: string | null
   internalCountAfterStrict: number
   effectiveLocationSource: "query" | "ui" | "device"
   scope: SearchIntent["scope"]
   parsedIntent: SearchIntent
-}): string | null {
-  if (!opts.q.trim() || !opts.executionCity) return null
-  if (opts.internalCountAfterStrict > AMBIENT_SUBURB_INTERNAL_THRESHOLD) return null
-  if (opts.effectiveLocationSource !== "ui") return null
-  if (opts.scope !== "local" && opts.scope !== "broad") return null
-  if (opts.parsedIntent.place?.city) return null
-  const key = opts.executionCity.toLowerCase().trim()
-  return AMBIENT_SUBURB_PARENT_CITY[key] ?? null
+}): boolean {
+  if (!opts.q.trim() || !opts.executionCity) return false
+  if (opts.internalCountAfterStrict > AMBIENT_SUBURB_INTERNAL_THRESHOLD) return false
+  if (opts.effectiveLocationSource !== "ui") return false
+  if (opts.scope !== "local" && opts.scope !== "broad") return false
+  if (opts.parsedIntent.place?.city) return false
+  return true
 }
 
 const EXTERNAL_STUB_EVENTS = [
@@ -449,7 +369,10 @@ export async function GET(req: NextRequest) {
 
       // PRIORITY 1: LOCATION FILTERS (city/country) - applied first
       if (city) {
-        where.city = { contains: city, mode: "insensitive" }
+        const locationMode =
+          effectiveLocation.source === "query" ? "explicit_query" : "inclusive"
+        where.AND = where.AND || []
+        where.AND.push(buildStructuredCityLocationOrClause(city, locationMode))
       }
       if (regionCountriesForFilter && regionCountriesForFilter.length > 0) {
         applyRegionCountriesWhere(where, regionCountriesForFilter)
@@ -634,30 +557,18 @@ export async function GET(req: NextRequest) {
       ...PUBLIC_EVENT_WHERE,
     }
 
-    // PRIORITY 1: LOCATION FILTERS (city/country) - applied first
-    // Handle city name variations (e.g., Brussels/Bruxelles, Athens/Αθήνα)
+    // PRIORITY 1: LOCATION FILTERS — structured `city` / `parentCity` (+ query vs UI behavior)
     if (city) {
       const cityLower = city.toLowerCase().trim()
-
       const variations = EXECUTION_CITY_VARIATIONS[cityLower] || []
       const allCityNames = [cityLower, ...variations]
-      
-      // Build OR conditions for city matching (any variation OR city in title/description)
-      const cityConditions: any[] = [
-        // Match city field with any variation
-        ...allCityNames.map(cityName => ({
-          city: { contains: cityName, mode: "insensitive" },
-        })),
-        // Also match if city appears in title or description
-        { title: { contains: cityLower, mode: "insensitive" } },
-        { description: { contains: cityLower, mode: "insensitive" } },
-      ]
-      
-      // Add city conditions to AND (we'll combine with other filters)
+      const locationMode =
+        effectiveLocation.source === "query" ? "explicit_query" : "inclusive"
       where.AND = where.AND || []
-      where.AND.push({ OR: cityConditions })
-      
-      console.log(`[v0] City filter with variations: ${city} → [${allCityNames.join(", ")}]`)
+      where.AND.push(buildStructuredCityLocationOrClause(city, locationMode))
+      console.log(
+        `[v0] City filter (${locationMode}): ${city} → [${allCityNames.join(", ")}]`,
+      )
     }
 
     if (regionCountriesForFilter && regionCountriesForFilter.length > 0) {
@@ -899,11 +810,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Strict internal location enforcement:
-    // When the user selected/typed a city, internal results must match that city via structured `event.city`.
-    // This prevents wrong-city internal events from slipping in due to title/description text mentions.
+    // Strict internal location enforcement: structured `event.city` (always); `parentCity` only for UI/device execution.
     const eventsBeforeStrict = events
-    const strict1 = applyStrictInternalCityFilter(events, city)
+    const strict1 = applyStrictInternalCityFilter(events, city, {
+      allowParentCityMatch: effectiveLocation.source !== "query",
+    })
     events = strict1.events
     count = strict1.count
     if (
@@ -915,14 +826,22 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    const parentMetro = ambientSuburbParentCityEligibility({
-      q,
-      executionCity: city,
-      internalCountAfterStrict: count,
-      effectiveLocationSource: effectiveLocation.source,
-      scope: searchPlan.scope,
-      parsedIntent,
-    })
+    let parentMetro: string | null = null
+    if (
+      city &&
+      ambientSuburbParentExpansionEligible({
+        q,
+        executionCity: city,
+        internalCountAfterStrict: count,
+        effectiveLocationSource: effectiveLocation.source,
+        scope: searchPlan.scope,
+        parsedIntent,
+      })
+    ) {
+      const key = city.toLowerCase().trim()
+      parentMetro =
+        (await fetchParentMetroFromStoredEvents(city)) ?? AMBIENT_SUBURB_PARENT_CITY[key] ?? null
+    }
     if (parentMetro) {
       const whereExpanded = structuredClone(whereSnapshotForAmbientRetry)
       const whereExpandedNoCat = structuredClone(whereWithoutCategory)
@@ -961,7 +880,9 @@ export async function GET(req: NextRequest) {
               prisma.event.count({ where: whereExpandedNoCat }),
             ])
           }
-          const strict2 = applyStrictInternalCityFilter(ev2, parentMetro)
+          const strict2 = applyStrictInternalCityFilter(ev2, parentMetro, {
+            allowParentCityMatch: true,
+          })
           events = strict2.events
           count = strict2.count
           city = parentMetro
@@ -994,7 +915,9 @@ export async function GET(req: NextRequest) {
                   prisma.event.count({ where: whereExpandedNoCat }),
                 ])
               }
-              const strict2 = applyStrictInternalCityFilter(ev2, parentMetro)
+              const strict2 = applyStrictInternalCityFilter(ev2, parentMetro, {
+                allowParentCityMatch: true,
+              })
               events = strict2.events
               count = strict2.count
               city = parentMetro

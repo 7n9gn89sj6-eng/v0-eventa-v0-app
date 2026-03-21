@@ -160,10 +160,13 @@ export function scoreSearchResult(args: {
     }
   } else if (targetCity) {
     const ec = String(result.city || result.location?.city || "").trim()
-    if (ec && !citiesCompatible(targetCity, ec)) {
+    const ep = String(result.parentCity || "").trim()
+    const strongCityMatch = Boolean(ec && citiesCompatible(targetCity, ec))
+    const strongParentMatch = Boolean(ep && citiesCompatible(targetCity, ep))
+    if (ec && !strongCityMatch && !strongParentMatch) {
       return null
     }
-    if (ec && citiesCompatible(targetCity, ec)) scopeScore += 32
+    if (strongCityMatch || strongParentMatch) scopeScore += 32
     else scopeScore += 6
     if (targetCountry) {
       const cty = String(result.country || result.location?.country || "").trim()
