@@ -135,9 +135,9 @@ export async function GET(req: NextRequest) {
 
   let intentForPlan: SearchIntent = parsedIntent
   const explicitParsedCountry = parsedIntent.place?.country?.trim()
-  const countryBiasFromContext =
-    !explicitParsedCountry &&
-    ((country ?? "").trim() || process.env.NEXT_PUBLIC_DEFAULT_SEARCH_COUNTRY?.trim() || null)
+  const countryBiasFromContext: string | null = explicitParsedCountry
+    ? null
+    : (country ?? "").trim() || process.env.NEXT_PUBLIC_DEFAULT_SEARCH_COUNTRY?.trim() || null
   const placeResolveInput = parsedIntent.place
     ? buildPlaceResolveInput(parsedIntent.place, countryBiasFromContext)
     : null
@@ -203,8 +203,8 @@ export async function GET(req: NextRequest) {
       const threshold = 0.6
       try {
         const interpreted = await interpretSearchIntent(q, {
-          city: searchPlan.location.city,
-          country: searchPlan.location.country,
+          city: searchPlan.location.city ?? undefined,
+          country: searchPlan.location.country ?? undefined,
         })
 
         if (missingCategory && !category && interpreted.category && (interpreted.confidence ?? 0) >= threshold) {

@@ -14,7 +14,6 @@ import { Badge } from "@/components/ui/badge"
 import ClientOnly from "@/components/ClientOnly"
 import { useI18n } from "@/lib/i18n/context"
 import { SmartInputBar } from "@/components/search/smart-input-bar"
-import { useLocation } from "@/lib/location-context"
 
 const CATEGORIES = [
   "All",
@@ -63,8 +62,6 @@ interface EventsListingContentProps {
   initialCategory?: string
   initialDateFrom?: string
   initialDateTo?: string
-  userLat?: number
-  userLng?: number
 }
 
 export function EventsListingContent({
@@ -74,12 +71,9 @@ export function EventsListingContent({
   initialCategory,
   initialDateFrom,
   initialDateTo,
-  userLat,
-  userLng,
 }: EventsListingContentProps) {
   const router = useRouter()
   const { t } = useI18n()
-  const { defaultLocation } = useLocation()
   const didInitUrlSync = useRef(false)
 
   const [q, setQ] = useState(initialQuery || "")
@@ -92,10 +86,9 @@ export function EventsListingContent({
   const [selectedCategory, setSelectedCategory] = useState(initialCategory || "All")
   const [selectedPriceFilter, setSelectedPriceFilter] = useState("all")
   const [sortBy, setSortBy] = useState("date-asc")
-  // Initialize city/country filters from URL params OR defaultLocation
-  // Must initialize after useLocation hook is called
-  const [cityFilter, setCityFilter] = useState(() => initialCity || defaultLocation?.city || "")
-  const [countryFilter, setCountryFilter] = useState(() => initialCountry || defaultLocation?.country || "")
+  // Discover location SSOT: URL only (synced via cityFilter / countryFilter).
+  const [cityFilter, setCityFilter] = useState(() => initialCity ?? "")
+  const [countryFilter, setCountryFilter] = useState(() => initialCountry ?? "")
 
   async function runSearch() {
     if (loading) return
@@ -104,12 +97,9 @@ export function EventsListingContent({
     try {
       const params = new URLSearchParams()
       if (q) params.set("query", q)
-      // CRITICAL: Always include location from location picker (cityFilter/countryFilter) OR defaultLocation
-      // Prefer cityFilter/countryFilter (UI state) over defaultLocation, but use defaultLocation as fallback
-      const effectiveCity = cityFilter || defaultLocation?.city || ""
-      const effectiveCountry = countryFilter || defaultLocation?.country || ""
-      if (effectiveCity) params.set("city", effectiveCity)
-      if (effectiveCountry) params.set("country", effectiveCountry)
+      if (cityFilter.trim()) params.set("city", cityFilter.trim())
+      if (countryFilter.trim()) params.set("country", countryFilter.trim())
+
       if (selectedCategory && selectedCategory !== "All") params.set("category", selectedCategory.toLowerCase())
       if (initialDateFrom) params.set("date_from", initialDateFrom)
       if (initialDateTo) params.set("date_to", initialDateTo)
@@ -227,28 +217,16 @@ export function EventsListingContent({
   }, [initialCategory])
 
   useEffect(() => {
-    // Update cityFilter from URL params, or use defaultLocation if no URL param
-    if (initialCity !== undefined) {
-      setCityFilter(initialCity || defaultLocation?.city || "")
-    } else if (defaultLocation?.city && !cityFilter) {
-      // No URL param but we have defaultLocation - use it
-      setCityFilter(defaultLocation.city)
-    }
-  }, [initialCity, defaultLocation?.city, cityFilter])
+    setCityFilter(initialCity ?? "")
+  }, [initialCity])
 
   useEffect(() => {
-    // Update countryFilter from URL params, or use defaultLocation if no URL param
-    if (initialCountry !== undefined) {
-      setCountryFilter(initialCountry || defaultLocation?.country || "")
-    } else if (defaultLocation?.country && !countryFilter) {
-      // No URL param but we have defaultLocation - use it
-      setCountryFilter(defaultLocation.country)
-    }
-  }, [initialCountry, defaultLocation?.country, countryFilter])
+    setCountryFilter(initialCountry ?? "")
+  }, [initialCountry])
 
   useEffect(() => {
     runSearch()
-  }, [q, cityFilter, countryFilter, selectedCategory, initialDateFrom, initialDateTo, defaultLocation])
+  }, [q, cityFilter, countryFilter, selectedCategory, initialDateFrom, initialDateTo])
 
   // Mobile + desktop consistency: keep `q`, `city`, and `category` synchronized with the URL.
   useEffect(() => {
@@ -264,10 +242,8 @@ export function EventsListingContent({
     const trimmedQuery = q.trim()
     if (trimmedQuery) params.set("q", trimmedQuery)
 
-    const effectiveCity = cityFilter || defaultLocation?.city || ""
-    const effectiveCountry = countryFilter || defaultLocation?.country || ""
-    if (effectiveCity) params.set("city", effectiveCity)
-    if (effectiveCountry) params.set("country", effectiveCountry)
+    if (cityFilter.trim()) params.set("city", cityFilter.trim())
+    if (countryFilter.trim()) params.set("country", countryFilter.trim())
 
     if (selectedCategory && selectedCategory !== "All") {
       params.set("category", selectedCategory.toLowerCase())
@@ -288,8 +264,6 @@ export function EventsListingContent({
     selectedCategory,
     initialDateFrom,
     initialDateTo,
-    defaultLocation?.city,
-    defaultLocation?.country,
     router,
   ])
 

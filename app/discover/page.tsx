@@ -11,8 +11,6 @@ type SearchParams = {
   category?: string
   date_from?: string
   date_to?: string
-  lat?: string
-  lng?: string
 }
 
 export default async function DiscoverPage({
@@ -41,8 +39,6 @@ export default async function DiscoverPage({
           initialCategory={params.category}
           initialDateFrom={params.date_from}
           initialDateTo={params.date_to}
-          userLat={params.lat ? Number.parseFloat(params.lat) : undefined}
-          userLng={params.lng ? Number.parseFloat(params.lng) : undefined}
         />
       </Suspense>
     </div>

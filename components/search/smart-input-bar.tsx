@@ -24,6 +24,12 @@ export interface SmartInputBarRef {
   setQuery: (query: string) => void
 }
 
+function isReliableStructuredCity(city: string | null | undefined): boolean {
+  if (!city?.trim()) return false
+  const x = city.trim().toLowerCase()
+  return x !== "unknown location" && x !== "current location"
+}
+
 export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
   ({ onSearch, onError, className, initialQuery, alwaysShowSuggestions = false }, ref) => {
     const { t } = useI18n()
@@ -87,7 +93,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
       try {
         // CRITICAL: Always include defaultLocation in the request if available
         const requestBody: any = { query }
-        if (defaultLocation && defaultLocation.city && defaultLocation.city !== "Unknown location") {
+        if (defaultLocation && isReliableStructuredCity(defaultLocation.city)) {
           requestBody.userLocation = {
             lat: defaultLocation.lat,
             lng: defaultLocation.lng,
@@ -116,22 +122,18 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
           // CRITICAL: Always ensure defaultLocation is in URL params if available
           // Query place from intent will override this in the backend (effectiveLocation precedence)
           const cityParam = params.get("city")
-          const hasCityParam = cityParam && cityParam.trim().length > 0 && cityParam !== "Unknown location"
+          const hasCityParam = cityParam && isReliableStructuredCity(cityParam)
           
           // Check if the extracted city is different from detected location (user override)
           const isLocationOverride = hasCityParam && defaultLocation?.city && 
             cityParam.toLowerCase() !== defaultLocation.city.toLowerCase()
           
           // Add defaultLocation if available (backend will use query place if present, otherwise defaultLocation)
-          if (defaultLocation && defaultLocation.city && defaultLocation.city !== "Unknown location") {
+          if (defaultLocation && isReliableStructuredCity(defaultLocation.city)) {
             if (!hasCityParam) {
               // No city in query, use defaultLocation as default
               console.log(`[v0] No city in query - using defaultLocation: ${defaultLocation.city}${defaultLocation.country ? `, ${defaultLocation.country}` : ""}`)
               params.set("city", defaultLocation.city)
-              if (defaultLocation.lat && defaultLocation.lng) {
-                params.set("lat", defaultLocation.lat.toString())
-                params.set("lng", defaultLocation.lng.toString())
-              }
             } else if (isLocationOverride) {
               // User specified a different location - let it override (backend will handle this)
               console.log(`[v0] User specified different location (${cityParam}) - will override detected location (${defaultLocation.city})`)
@@ -146,7 +148,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
           } else if (hasCityParam) {
             console.log(`[v0] Using extracted city from query/intent: ${cityParam}`)
           } else {
-            console.log(`[v0] ⚠️ No city available - search will be broad`)
+            console.log(`[v0] ⚠️ No structured city for /discover URL — search will be broad (coords not sent)`)
           }
 
           console.log("[v0] Navigating with params:", params.toString())
@@ -197,14 +199,10 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
           const isLocationOverride = extractedCity && defaultLocation?.city && 
             extractedCity.toLowerCase() !== defaultLocation.city.toLowerCase()
           
-          if (defaultLocation && defaultLocation.city && defaultLocation.city !== "Unknown location") {
+          if (defaultLocation && isReliableStructuredCity(defaultLocation.city)) {
             if (!isLocationOverride) {
               // No location override - use defaultLocation
               fallbackParams.set("city", defaultLocation.city)
-              if (defaultLocation.lat && defaultLocation.lng) {
-                fallbackParams.set("lat", defaultLocation.lat.toString())
-                fallbackParams.set("lng", defaultLocation.lng.toString())
-              }
               if (defaultLocation.country) {
                 fallbackParams.set("country", defaultLocation.country)
               }
@@ -222,12 +220,8 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
         console.error("[v0] Smart input error:", error)
         const errorParams = new URLSearchParams()
         errorParams.set("q", query)
-        if (defaultLocation && defaultLocation.city && defaultLocation.city !== "Unknown location") {
+        if (defaultLocation && isReliableStructuredCity(defaultLocation.city)) {
           errorParams.set("city", defaultLocation.city)
-          if (defaultLocation.lat && defaultLocation.lng) {
-            errorParams.set("lat", defaultLocation.lat.toString())
-            errorParams.set("lng", defaultLocation.lng.toString())
-          }
           if (defaultLocation.country) {
             errorParams.set("country", defaultLocation.country)
           }
@@ -288,17 +282,17 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
               disabled={manualLocationLoading || isProcessing}
               className={cn(
                 "shrink-0 min-h-[44px] active:scale-95",
-                defaultLocation && defaultLocation.city && defaultLocation.city !== "Unknown location" 
+                defaultLocation && isReliableStructuredCity(defaultLocation.city) 
                   ? "bg-primary/10 border-primary/20" 
                   : "bg-transparent"
               )}
               title={
-                defaultLocation && defaultLocation.city && defaultLocation.city !== "Unknown location"
+                defaultLocation && isReliableStructuredCity(defaultLocation.city)
                   ? `Location: ${defaultLocation.city}${defaultLocation.country ? `, ${defaultLocation.country}` : ""}. Click to clear.`
                   : "Detect my current location"
               }
               aria-label={
-                defaultLocation && defaultLocation.city && defaultLocation.city !== "Unknown location"
+                defaultLocation && isReliableStructuredCity(defaultLocation.city)
                   ? `Clear location: ${defaultLocation.city}`
                   : "Detect my current location"
               }
@@ -309,7 +303,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
                   <Loader2 className="h-5 w-5 animate-spin" />
                   <span className="hidden sm:inline ml-2">Finding your location…</span>
                 </>
-              ) : defaultLocation && defaultLocation.city && defaultLocation.city !== "Unknown location" ? (
+              ) : defaultLocation && isReliableStructuredCity(defaultLocation.city) ? (
                 <>
                   <Check className="h-5 w-5 text-primary" />
                   <span className="hidden sm:inline ml-2">

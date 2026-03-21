@@ -28,15 +28,6 @@ vi.mock("@/lib/i18n/context", () => ({
   }),
 }))
 
-vi.mock("@/lib/location-context", () => ({
-  useLocation: () => ({
-    defaultLocation: undefined,
-    isLoadingLocation: false,
-    clearDefaultLocation: vi.fn(),
-    requestUserLocation: vi.fn(),
-  }),
-}))
-
 vi.mock("@/components/search/smart-input-bar", () => ({
   SmartInputBar: () => <div data-testid="smart-input-stub" />,
 }))

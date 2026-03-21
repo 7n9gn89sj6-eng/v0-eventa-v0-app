@@ -1,18 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-
-interface NominatimResponse {
-  address?: {
-    city?: string
-    town?: string
-    suburb?: string
-    locality?: string
-    village?: string
-    municipality?: string
-    county?: string
-    country?: string
-  }
-  error?: string
-}
+import { reverseGeocodeNominatim } from "@/lib/geocode/reverse-nominatim"
 
 /**
  * Server-side reverse geocoding API route
@@ -40,85 +27,18 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  try {
-    // Create a timeout controller for the fetch request
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
-
-    // Nominatim terms require User-Agent header and rate limiting (max 1 request per second)
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${latNum}&lon=${lngNum}&format=json&addressdetails=1`,
-      {
-        headers: {
-          "User-Agent": "Eventa-App/1.0 (https://eventa.app)",
-          "Accept": "application/json",
-        },
-        signal: controller.signal,
-      },
-    )
-
-    clearTimeout(timeoutId)
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`[geocode/reverse] Nominatim API error: ${response.status} - ${errorText}`)
-      return NextResponse.json(
-        { error: "Reverse geocoding failed", status: response.status, details: errorText },
-        { status: 500 }
-      )
-    }
-
-    const data: NominatimResponse = await response.json()
-
-    if (data.error) {
-      console.error("[geocode/reverse] Nominatim returned error:", data.error)
-      return NextResponse.json(
-        { error: data.error },
-        { status: 500 }
-      )
-    }
-
-    // Log full Nominatim response for debugging
-    console.log("[geocode/reverse] Nominatim response:", JSON.stringify(data.address, null, 2))
-
-    // Normalize country names first (needed for fallback)
-    let country = data.address?.country || null
-    if (country) {
-      // Normalize country names to standard format
-      const countryLower = country.toLowerCase()
-      if (countryLower.includes("australia")) {
-        country = "Australia"
-      } else if (countryLower.includes("united states") || countryLower === "usa" || countryLower === "us") {
-        country = "United States"
-      } else if (countryLower.includes("united kingdom") || countryLower === "uk") {
-        country = "United Kingdom"
-      }
-    }
-
-    // Try to extract city name from address hierarchy
-    const city =
-      data.address?.city ||
-      data.address?.town ||
-      data.address?.suburb ||
-      data.address?.locality ||
-      data.address?.village ||
-      data.address?.municipality ||
-      data.address?.county ||
-      (country ?? null) // fallback to country so client can show something
-
-    console.log("[geocode/reverse] Extracted:", { city, country, fullAddress: data.address })
-
-    return NextResponse.json({
-      city,
-      country,
-      address: data.address,
-    })
-  } catch (error) {
-    console.error("[geocode/reverse] Reverse geocoding failed:", error)
-    return NextResponse.json(
-      { error: "Reverse geocoding failed" },
-      { status: 500 }
-    )
+  const result = await reverseGeocodeNominatim(latNum, lngNum)
+  if (!result) {
+    return NextResponse.json({ error: "Reverse geocoding failed" }, { status: 500 })
   }
+
+  console.log("[geocode/reverse] Nominatim response:", JSON.stringify(result.address, null, 2))
+  console.log("[geocode/reverse] Extracted:", { city: result.city, country: result.country, fullAddress: result.address })
+
+  return NextResponse.json({
+    city: result.city,
+    country: result.country,
+    address: result.address,
+  })
 }
 
