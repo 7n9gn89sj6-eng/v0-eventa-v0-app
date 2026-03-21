@@ -28,6 +28,7 @@ import {
   buildStructuredCityLocationOrClause,
   replaceExecutionCityInWhere,
 } from "@/lib/search/search-location-clause"
+import { microLocationForWebSearch } from "@/lib/search/micro-location-for-web"
 
 /**
  * Helper function to check if text contains Australian location indicators
@@ -264,7 +265,7 @@ export async function GET(req: NextRequest) {
 
   let effectiveCity = city
   const effectiveCountry = country
-  const microLocation: string | null = parsedIntent.place?.raw || null
+  const microLocation: string | null = microLocationForWebSearch(parsedIntent)
 
   const emitSearchEventsComplete = (opts: {
     internalCount: number
