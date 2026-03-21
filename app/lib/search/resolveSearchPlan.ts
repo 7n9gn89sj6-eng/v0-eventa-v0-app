@@ -28,10 +28,10 @@ export type SearchPlan = {
  * Resolve intent + ambient context into one search plan.
  *
  * Rules:
- * - Explicit query place (city / country / region) overrides selected UI location.
+ * - Query geography overrides selected UI location only when `intent.placeEvidence === "explicit"`.
+ * - Weak/implicit query place (e.g. non-anchored trailing city) keeps URL/picker scope.
  * - Region scope: resolve to `location.countries`; never use selected UI city/country.
  * - Global scope: no structured location restriction at execution time.
- * - Broad / local / city / country: query wins when present; else UI ambient.
  */
 export function resolveSearchPlan(
   intent: SearchIntent,
@@ -48,9 +48,11 @@ export function resolveSearchPlan(
   const selectedCity = selectedLocation?.city?.trim()
   const selectedCountry = selectedLocation?.country?.trim()
 
-  const hasQueryPlace = Boolean(queryCity || queryCountry || queryRegion)
+  const hasGeographicQuery = Boolean(queryCity || queryCountry || queryRegion)
+  const explicitQueryOverrides =
+    intent.placeEvidence === "explicit" && hasGeographicQuery
 
-  let source: SearchPlan["location"]["source"] = hasQueryPlace
+  let source: SearchPlan["location"]["source"] = explicitQueryOverrides
     ? "query"
     : selectedCity || selectedCountry
       ? "selected"
@@ -72,7 +74,7 @@ export function resolveSearchPlan(
     city = undefined
     country = undefined
     source = queryRegion ? "query" : "none"
-  } else if (hasQueryPlace) {
+  } else if (explicitQueryOverrides) {
     city = queryCity || undefined
     country = queryCountry || undefined
     region = queryRegion || undefined

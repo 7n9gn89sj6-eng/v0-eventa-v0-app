@@ -104,10 +104,21 @@ describe("Eventa trust: intent -> plan foundation", () => {
       const plan = resolveSearchPlan(intent, { city: "Melbourne", country: "Australia" })
 
       expect(intent.place?.city).toBe("Berlin")
+      expect(intent.placeEvidence).toBe("explicit")
       expect(plan.location.source).toBe("query")
       expect(plan.location.city).toBe("Berlin")
       expect(plan.location.country).toBe("Germany")
       expect(intent.interest).toContain("music")
+    })
+
+    it("Brisbane comedy keeps selected scope (trailing city not suffix-anchored)", () => {
+      const intent = parseSearchIntent("Brisbane comedy")
+      const plan = resolveSearchPlan(intent, { city: "Melbourne", country: "Australia" })
+
+      expect(intent.place?.city).toBe("Brisbane")
+      expect(intent.placeEvidence).toBe("implicit")
+      expect(plan.location.source).toBe("selected")
+      expect(plan.location.city).toBe("Melbourne")
     })
   })
 })

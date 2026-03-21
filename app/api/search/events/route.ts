@@ -69,7 +69,7 @@ function ambientSuburbParentExpansionEligible(opts: {
   if (opts.internalCountAfterStrict > AMBIENT_SUBURB_INTERNAL_THRESHOLD) return false
   if (opts.effectiveLocationSource !== "ui") return false
   if (opts.scope !== "local" && opts.scope !== "broad") return false
-  if (opts.parsedIntent.place?.city) return false
+  if (opts.parsedIntent.placeEvidence === "explicit" && opts.parsedIntent.place?.city) return false
   return true
 }
 

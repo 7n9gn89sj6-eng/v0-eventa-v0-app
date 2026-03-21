@@ -8,6 +8,9 @@ import {
 import { normalizeSearchUtterance, stripTrailingAustralianStateTokens } from "@/lib/search/normalize-search-utterance"
 import { parseDateExpression } from "@/lib/search/query-parser"
 
+/** Whether query text clearly names a place (override selected scope) vs weak trailing inference. */
+export type PlaceEvidence = "explicit" | "implicit" | "none"
+
 export type SearchIntent = {
   rawQuery: string
 
@@ -24,6 +27,9 @@ export type SearchIntent = {
     country?: string
     raw?: string
   }
+
+  /** Precedence: only `explicit` query geography overrides URL/picker location in `resolveSearchPlan`. */
+  placeEvidence: PlaceEvidence
 
   scope: "local" | "city" | "region" | "country" | "global" | "broad"
 
@@ -131,14 +137,28 @@ function stripCountryTokensFromPlace(cityRaw: string, countryLabel: string | und
     .trim()
 }
 
-function extractPlace(query: string): SearchIntent["place"] {
+/** True when `candidate` is a suffix of the trimmed query (e.g. "… Berlin" but not "Richmond jazz"). */
+function isPlaceSuffixAnchored(query: string, candidate: string): boolean {
+  const qn = query.trim().replace(/[.,;!?]+$/g, "").trim()
+  const cn = candidate.trim().replace(/[.,;!?]+$/g, "").trim()
+  if (!cn.length) return false
+  return qn.toLowerCase().endsWith(cn.toLowerCase())
+}
+
+function extractPlaceWithEvidence(query: string): {
+  place: SearchIntent["place"] | undefined
+  placeEvidence: PlaceEvidence
+} {
   const q = query.trim()
   const lower = q.toLowerCase()
+
+  let geoEvidence: PlaceEvidence = "none"
 
   let region: string | undefined
   for (const { pattern, value } of REGION_PATTERNS) {
     if (pattern.test(lower)) {
       region = value
+      geoEvidence = "explicit"
       break
     }
   }
@@ -147,6 +167,7 @@ function extractPlace(query: string): SearchIntent["place"] {
   for (const { pattern, value } of COUNTRY_PATTERNS) {
     if (pattern.test(lower)) {
       country = value
+      geoEvidence = "explicit"
       break
     }
   }
@@ -160,6 +181,7 @@ function extractPlace(query: string): SearchIntent["place"] {
     if (cityRaw) {
       city = titleCaseTokens(cityRaw)
       raw = city
+      geoEvidence = "explicit"
     }
   }
 
@@ -175,6 +197,7 @@ function extractPlace(query: string): SearchIntent["place"] {
 
       city = titleCaseTokens(cityRaw)
       raw = captured
+      geoEvidence = "explicit"
       break
     }
   }
@@ -191,13 +214,20 @@ function extractPlace(query: string): SearchIntent["place"] {
     ) {
       city = candidate
       raw = candidate
+      if (isPlaceSuffixAnchored(q, candidate)) {
+        if (geoEvidence === "none") geoEvidence = "explicit"
+      } else if (geoEvidence === "none") {
+        geoEvidence = "implicit"
+      }
     }
   }
 
   const inferredCountry = city ? countryForKnownCity(city) : null
   const mergedCountry = country ?? inferredCountry ?? undefined
 
-  if (!city && !region && !mergedCountry && !raw) return undefined
+  if (!city && !region && !mergedCountry && !raw) {
+    return { place: undefined, placeEvidence: "none" }
+  }
 
   let cityOut = city
   if (cityOut && mergedCountry === "Australia") {
@@ -205,10 +235,13 @@ function extractPlace(query: string): SearchIntent["place"] {
   }
 
   return {
-    city: cityOut,
-    region,
-    country: mergedCountry,
-    raw: raw || undefined,
+    place: {
+      city: cityOut,
+      region,
+      country: mergedCountry,
+      raw: raw || undefined,
+    },
+    placeEvidence: geoEvidence,
   }
 }
 
@@ -234,7 +267,7 @@ export function parseSearchIntent(query: string): SearchIntent {
   const audience = extractAudience(nq)
   const price = extractPrice(nq)
   const time = extractTime(nq)
-  const place = extractPlace(nq)
+  const { place, placeEvidence } = extractPlaceWithEvidence(nq)
   const scope = detectScope(nq, place)
 
   let confidence = 0.3
@@ -249,6 +282,7 @@ export function parseSearchIntent(query: string): SearchIntent {
     interest: interests.length > 0 ? interests : undefined,
     time,
     place,
+    placeEvidence,
     scope,
     audience: audience.length > 0 ? audience : undefined,
     price: price.length > 0 ? price : undefined,
