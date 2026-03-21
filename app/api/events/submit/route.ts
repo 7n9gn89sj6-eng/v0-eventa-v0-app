@@ -10,6 +10,11 @@ import { storeEventEmbedding } from "@/lib/embeddings/store";
 import { notifyAdminsEventNeedsReview } from "@/lib/admin-notifications";
 import { checkRateLimit, getClientIdentifier, rateLimiters } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
+import {
+  buildSubmitPlaceResolveInput,
+  mergeSubmitLocationAfterResolve,
+} from "@/lib/events/submit-place-resolution";
+import { resolvePlace } from "@/lib/search/resolve-place";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -98,26 +103,56 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    /* ------------------------- LOCATION PARSING ------------------------- */
+    /* ------------------------- LOCATION PARSING + PLACE RESOLVE ------------------------- */
 
-    // Use individual fields if provided, otherwise parse from address string
-    const city = validated.location?.city || "Unknown";
-    const state = validated.location?.state || null;
-    const country = validated.location?.country || "Australia";
-    const postcode = validated.location?.postcode || null;
-    
-    // Build address string if individual components are provided
+    const fallbackCity = validated.location?.city?.trim() || "Unknown";
+    const fallbackState = validated.location?.state?.trim() || null;
+    const fallbackCountry = validated.location?.country?.trim() || "Australia";
+    const postcode = validated.location?.postcode?.trim() || null;
+
     let address = validated.location?.address ?? "";
     if (!address && validated.location) {
-      // Construct address from components
-      const parts: string[] = []
-      if (validated.location.name) parts.push(validated.location.name)
-      if (city && city !== "Unknown") parts.push(city)
-      if (state) parts.push(state)
-      if (postcode) parts.push(postcode)
-      if (country) parts.push(country)
-      address = parts.join(", ")
+      const parts: string[] = [];
+      if (validated.location.name) parts.push(validated.location.name);
+      if (fallbackCity && fallbackCity !== "Unknown") parts.push(fallbackCity);
+      if (fallbackState) parts.push(fallbackState);
+      if (postcode) parts.push(postcode);
+      if (fallbackCountry) parts.push(fallbackCountry);
+      address = parts.join(", ");
     }
+
+    /** Geocode query: full `location.address` if present (≥2 chars), else "city, state, country" (skips placeholder Unknown). */
+    const placeResolveInput = buildSubmitPlaceResolveInput(validated.location);
+    const resolvedPlace = placeResolveInput ? await resolvePlace(placeResolveInput) : null;
+    const persistedLoc = mergeSubmitLocationAfterResolve({
+      resolved: resolvedPlace,
+      fallbackCity,
+      fallbackCountry,
+      fallbackState,
+    });
+
+    logger.info("[submit] place.resolve", {
+      rawInput: placeResolveInput ?? null,
+      resolved: resolvedPlace
+        ? {
+            city: resolvedPlace.city,
+            country: resolvedPlace.country,
+            region: resolvedPlace.region,
+            parentCity: resolvedPlace.parentCity,
+            lat: resolvedPlace.lat,
+            lng: resolvedPlace.lng,
+          }
+        : null,
+      persisted: {
+        city: persistedLoc.city,
+        country: persistedLoc.country,
+        region: persistedLoc.region,
+        parentCity: persistedLoc.parentCity,
+        lat: persistedLoc.lat,
+        lng: persistedLoc.lng,
+        formattedAddress: persistedLoc.formattedAddress,
+      },
+    });
 
     /* ------------------------- DETECT LANGUAGE ------------------------- */
     
@@ -144,9 +179,15 @@ export async function POST(request: NextRequest) {
 
         venueName: validated.location?.name || null,
         address,
-        city,
-        country,
+        city: persistedLoc.city,
+        country: persistedLoc.country,
         postcode: postcode || null,
+        region: persistedLoc.region,
+        parentCity: persistedLoc.parentCity,
+        formattedAddress: persistedLoc.formattedAddress,
+        ...(persistedLoc.lat != null && persistedLoc.lng != null
+          ? { lat: persistedLoc.lat, lng: persistedLoc.lng }
+          : {}),
 
         imageUrl: validated.imageUrl || null,
         imageUrls,
@@ -156,7 +197,7 @@ export async function POST(request: NextRequest) {
         languages,
         ...(detectedLanguage ? { language: detectedLanguage } : {}), // Store detected language (only if detected)
 
-        searchText: `${validated.title} ${validated.description} ${city} ${state ? state + " " : ""}${postcode ? postcode + " " : ""}${country}`.toLowerCase(),
+        searchText: `${validated.title} ${validated.description} ${persistedLoc.city} ${persistedLoc.region ? persistedLoc.region + " " : ""}${postcode ? postcode + " " : ""}${persistedLoc.country}`.toLowerCase(),
 
         createdById: user.id,
 
@@ -209,8 +250,8 @@ export async function POST(request: NextRequest) {
         description: validated.description,
         categories,
         languages,
-        city,
-        country,
+        city: persistedLoc.city,
+        country: persistedLoc.country,
       });
 
       console.log("[AI] moderation:", moderation);
@@ -247,8 +288,8 @@ export async function POST(request: NextRequest) {
         const notifyResult = await notifyAdminsEventNeedsReview({
           eventId: event.id,
           title: validated.title,
-          city,
-          country,
+          city: persistedLoc.city,
+          country: persistedLoc.country,
           aiStatus: "NEEDS_REVIEW",
           aiReason: moderation.reason,
         });
@@ -298,8 +339,8 @@ export async function POST(request: NextRequest) {
       const notifyResult = await notifyAdminsEventNeedsReview({
         eventId: event.id,
         title: validated.title,
-        city,
-        country,
+        city: persistedLoc.city,
+        country: persistedLoc.country,
         aiStatus: "NEEDS_REVIEW",
         aiReason: "Moderation service failed – manual review required",
       });

@@ -127,6 +127,9 @@ model Event {
   address              String?
   lat                  Float?
   lng                  Float?
+  region               String?
+  parentCity           String?
+  formattedAddress     String?
   priceFree            Boolean                @default(false)
   priceAmount          Int?
   websiteUrl           String?
