@@ -101,11 +101,28 @@ export async function resolvePlace(input: string): Promise<ResolvedPlace | null>
   }
 }
 
-/** String passed to forward geocode; prefers `raw`, else "city, country". */
-export function buildPlaceResolveInput(place: NonNullable<SearchIntent["place"]>): string | null {
-  if (place.raw?.trim()) return place.raw.trim()
-  const parts = [place.city, place.country].map((x) => x?.trim()).filter(Boolean) as string[]
-  return parts.length ? parts.join(", ") : null
+/**
+ * String passed to forward geocode.
+ * - Locality comes from `raw` or `city`.
+ * - When the query already parsed a country, append it (never overridden by `biasCountry`).
+ * - When there is no parsed country, append `biasCountry` (e.g. UI-selected country) to reduce ambiguous global hits.
+ */
+export function buildPlaceResolveInput(
+  place: NonNullable<SearchIntent["place"]>,
+  biasCountry?: string | null,
+): string | null {
+  const explicitCountry = place.country?.trim()
+  const locality = (place.raw?.trim() || place.city?.trim()) ?? ""
+  if (!locality) return null
+
+  if (explicitCountry) {
+    return `${locality}, ${explicitCountry}`
+  }
+  const bias = biasCountry?.trim()
+  if (bias) {
+    return `${locality}, ${bias}`
+  }
+  return locality
 }
 
 export function shouldAttemptPlaceResolve(intent: SearchIntent, placeInput: string | null): boolean {

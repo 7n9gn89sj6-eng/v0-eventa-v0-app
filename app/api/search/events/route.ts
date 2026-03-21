@@ -134,13 +134,38 @@ export async function GET(req: NextRequest) {
   const parsedIntent = q ? parseSearchIntent(q) : parseSearchIntent("")
 
   let intentForPlan: SearchIntent = parsedIntent
-  const placeResolveInput = parsedIntent.place ? buildPlaceResolveInput(parsedIntent.place) : null
+  const explicitParsedCountry = parsedIntent.place?.country?.trim()
+  const countryBiasFromContext =
+    !explicitParsedCountry &&
+    ((country ?? "").trim() || process.env.NEXT_PUBLIC_DEFAULT_SEARCH_COUNTRY?.trim() || null)
+  const placeResolveInput = parsedIntent.place
+    ? buildPlaceResolveInput(parsedIntent.place, countryBiasFromContext)
+    : null
   if (shouldAttemptPlaceResolve(parsedIntent, placeResolveInput) && placeResolveInput) {
-    console.log("[v0] place.resolve raw input:", placeResolveInput)
+    console.log(
+      "[v0] place.resolve",
+      JSON.stringify({
+        localityFromParser: parsedIntent.place?.raw?.trim() || parsedIntent.place?.city || null,
+        explicitParsedCountry: explicitParsedCountry || null,
+        biasCountry: countryBiasFromContext || null,
+        geocodeInput: placeResolveInput,
+      }),
+    )
     try {
       const resolved = await resolvePlace(placeResolveInput)
       if (resolved && isResolvedPlaceCompatibleWithParsed(parsedIntent.place!, resolved)) {
-        console.log("[v0] place.resolve output:", JSON.stringify(resolved))
+        console.log(
+          "[v0] place.resolve merged",
+          JSON.stringify({
+            geocodeInput: placeResolveInput,
+            resolved: {
+              city: resolved.city,
+              country: resolved.country,
+              region: resolved.region,
+              parentCity: resolved.parentCity,
+            },
+          }),
+        )
         const prevCountry = parsedIntent.place?.country?.trim()
         intentForPlan = {
           ...parsedIntent,
