@@ -149,6 +149,11 @@ export const translations = {
         change: "Change",
         setPlace: "Set place",
         clearIntentQuery: "Clear search",
+        aiSuggestionTooltip:
+          "AI suggested different filters ({suggestion}). Results use your current search.",
+        aiSuggestionLowConfidence: "Low confidence.",
+        aiSuggestionAria:
+          "AI suggestion: {suggestion}. Results use your current search.",
       },
     },
     form: {
@@ -396,6 +401,11 @@ export const translations = {
         change: "Cambia",
         setPlace: "Imposta luogo",
         clearIntentQuery: "Cancella ricerca",
+        aiSuggestionTooltip:
+          "L’IA ha suggerito filtri diversi ({suggestion}). I risultati usano la ricerca attuale.",
+        aiSuggestionLowConfidence: "Bassa confidenza.",
+        aiSuggestionAria:
+          "Suggerimento IA: {suggestion}. I risultati usano la ricerca attuale.",
       },
     },
     form: {
@@ -646,6 +656,11 @@ export const translations = {
         change: "Αλλαγή",
         setPlace: "Ορισμός τοποθεσίας",
         clearIntentQuery: "Διαγραφή αναζήτησης",
+        aiSuggestionTooltip:
+          "Η ΤΝ πρότεινε διαφορετικά φίλτρα ({suggestion}). Τα αποτελέσματα βασίζονται στην τρέχουσα αναζήτησή σας.",
+        aiSuggestionLowConfidence: "Χαμηλή βεβαιότητα.",
+        aiSuggestionAria:
+          "Πρόταση ΤΝ: {suggestion}. Τα αποτελέσματα βασίζονται στην τρέχουσα αναζήτησή σας.",
       },
     },
     form: {
@@ -896,6 +911,11 @@ export const translations = {
         change: "Cambiar",
         setPlace: "Elegir lugar",
         clearIntentQuery: "Borrar búsqueda",
+        aiSuggestionTooltip:
+          "La IA sugirió filtros distintos ({suggestion}). Los resultados usan tu búsqueda actual.",
+        aiSuggestionLowConfidence: "Baja confianza.",
+        aiSuggestionAria:
+          "Sugerencia de IA: {suggestion}. Los resultados usan tu búsqueda actual.",
       },
     },
     form: {
@@ -1146,6 +1166,11 @@ export const translations = {
         change: "Modifier",
         setPlace: "Définir le lieu",
         clearIntentQuery: "Effacer la recherche",
+        aiSuggestionTooltip:
+          "L’IA a suggéré d’autres filtres ({suggestion}). Les résultats utilisent votre recherche actuelle.",
+        aiSuggestionLowConfidence: "Faible confiance.",
+        aiSuggestionAria:
+          "Suggestion IA : {suggestion}. Les résultats utilisent votre recherche actuelle.",
       },
     },
     form: {

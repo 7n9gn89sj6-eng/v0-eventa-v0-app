@@ -183,6 +183,12 @@ describe("Eventa trust: /api/search/events regression suite", () => {
 
     // Internal-first contract
     expect((data.events?.[0] as any)?.source).toBe("internal")
+
+    expect(data).toHaveProperty("phase1Interpretation")
+    expect(data.phase1Interpretation).toMatchObject({
+      schemaVersion: 1,
+      meta: expect.objectContaining({ aiAttempted: true }),
+    })
   })
 
   it("explicit suburb is respected (`food in brunswick` uses Brunswick internally)", async () => {

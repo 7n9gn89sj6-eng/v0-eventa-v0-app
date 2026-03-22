@@ -18,7 +18,8 @@ import {
 // Two modules both export `parseSearchIntent` (different shapes): app = full planning intent for
 // `resolveSearchPlan` / execution; lib `parse-search-intent` = lightweight category hint for ranking/web only.
 import { parseSearchIntent as parseRankingIntent } from "@/lib/search/parse-search-intent"
-import { interpretSearchIntent } from "@/lib/search/ai-intent"
+import { interpretSearchIntent, type InterpretedSearchIntent } from "@/lib/search/ai-intent"
+import { buildPhase1Interpretation } from "@/lib/search/phase1-interpretation"
 import { parseSearchIntent, type SearchIntent } from "@/app/lib/search/parseSearchIntent"
 import { resolveSearchPlan } from "@/app/lib/search/resolveSearchPlan"
 import { EXECUTION_CITY_VARIATIONS } from "@/lib/search/city-variations"
@@ -187,6 +188,21 @@ export async function GET(req: NextRequest) {
   const searchPlan = resolveSearchPlan(intentForPlan, { city: city ?? undefined, country: country ?? undefined })
   const shouldStrictCategoryFilter = searchPlan.filters.strictCategory
 
+  let lastInterpreted: InterpretedSearchIntent | null = null
+  let lastInterpretError = false
+
+  if (q.trim().length > 0) {
+    try {
+      lastInterpreted = await interpretSearchIntent(q, {
+        city: searchPlan.location.city ?? undefined,
+        country: searchPlan.location.country ?? undefined,
+      })
+    } catch (err) {
+      lastInterpretError = true
+      console.warn("[v0] Intent interpretation failed; continuing with deterministic plan.", err)
+    }
+  }
+
   if (q) {
     const missingCategory = !category || category.trim().length === 0 || category === "all"
     const missingDate = !dateFrom || !dateTo
@@ -200,15 +216,11 @@ export async function GET(req: NextRequest) {
       if (parsedIntent.time?.date_to) dateTo = parsedIntent.time.date_to
     }
 
-    // Keep optional additive interpreter as low-priority augmentation.
+    // Keep optional additive interpreter as low-priority augmentation (single interpretSearchIntent result).
     if (missingCategory || missingDate) {
       const threshold = 0.6
-      try {
-        const interpreted = await interpretSearchIntent(q, {
-          city: searchPlan.location.city ?? undefined,
-          country: searchPlan.location.country ?? undefined,
-        })
-
+      const interpreted = lastInterpreted
+      if (interpreted) {
         if (missingCategory && !category && interpreted.category && (interpreted.confidence ?? 0) >= threshold) {
           category = interpreted.category
         }
@@ -224,8 +236,6 @@ export async function GET(req: NextRequest) {
           dateFrom = interpreted.date_from
           dateTo = interpreted.date_to
         }
-      } catch (err) {
-        console.warn("[v0] Intent interpretation failed; continuing with deterministic plan.", err)
       }
     }
   }
@@ -383,6 +393,17 @@ export async function GET(req: NextRequest) {
     console.log(`[v0] 🎯 Event-intent query detected: "${q}" - will apply strict location filtering and automatic web fallback if no internal events`)
   }
 
+  const phase1Interpretation = buildPhase1Interpretation({
+    q,
+    interpreted: lastInterpreted,
+    interpretThrew: lastInterpretError,
+    executionCategory: category,
+    executionDateFrom: dateFrom,
+    executionDateTo: dateTo,
+    executionPlace: { city, country },
+    parsedIntent,
+  })
+
   try {
     if (!q) {
       // BUILD WHERE CLAUSE IN PRIORITY ORDER:
@@ -484,6 +505,7 @@ export async function GET(req: NextRequest) {
               internal: [],
               external: [],
               total: 0,
+              phase1Interpretation,
             })
           }
         } else {
@@ -516,6 +538,7 @@ export async function GET(req: NextRequest) {
         emptyState: false,
         includesWeb: false,
         isEventIntent: false,
+        phase1Interpretation,
       })
     }
 
@@ -784,6 +807,7 @@ export async function GET(req: NextRequest) {
             internal: [],
             external: [],
             total: 0,
+            phase1Interpretation,
           })
         }
       } else {
@@ -1850,6 +1874,7 @@ export async function GET(req: NextRequest) {
       isEventIntent: isEventQuery,
       // Locality Contract F: Return effectiveLocation for UI labeling
       effectiveLocation: effectiveLocation,
+      phase1Interpretation,
     }
     
     // Add debug trace if ?debug=1

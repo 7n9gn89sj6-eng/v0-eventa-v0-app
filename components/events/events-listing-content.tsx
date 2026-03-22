@@ -89,6 +89,24 @@ function normalizeInterpretationSnapshot(data: {
   return { source, city, country }
 }
 
+type AiSuggestionFromApi = { displayLabel: string; confidence?: number }
+
+function extractAiSuggestionFacet(data: unknown): AiSuggestionFromApi | null {
+  const raw = (data as { phase1Interpretation?: unknown })?.phase1Interpretation
+  if (!raw || typeof raw !== "object") return null
+  const facets = (raw as { facets?: unknown }).facets
+  if (!Array.isArray(facets)) return null
+  const facet = facets.find(
+    (f): f is { kind: string; displayLabel?: string; confidence?: number } =>
+      Boolean(f && typeof f === "object" && (f as { kind?: string }).kind === "ai_suggestion"),
+  )
+  if (!facet || typeof facet.displayLabel !== "string") return null
+  return {
+    displayLabel: facet.displayLabel,
+    confidence: typeof facet.confidence === "number" ? facet.confidence : undefined,
+  }
+}
+
 export function EventsListingContent({
   initialQuery,
   initialCity,
@@ -107,6 +125,7 @@ export function EventsListingContent({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [interpretationSnapshot, setInterpretationSnapshot] = useState<InterpretationSnapshot | null>(null)
+  const [aiSuggestionChip, setAiSuggestionChip] = useState<AiSuggestionFromApi | null>(null)
   const [results, setResults] = useState<Event[]>([])
   const [total, setTotal] = useState(0)
 
@@ -122,6 +141,7 @@ export function EventsListingContent({
     if (loading) return
     setLoading(true)
     setError(null)
+    setAiSuggestionChip(null)
     try {
       const params = new URLSearchParams()
       if (q) params.set("query", q)
@@ -225,12 +245,14 @@ export function EventsListingContent({
       setResults(allEvents)
       setTotal(data.count ?? allEvents.length)
       setInterpretationSnapshot(normalizeInterpretationSnapshot(data))
+      setAiSuggestionChip(extractAiSuggestionFacet(data))
     } catch (e: any) {
       console.error(e)
       setError(e?.message || "Search failed")
       setResults([])
       setTotal(0)
       setInterpretationSnapshot(null)
+      setAiSuggestionChip(null)
     } finally {
       setLoading(false)
     }
@@ -440,6 +462,23 @@ export function EventsListingContent({
     return parts.length > 0 ? parts.join(" · ") : ""
   })()
 
+  const aiSuggestionA11y =
+    aiSuggestionChip && !loading && !error
+      ? (() => {
+          const baseTooltip = tStrip("aiSuggestionTooltip", {
+            suggestion: aiSuggestionChip.displayLabel,
+          })
+          const baseAria = tStrip("aiSuggestionAria", {
+            suggestion: aiSuggestionChip.displayLabel,
+          })
+          const low =
+            aiSuggestionChip.confidence !== undefined &&
+            aiSuggestionChip.confidence < 0.7
+          const suffix = low ? ` ${tStrip("aiSuggestionLowConfidence")}` : ""
+          return { title: `${baseTooltip}${suffix}`, ariaLabel: `${baseAria}${suffix}` }
+        })()
+      : null
+
   return (
     <div className="space-y-6">
       <div className="mb-8 space-y-3">
@@ -496,6 +535,21 @@ export function EventsListingContent({
                 </button>
               </p>
             ) : null}
+          </div>
+        ) : null}
+
+        {aiSuggestionChip && aiSuggestionA11y ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge
+              variant="outline"
+              role="note"
+              data-testid="discover-interpretation-ai-suggestion-chip"
+              className="h-auto min-h-[44px] max-w-full shrink-0 py-1.5 px-2.5 text-xs font-normal sm:max-w-[min(420px,90vw)]"
+              title={aiSuggestionA11y.title}
+              aria-label={aiSuggestionA11y.ariaLabel}
+            >
+              {aiSuggestionChip.displayLabel}
+            </Badge>
           </div>
         ) : null}
       </div>
