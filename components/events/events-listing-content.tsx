@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Calendar, MapPin, SlidersHorizontal, X } from "lucide-react"
+import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
@@ -64,6 +65,30 @@ interface EventsListingContentProps {
   initialDateTo?: string
 }
 
+type InterpretationSnapshot = {
+  source: "query" | "ui" | "device"
+  city: string | null
+  country: string | null
+}
+
+function normalizeInterpretationSnapshot(data: {
+  effectiveLocation?: {
+    city?: string | null
+    country?: string | null
+    source?: string
+  }
+}): InterpretationSnapshot {
+  const el = data?.effectiveLocation
+  const src = el?.source
+  const source: InterpretationSnapshot["source"] =
+    src === "query" || src === "ui" || src === "device" ? src : "device"
+  const city =
+    typeof el?.city === "string" && el.city.trim() ? el.city.trim() : null
+  const country =
+    typeof el?.country === "string" && el.country.trim() ? el.country.trim() : null
+  return { source, city, country }
+}
+
 export function EventsListingContent({
   initialQuery,
   initialCity,
@@ -75,10 +100,13 @@ export function EventsListingContent({
   const router = useRouter()
   const { t } = useI18n()
   const didInitUrlSync = useRef(false)
+  const searchBarWrapRef = useRef<HTMLDivElement>(null)
+  const placeFieldWrapRef = useRef<HTMLDivElement>(null)
 
   const [q, setQ] = useState(initialQuery || "")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [interpretationSnapshot, setInterpretationSnapshot] = useState<InterpretationSnapshot | null>(null)
   const [results, setResults] = useState<Event[]>([])
   const [total, setTotal] = useState(0)
 
@@ -196,11 +224,13 @@ export function EventsListingContent({
 
       setResults(allEvents)
       setTotal(data.count ?? allEvents.length)
+      setInterpretationSnapshot(normalizeInterpretationSnapshot(data))
     } catch (e: any) {
       console.error(e)
       setError(e?.message || "Search failed")
       setResults([])
       setTotal(0)
+      setInterpretationSnapshot(null)
     } finally {
       setLoading(false)
     }
@@ -325,6 +355,52 @@ export function EventsListingContent({
     countryFilter !== ""
 
   const tEvents = t("events")
+  const tStrip = (key: string, vars?: Record<string, string | number>) =>
+    tEvents(`interpretationStrip.${key}`, vars ?? {})
+
+  const focusDiscoverSearchInput = useCallback(() => {
+    const input = searchBarWrapRef.current?.querySelector<HTMLInputElement>("input")
+    input?.focus()
+    if (input && typeof input.setSelectionRange === "function") {
+      const len = input.value.length
+      input.setSelectionRange(len, len)
+    }
+    searchBarWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+  }, [])
+
+  const openDiscoverPlaceField = useCallback(() => {
+    setShowFilters(true)
+    requestAnimationFrame(() => {
+      placeFieldWrapRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+      const input = placeFieldWrapRef.current?.querySelector<HTMLInputElement>("input")
+      input?.focus()
+    })
+  }, [])
+
+  const hasIntentChip = q.trim().length > 0
+  const showInterpretationLocationLine =
+    interpretationSnapshot !== null && !loading && !error
+  const showInterpretationStrip = hasIntentChip || showInterpretationLocationLine
+
+  const interpretationPlaceLabel = (() => {
+    if (!interpretationSnapshot || !showInterpretationLocationLine) return null
+    const { source, city, country } = interpretationSnapshot
+    const place = [city, country].filter(Boolean).join(", ")
+    if (!place) {
+      return {
+        line: tStrip("noActivePlace"),
+        hasPlace: false as const,
+      }
+    }
+    if (source === "query") {
+      return { line: tStrip("placeFromSearch", { place }), hasPlace: true as const }
+    }
+    if (source === "ui") {
+      return { line: tStrip("selectedPlace", { place }), hasPlace: true as const }
+    }
+    return { line: tStrip("currentArea", { place }), hasPlace: true as const }
+  })()
+
   const showingText = tEvents("results.showing", {
     filtered: filteredResults.length,
     total: results.length,
@@ -358,13 +434,62 @@ export function EventsListingContent({
 
   return (
     <div className="space-y-6">
-      <div className="mb-8">
-        <SmartInputBar
-          onSearch={handleSmartSearch}
-          initialQuery={initialQuery}
-          alwaysShowSuggestions={true}
-          onError={(error) => setError(error)}
-        />
+      <div className="mb-8 space-y-3">
+        <div ref={searchBarWrapRef}>
+          <SmartInputBar
+            onSearch={handleSmartSearch}
+            initialQuery={initialQuery}
+            alwaysShowSuggestions={true}
+            onError={(error) => setError(error)}
+          />
+        </div>
+
+        {showInterpretationStrip ? (
+          <div
+            className={cn(
+              "flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-2",
+            )}
+            aria-live="polite"
+          >
+            {hasIntentChip ? (
+              <Badge
+                variant="secondary"
+                data-testid="discover-interpretation-intent-chip"
+                className="h-auto min-h-[44px] w-full max-w-full shrink-0 gap-1.5 py-1.5 pl-2 pr-1 sm:w-auto sm:max-w-[min(280px,55vw)]"
+              >
+                <button
+                  type="button"
+                  title={q.trim()}
+                  onClick={focusDiscoverSearchInput}
+                  className="min-h-[44px] min-w-0 flex-1 truncate text-left text-sm font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                >
+                  {q.trim()}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQ("")}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm hover:bg-secondary-foreground/10 focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={tStrip("clearIntentQuery")}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </Badge>
+            ) : null}
+
+            {showInterpretationLocationLine && interpretationPlaceLabel ? (
+              <p className="text-sm text-muted-foreground min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="min-w-0">{interpretationPlaceLabel.line}</span>
+                <button
+                  type="button"
+                  onClick={openDiscoverPlaceField}
+                  className="shrink-0 text-sm font-medium text-primary underline-offset-4 hover:underline min-h-[44px] sm:min-h-0 py-2 sm:py-0"
+                >
+                  {interpretationPlaceLabel.hasPlace ? tStrip("change") : tStrip("setPlace")}
+                </button>
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {(cityFilter || (selectedCategory && selectedCategory !== "All") || initialDateFrom) && (
@@ -431,7 +556,7 @@ export function EventsListingContent({
         {showFilters && (
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-2 sm:col-span-2">
+              <div ref={placeFieldWrapRef} className="space-y-2 sm:col-span-2">
                 <PlaceAutocomplete
                   testId="discover-place-autocomplete"
                   label="City / place"

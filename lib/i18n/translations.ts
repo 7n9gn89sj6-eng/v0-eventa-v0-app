@@ -140,6 +140,16 @@ export const translations = {
         viewOn: "View on {source}",
         locationNotVerified: "Location not verified",
       },
+      interpretationStrip: {
+        placeFromSearch: "Place from your search: {place}",
+        selectedPlace: "Using your selected place: {place}",
+        currentArea: "Using your current area: {place}",
+        noActivePlace:
+          "No active place — results are not limited to a specific area.",
+        change: "Change",
+        setPlace: "Set place",
+        clearIntentQuery: "Clear search",
+      },
     },
     form: {
       page: {
@@ -376,6 +386,16 @@ export const translations = {
         viewDetails: "Vedi Dettagli",
         viewOn: "Visualizza su {source}",
         locationNotVerified: "Posizione non verificata",
+      },
+      interpretationStrip: {
+        placeFromSearch: "Luogo dalla tua ricerca: {place}",
+        selectedPlace: "Luogo selezionato: {place}",
+        currentArea: "Area attuale: {place}",
+        noActivePlace:
+          "Nessun luogo attivo — i risultati non sono limitati a un’area specifica.",
+        change: "Cambia",
+        setPlace: "Imposta luogo",
+        clearIntentQuery: "Cancella ricerca",
       },
     },
     form: {
@@ -617,6 +637,16 @@ export const translations = {
         viewOn: "Προβολή στο {source}",
         locationNotVerified: "Η τοποθεσία δεν έχει επαληθευτεί",
       },
+      interpretationStrip: {
+        placeFromSearch: "Τοποθεσία από την αναζήτησή σας: {place}",
+        selectedPlace: "Χρησιμοποιείται η επιλεγμένη τοποθεσία: {place}",
+        currentArea: "Χρησιμοποιείται η τρέχουσα περιοχή σας: {place}",
+        noActivePlace:
+          "Καμία ενεργή τοποθεσία — τα αποτελέσματα δεν περιορίζονται σε συγκεκριμένη περιοχή.",
+        change: "Αλλαγή",
+        setPlace: "Ορισμός τοποθεσίας",
+        clearIntentQuery: "Διαγραφή αναζήτησης",
+      },
     },
     form: {
       page: {
@@ -857,6 +887,16 @@ export const translations = {
         viewOn: "Ver en {source}",
         locationNotVerified: "Ubicación no verificada",
       },
+      interpretationStrip: {
+        placeFromSearch: "Lugar de tu búsqueda: {place}",
+        selectedPlace: "Usando el lugar que elegiste: {place}",
+        currentArea: "Usando tu zona actual: {place}",
+        noActivePlace:
+          "Sin lugar activo — los resultados no se limitan a un área concreta.",
+        change: "Cambiar",
+        setPlace: "Elegir lugar",
+        clearIntentQuery: "Borrar búsqueda",
+      },
     },
     form: {
       page: {
@@ -1096,6 +1136,16 @@ export const translations = {
         viewDetails: "Voir les Détails",
         viewOn: "Voir sur {source}",
         locationNotVerified: "Lieu non vérifié",
+      },
+      interpretationStrip: {
+        placeFromSearch: "Lieu issu de votre recherche : {place}",
+        selectedPlace: "Lieu sélectionné : {place}",
+        currentArea: "Zone actuelle : {place}",
+        noActivePlace:
+          "Aucun lieu actif — les résultats ne sont pas limités à une zone précise.",
+        change: "Modifier",
+        setPlace: "Définir le lieu",
+        clearIntentQuery: "Effacer la recherche",
       },
     },
     form: {

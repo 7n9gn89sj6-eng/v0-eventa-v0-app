@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import React from "react"
 import { EventsListingContent } from "@/components/events/events-listing-content"
 
@@ -59,7 +59,9 @@ describe("EventsListingContent category sync from URL", () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText("markets")).toBeTruthy()
+      expect(
+        within(screen.getByTestId("discover-interpretation-intent-chip")).getByText("markets"),
+      ).toBeTruthy()
     })
 
     rerender(<EventsListingContent initialQuery="music" initialCategory="music" />)
