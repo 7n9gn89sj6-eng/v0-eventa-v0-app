@@ -256,6 +256,14 @@ export function EventsListingContent({
   }, [initialCountry])
 
   useEffect(() => {
+    setSelectedPriceFilter("all")
+  }, [initialQuery])
+
+  useEffect(() => {
+    setSelectedPriceFilter("all")
+  }, [selectedCategory])
+
+  useEffect(() => {
     runSearch()
   }, [q, cityFilter, countryFilter, selectedCategory, initialDateFrom, initialDateTo])
 
