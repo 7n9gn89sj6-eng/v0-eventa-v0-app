@@ -1679,7 +1679,11 @@ export async function GET(req: NextRequest) {
     
     // Deterministic ranking (lib/search/score-search-result): internal-first order unchanged; scores explain relevance.
     const parsedRanking = q ? parseRankingIntent(q) : {}
-    const detectedCat = parsedRanking.detectedCategory
+    const explicitCategoryTrimmed = category?.trim()
+    const rankingCategorySignal =
+      explicitCategoryTrimmed && explicitCategoryTrimmed.toLowerCase() !== "all"
+        ? explicitCategoryTrimmed.toLowerCase()
+        : parsedRanking.detectedCategory
 
     const searchPlanForScoring =
       ambientParentExpansionApplied && effectiveCity
@@ -1694,7 +1698,7 @@ export async function GET(req: NextRequest) {
           searchPlan: searchPlanForScoring,
           now,
           kind: "internal",
-          rankingCategory: detectedCat,
+          rankingCategory: rankingCategorySignal,
           webListingBoost: 0,
         })
         if (!breakdown) return null
@@ -1788,7 +1792,7 @@ export async function GET(req: NextRequest) {
           searchPlan: searchPlanForScoring,
           now,
           kind: "web",
-          rankingCategory: detectedCat,
+          rankingCategory: rankingCategorySignal,
           webListingBoost: result._eventnessBoost || 0,
         })
         if (!breakdown) return null

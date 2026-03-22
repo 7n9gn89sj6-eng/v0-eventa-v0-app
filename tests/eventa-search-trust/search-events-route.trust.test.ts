@@ -191,6 +191,54 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     })
   })
 
+  it("URL category steers ranking when query text has no category keyword (broad scope)", async () => {
+    const future = new Date(FIXED_NOW.getTime() + 3 * 86400 * 1000).toISOString()
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "evt-music-quality",
+        title: "Club events — live jazz evening",
+        description:
+          "An extended evening of live jazz with local artists and guest performers at the venue.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: future,
+        endAt: addHours(future, 3),
+        categories: ["music"],
+        category: "MUSIC_NIGHTLIFE",
+      }),
+      makeEvent({
+        id: "evt-markets-thin",
+        title: "Weekend market events",
+        description: "Stalls.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: future,
+        endAt: addHours(future, 2),
+        categories: ["markets"],
+        category: "MARKETS_FAIRS",
+      }),
+    ]
+
+    // Broad scope → strict category filter off, but category=markets is still a ranking signal.
+    const withCategory = await callSearchEvents({
+      query: "events this weekend",
+      city: "Melbourne",
+      country: "Australia",
+      category: "markets",
+    })
+
+    expect(withCategory.internal?.[0]?.id).toBe("evt-markets-thin")
+
+    const noCategory = await callSearchEvents({
+      query: "events this weekend",
+      city: "Melbourne",
+      country: "Australia",
+    })
+
+    expect(noCategory.internal?.[0]?.id).toBe("evt-music-quality")
+  })
+
   it("explicit suburb is respected (`food in brunswick` uses Brunswick internally)", async () => {
     const future = new Date(FIXED_NOW.getTime() + 4 * 86400 * 1000).toISOString()
 
