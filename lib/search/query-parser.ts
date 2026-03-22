@@ -172,6 +172,129 @@ export function categoryToEnum(categoryString: string): string | null {
   return null
 }
 
+const MONTH_NAME_ALT =
+  "january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec"
+
+const MONTH_TOKEN_TO_INDEX: Record<string, number> = {
+  january: 0,
+  jan: 0,
+  february: 1,
+  feb: 1,
+  march: 2,
+  mar: 2,
+  april: 3,
+  apr: 3,
+  may: 4,
+  june: 5,
+  jun: 5,
+  july: 6,
+  jul: 6,
+  august: 7,
+  aug: 7,
+  september: 8,
+  sep: 8,
+  sept: 8,
+  october: 9,
+  oct: 9,
+  november: 10,
+  nov: 10,
+  december: 11,
+  dec: 11,
+}
+
+function monthIndexFromToken(token: string): number | null {
+  const key = token.toLowerCase().replace(/\.$/, "")
+  const idx = MONTH_TOKEN_TO_INDEX[key]
+  return idx === undefined ? null : idx
+}
+
+/**
+ * Explicit ranges: "01 May to 03 May 2026", "May 1 to May 3, 2026", cross-month same year.
+ */
+function tryParseExplicitCalendarRange(normalized: string): {
+  date_from?: string
+  date_to?: string
+} {
+  const dayFirst = new RegExp(
+    `(\\d{1,2})\\s+(${MONTH_NAME_ALT})\\s+to\\s+(\\d{1,2})\\s+(${MONTH_NAME_ALT})\\s+(\\d{4})\\b`,
+    "i",
+  )
+  const dm = normalized.match(dayFirst)
+  if (dm) {
+    const year = Number.parseInt(dm[5], 10)
+    const d1 = Number.parseInt(dm[1], 10)
+    const d2 = Number.parseInt(dm[3], 10)
+    const m1 = monthIndexFromToken(dm[2])
+    const m2 = monthIndexFromToken(dm[4])
+    const built = buildCalendarRangeIso(year, m1, d1, m2, d2)
+    if (built) return built
+  }
+
+  const monthFirst = new RegExp(
+    `(${MONTH_NAME_ALT})\\s+(\\d{1,2})\\s+to\\s+(${MONTH_NAME_ALT})\\s+(\\d{1,2})(?:,)?\\s+(\\d{4})\\b`,
+    "i",
+  )
+  const mm = normalized.match(monthFirst)
+  if (mm) {
+    const year = Number.parseInt(mm[5], 10)
+    const m1 = monthIndexFromToken(mm[1])
+    const m2 = monthIndexFromToken(mm[3])
+    const d1 = Number.parseInt(mm[2], 10)
+    const d2 = Number.parseInt(mm[4], 10)
+    const built = buildCalendarRangeIso(year, m1, d1, m2, d2)
+    if (built) return built
+  }
+
+  return {}
+}
+
+function buildCalendarRangeIso(
+  year: number,
+  monthIndex1: number | null,
+  day1: number,
+  monthIndex2: number | null,
+  day2: number,
+): { date_from: string; date_to: string } | null {
+  if (
+    monthIndex1 === null ||
+    monthIndex2 === null ||
+    !Number.isFinite(year) ||
+    year < 1900 ||
+    year > 2100 ||
+    day1 < 1 ||
+    day1 > 31 ||
+    day2 < 1 ||
+    day2 > 31
+  ) {
+    return null
+  }
+
+  const dayStart = new Date(year, monthIndex1, day1)
+  const dayEnd = new Date(year, monthIndex2, day2)
+  if (dayStart.getFullYear() !== year || dayStart.getMonth() !== monthIndex1 || dayStart.getDate() !== day1) {
+    return null
+  }
+  if (dayEnd.getFullYear() !== year || dayEnd.getMonth() !== monthIndex2 || dayEnd.getDate() !== day2) {
+    return null
+  }
+
+  dayStart.setHours(0, 0, 0, 0)
+  dayEnd.setHours(23, 59, 59, 999)
+
+  if (dayEnd.getTime() < dayStart.getTime()) {
+    const lo = new Date(year, monthIndex2, day2)
+    lo.setHours(0, 0, 0, 0)
+    const hi = new Date(year, monthIndex1, day1)
+    hi.setHours(23, 59, 59, 999)
+    return { date_from: lo.toISOString(), date_to: hi.toISOString() }
+  }
+
+  return {
+    date_from: dayStart.toISOString(),
+    date_to: dayEnd.toISOString(),
+  }
+}
+
 /**
  * Parse natural language date expressions into ISO date strings
  */
@@ -286,6 +409,11 @@ export function parseDateExpression(dateExpr: string): {
       date_from: nextWeekStart.toISOString(),
       date_to: nextWeekEnd.toISOString(),
     }
+  }
+
+  const explicitRange = tryParseExplicitCalendarRange(normalized)
+  if (explicitRange.date_from && explicitRange.date_to) {
+    return explicitRange
   }
 
   // If we can't parse, return empty
