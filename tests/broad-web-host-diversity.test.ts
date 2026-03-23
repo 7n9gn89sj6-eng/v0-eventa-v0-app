@@ -23,13 +23,13 @@ function internal(id: string, score: number) {
 }
 
 describe("applyBroadWebHostDiversity", () => {
-  it("spaces repeated same-host web results when another host sits between by score", () => {
-    // Leading internal pushes duplicate EB rows to preIdx ≥2 so full second-host penalty applies.
+  it("spaces repeated same-host web results when another host scores between them (linear penalty)", () => {
+    // K=4: second EB at preIdx 2 → penalty 4 → eff 96; timeout at 97 stays between 100 and 96.
     const rows = [
       internal("lead", 300),
       web("a", "eventbrite.com", 100),
       web("b", "eventbrite.com", 100),
-      web("c", "timeout.com", 95),
+      web("c", "timeout.com", 97),
     ]
     const out = applyBroadWebHostDiversity(rows)
     expect(out.map((r) => r.id)).toEqual(["lead", "a", "c", "b"])
@@ -60,16 +60,27 @@ describe("applyBroadWebHostDiversity", () => {
     expect(out).toHaveLength(1)
     expect(out[0].id).toBe("x")
     expect((out[0] as any)._hostOccurrenceIndex).toBe(0)
+    expect((out[0] as any)._diversityPenalty).toBe(0)
   })
 
-  it("applies reduced penalty in top two slots (same-host pair can stay above slightly lower third-party)", () => {
+  it("softens penalty in top two overall slots so a strong same-host pair is not over-penalized", () => {
     const rows = [
       web("a", "eventbrite.com", 100),
       web("b", "eventbrite.com", 100),
       web("c", "timeout.com", 97),
     ]
     const out = applyBroadWebHostDiversity(rows)
-    // Second EB at index 1: penalty floor(6 * 0.25) = 1 → effective 99, still above 97
+    // b at preIdx 1: occurrence 1 → raw 4, softened floor(4 * 0.25) = 1 → eff 99, still above 97
     expect(out.map((r) => r.id)).toEqual(["a", "b", "c"])
+  })
+
+  it("first occurrence of a host stays at full score (single dominant same-host result)", () => {
+    const rows = [
+      web("solo", "eventbrite.com", 100),
+      web("other", "timeout.com", 50),
+    ]
+    const out = applyBroadWebHostDiversity(rows)
+    expect(out.map((r) => r.id)).toEqual(["solo", "other"])
+    expect((out[0] as any)._diversityPenalty).toBe(0)
   })
 })

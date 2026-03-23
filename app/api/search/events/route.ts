@@ -1774,6 +1774,7 @@ export async function GET(req: NextRequest) {
         _preDiversityIndex,
         _diversityHost,
         _hostOccurrenceIndex,
+        _diversityPenalty,
         ...e
       } = row
       const base = { ...e, source: "web" as const, isWebResult: true }
@@ -1786,6 +1787,8 @@ export async function GET(req: NextRequest) {
               host: _diversityHost ?? null,
               hostOccurrenceIndex:
                 typeof _hostOccurrenceIndex === "number" ? _hostOccurrenceIndex : null,
+              diversityPenalty:
+                typeof _diversityPenalty === "number" ? _diversityPenalty : null,
             }
           : {}
       const dbg = debug && _rankBreakdown ? { _rankBreakdown } : {}

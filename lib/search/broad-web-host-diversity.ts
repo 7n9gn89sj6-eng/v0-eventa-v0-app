@@ -1,6 +1,6 @@
 /**
- * Broad-query only: reduce same-host web stacking by effective score + stable re-sort.
- * Internal rows are unchanged; relative order preserved on ties via pre-pass index.
+ * Broad-query only: reduce same-host web stacking via diversityPenalty on effective score + stable re-sort.
+ * Internal rows unchanged; tie-breaks preserve pre-pass order.
  */
 
 export function normalizeWebHostKey(rawUrl: string): string | null {
@@ -28,17 +28,15 @@ export type BroadDiversityRow = {
   [key: string]: unknown
 }
 
-const PENALTY_SECOND = 6
-const PENALTY_THIRD_BASE = 14
-const PENALTY_EXTRA_PER = 4
-const PENALTY_CAP = 34
+/** Penalty for occurrence index n is n * K (n=0 → no penalty). */
+const DIVERSITY_K = 4
 const TOP_SLOTS_SOFTEN = 2
 const TOP_SLOT_FACTOR = 0.25
 
 /**
  * Returns a new array sorted by `_effectiveRankScore` (desc), stable on ties.
- * Sets on web rows: `_effectiveRankScore`, `_diversityHost`, `_hostOccurrenceIndex`, `_preDiversityIndex`.
- * Internal rows: `_effectiveRankScore === _score`, same index field.
+ * Web rows: `_diversityPenalty`, `_effectiveRankScore`, `_diversityHost`, `_hostOccurrenceIndex`, `_preDiversityIndex`.
+ * Internal rows: `_effectiveRankScore === _score`, `_preDiversityIndex` only.
  */
 export function applyBroadWebHostDiversity(rows: BroadDiversityRow[]): BroadDiversityRow[] {
   if (rows.length === 0) return rows
@@ -55,23 +53,15 @@ export function applyBroadWebHostDiversity(rows: BroadDiversityRow[]): BroadDive
     const occurrenceIndex = hostCounts.get(host) ?? 0
     hostCounts.set(host, occurrenceIndex + 1)
 
-    let penalty = 0
-    if (occurrenceIndex === 1) {
-      penalty = PENALTY_SECOND
-    } else if (occurrenceIndex >= 2) {
-      penalty = Math.min(
-        PENALTY_CAP,
-        PENALTY_THIRD_BASE + (occurrenceIndex - 2) * PENALTY_EXTRA_PER,
-      )
-    }
-
+    let diversityPenalty = occurrenceIndex * DIVERSITY_K
     if (preIdx < TOP_SLOTS_SOFTEN) {
-      penalty = Math.floor(penalty * TOP_SLOT_FACTOR)
+      diversityPenalty = Math.floor(diversityPenalty * TOP_SLOT_FACTOR)
     }
 
-    const effective = r._score - penalty
+    const effective = r._score - diversityPenalty
     return {
       ...base,
+      _diversityPenalty: diversityPenalty,
       _effectiveRankScore: effective,
       _diversityHost: host,
       _hostOccurrenceIndex: occurrenceIndex,

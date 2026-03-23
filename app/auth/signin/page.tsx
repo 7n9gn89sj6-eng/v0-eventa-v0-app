@@ -2,7 +2,7 @@ import { SignInForm } from "@/components/auth/sign-in-form"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 import { getTranslations } from "@/lib/i18n/server"
-import { adminCredentialsConfigured } from "@/lib/next-auth-options"
+import { adminCredentialsConfigured } from "@/lib/admin-credentials-config"
 
 export async function generateMetadata() {
   const t = await getTranslations("metadata")
