@@ -15,6 +15,7 @@ import ClientOnly from "@/components/ClientOnly"
 import { useI18n } from "@/lib/i18n/context"
 import { SmartInputBar } from "@/components/search/smart-input-bar"
 import { PlaceAutocomplete } from "@/components/places/place-autocomplete"
+import { normalizeDiscoverFreeTextForStructuredFilters } from "@/lib/discover-effective-query"
 
 const CATEGORIES = [
   "All",
@@ -22,6 +23,7 @@ const CATEGORIES = [
   "Sports",
   "Arts",
   "Food",
+  "Markets",
   "Tech",
   "Business",
   "Health",
@@ -122,6 +124,9 @@ export function EventsListingContent({
   const placeFieldWrapRef = useRef<HTMLDivElement>(null)
   const searchSeqRef = useRef(0)
   const searchAbortRef = useRef<AbortController | null>(null)
+  const categoryStructuredTouchedRef = useRef(false)
+  const locationStructuredTouchedRef = useRef(false)
+  const selectedCategoryRef = useRef(initialCategory || "All")
 
   const [q, setQ] = useState(initialQuery || "")
   const [loading, setLoading] = useState(false)
@@ -139,6 +144,30 @@ export function EventsListingContent({
   const [cityFilter, setCityFilter] = useState(() => initialCity ?? "")
   const [countryFilter, setCountryFilter] = useState(() => initialCountry ?? "")
 
+  useEffect(() => {
+    selectedCategoryRef.current = selectedCategory
+  }, [selectedCategory])
+
+  const handleDiscoverCategoryChange = useCallback(
+    (v: string) => {
+      categoryStructuredTouchedRef.current = true
+      setSelectedCategory(v)
+      setQ((prev) =>
+        normalizeDiscoverFreeTextForStructuredFilters({
+          rawQuery: prev,
+          selectedCategory: v,
+          cityFilter,
+          countryFilter,
+          structuredCategoryAuthoritative: true,
+          structuredLocationAuthoritative:
+            locationStructuredTouchedRef.current &&
+            (cityFilter.trim().length > 0 || countryFilter.trim().length > 0),
+        }),
+      )
+    },
+    [cityFilter, countryFilter],
+  )
+
   async function runSearch() {
     searchSeqRef.current += 1
     const seq = searchSeqRef.current
@@ -150,8 +179,18 @@ export function EventsListingContent({
     setError(null)
     setAiSuggestionChip(null)
     try {
+      const apiQuery = normalizeDiscoverFreeTextForStructuredFilters({
+        rawQuery: q,
+        selectedCategory,
+        cityFilter,
+        countryFilter,
+        structuredCategoryAuthoritative: categoryStructuredTouchedRef.current,
+        structuredLocationAuthoritative:
+          locationStructuredTouchedRef.current &&
+          (cityFilter.trim().length > 0 || countryFilter.trim().length > 0),
+      })
       const params = new URLSearchParams()
-      if (q) params.set("query", q)
+      if (apiQuery) params.set("query", apiQuery)
       if (cityFilter.trim()) params.set("city", cityFilter.trim())
       if (countryFilter.trim()) params.set("country", countryFilter.trim())
 
@@ -276,6 +315,8 @@ export function EventsListingContent({
   // Sync state with props when they change (URL params updated)
   useEffect(() => {
     if (initialQuery !== undefined && initialQuery !== q) {
+      categoryStructuredTouchedRef.current = false
+      locationStructuredTouchedRef.current = false
       setQ(initialQuery)
     }
   }, [initialQuery])
@@ -387,6 +428,8 @@ export function EventsListingContent({
     })
 
   const clearFilters = () => {
+    categoryStructuredTouchedRef.current = false
+    locationStructuredTouchedRef.current = false
     setSelectedCategory("All")
     setSelectedPriceFilter("all")
     setQ("")
@@ -585,6 +628,7 @@ export function EventsListingContent({
               <button
                 type="button"
                 onClick={() => {
+                  locationStructuredTouchedRef.current = true
                   setCityFilter("")
                   setCountryFilter("")
                 }}
@@ -599,7 +643,7 @@ export function EventsListingContent({
             <Badge variant="secondary" className="gap-1.5 pl-2 pr-1.5">
               <span>{selectedCategory}</span>
               <button
-                onClick={() => setSelectedCategory("All")}
+                onClick={() => handleDiscoverCategoryChange("All")}
                 className="ml-0.5 rounded-sm hover:bg-secondary-foreground/20"
               >
                 <X className="h-3 w-3" />
@@ -649,10 +693,22 @@ export function EventsListingContent({
                       .join(", ") || ""
                   }
                   onResolved={(place) => {
+                    locationStructuredTouchedRef.current = true
                     setCityFilter(place.city)
                     setCountryFilter(place.country || "")
+                    setQ((prev) =>
+                      normalizeDiscoverFreeTextForStructuredFilters({
+                        rawQuery: prev,
+                        selectedCategory: selectedCategoryRef.current,
+                        cityFilter: place.city,
+                        countryFilter: place.country || "",
+                        structuredCategoryAuthoritative: categoryStructuredTouchedRef.current,
+                        structuredLocationAuthoritative: true,
+                      }),
+                    )
                   }}
                   onClear={() => {
+                    locationStructuredTouchedRef.current = true
                     setCityFilter("")
                     setCountryFilter("")
                   }}
@@ -661,7 +717,7 @@ export function EventsListingContent({
 
               <div className="space-y-2">
                 <Label htmlFor="category">{tEvents("filters.category")}</Label>
-                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <Select value={selectedCategory} onValueChange={handleDiscoverCategoryChange}>
                   <SelectTrigger id="category">
                     <SelectValue />
                   </SelectTrigger>

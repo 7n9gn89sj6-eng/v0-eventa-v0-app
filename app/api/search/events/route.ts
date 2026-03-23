@@ -134,7 +134,27 @@ export async function GET(req: NextRequest) {
   const isEventQuery = isEventIntentQuery(q)
 
   // Intent -> Plan resolution (deterministic, query-first precedence).
-  const parsedIntent = q ? parseSearchIntent(q) : parseSearchIntent("")
+  let parsedIntent: SearchIntent = q ? parseSearchIntent(q) : parseSearchIntent("")
+
+  // Structured URL location wins over conflicting geography parsed from free text (e.g. q mentions Paris but `city=Berlin`).
+  const urlCityTrim = (city ?? "").trim()
+  const urlCountryTrim = (country ?? "").trim()
+  if (urlCityTrim || urlCountryTrim) {
+    const p = parsedIntent.place
+    const pc = p?.city?.trim().toLowerCase() ?? ""
+    const pco = p?.country?.trim().toLowerCase() ?? ""
+    const uc = urlCityTrim.toLowerCase()
+    const uco = urlCountryTrim.toLowerCase()
+    const cityConflicts = Boolean(uc && pc && pc !== uc)
+    const countryConflicts = Boolean(uco && pco && pco !== uco)
+    if (cityConflicts || countryConflicts) {
+      parsedIntent = {
+        ...parsedIntent,
+        place: undefined,
+        placeEvidence: "none",
+      }
+    }
+  }
 
   let intentForPlan: SearchIntent = parsedIntent
   const explicitParsedCountry = parsedIntent.place?.country?.trim()
