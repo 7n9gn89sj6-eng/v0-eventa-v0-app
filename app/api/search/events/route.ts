@@ -6,6 +6,7 @@ import { searchWeb } from "@/lib/search/web-search"
 import { withLanguageColumnGuard, getEventSelectWithoutLanguage, isLanguageFilteringAvailable } from "@/lib/db-runtime-guard"
 import { buildDateOverlapWhere, buildDateRangeOverlapWhere } from "@/lib/search/date-overlap"
 import { isEventIntentQuery } from "@/lib/search/event-ranking"
+import { applyBroadWebHostDiversity } from "@/lib/search/broad-web-host-diversity"
 import { scoreSearchResult } from "@/lib/search/score-search-result"
 import { getExpandedTermGroups } from "@/lib/search/search-taxonomy"
 import { normalizeSearchUtterance, stripTextSearchStopwords } from "@/lib/search/normalize-search-utterance"
@@ -1744,7 +1745,16 @@ export async function GET(req: NextRequest) {
     }
 
     const toPublicInternalRow = (row: any) => {
-      const { _score, _rankBreakdown, _resultKind, ...e } = row
+      const {
+        _score,
+        _rankBreakdown,
+        _resultKind,
+        _effectiveRankScore,
+        _preDiversityIndex,
+        _diversityHost,
+        _hostOccurrenceIndex,
+        ...e
+      } = row
       const base = { ...e, source: "internal" as const, isEventaEvent: true }
       const devMeta =
         process.env.NODE_ENV === "development"
@@ -1755,11 +1765,28 @@ export async function GET(req: NextRequest) {
     }
 
     const toPublicWebRow = (row: any) => {
-      const { _eventnessBoost, _score, _rankBreakdown, _resultKind, ...e } = row
+      const {
+        _eventnessBoost,
+        _score,
+        _rankBreakdown,
+        _resultKind,
+        _effectiveRankScore,
+        _preDiversityIndex,
+        _diversityHost,
+        _hostOccurrenceIndex,
+        ...e
+      } = row
       const base = { ...e, source: "web" as const, isWebResult: true }
       const devMeta =
         process.env.NODE_ENV === "development"
-          ? { score: _score, scoreBreakdown: _rankBreakdown ?? null, sourceType: "web" as const }
+          ? {
+              score: _score,
+              scoreBreakdown: _rankBreakdown ?? null,
+              sourceType: "web" as const,
+              host: _diversityHost ?? null,
+              hostOccurrenceIndex:
+                typeof _hostOccurrenceIndex === "number" ? _hostOccurrenceIndex : null,
+            }
           : {}
       const dbg = debug && _rankBreakdown ? { _rankBreakdown } : {}
       return { ...base, ...devMeta, ...dbg }
@@ -1871,7 +1898,7 @@ export async function GET(req: NextRequest) {
             return { ...r, _score: breakdown.total, _rankBreakdown: breakdown, _resultKind: "web" as const }
           }).filter(Boolean)
 
-    const unifiedRanked = [...scoredInternal, ...scoredWebRanked, ...stubScoredWeb].sort((a: any, b: any) => {
+    let unifiedRanked = [...scoredInternal, ...scoredWebRanked, ...stubScoredWeb].sort((a: any, b: any) => {
       if ((b._score ?? 0) !== (a._score ?? 0)) return (b._score ?? 0) - (a._score ?? 0)
       try {
         const ta = new Date(a.startAt).getTime()
@@ -1885,6 +1912,13 @@ export async function GET(req: NextRequest) {
       if (sa !== sb) return sa - sb
       return String(a.id ?? a.externalUrl ?? "").localeCompare(String(b.id ?? b.externalUrl ?? ""))
     })
+
+    const applyBroadHostDiversity =
+      searchPlanForScoring.scope === "broad" && !rankingCategorySignal
+
+    if (applyBroadHostDiversity && unifiedRanked.length > 1) {
+      unifiedRanked = applyBroadWebHostDiversity(unifiedRanked) as any[]
+    }
 
     const eventsPublic = unifiedRanked.map((row: any) =>
       row._resultKind === "internal" ? toPublicInternalRow(row) : toPublicWebRow(row),
