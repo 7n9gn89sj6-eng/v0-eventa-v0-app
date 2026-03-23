@@ -80,10 +80,8 @@ function isBroadScope(plan: SearchPlan): boolean {
   return plan.scope === "broad"
 }
 
-function hasStrictTimeIntent(intent: SearchIntent, plan: SearchPlan): boolean {
-  if (!intent.time?.date_from || !intent.time?.date_to) return false
-  if (isBroadScope(plan)) return false
-  return true
+function hasStrictTimeIntent(_intent: SearchIntent, plan: SearchPlan): boolean {
+  return plan.filters.strictTimeOverlap
 }
 
 function primaryInterestKey(intent: SearchIntent, rankingCategory?: string): string | undefined {

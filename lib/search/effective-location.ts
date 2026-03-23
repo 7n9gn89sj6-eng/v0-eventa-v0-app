@@ -75,6 +75,7 @@ const COMMON_NON_LOCATION_WORDS = new Set([
   "see",
   "hiking",
   "hike",
+  "happening",
 ])
 
 const INTENT_PREFIX_WORDS = new Set([
@@ -195,9 +196,9 @@ export function extractPlaceFromQuery(query: string): string | null {
       placeClean = trimPlaceCaptureTail(placeClean)
       if (!placeClean || placeClean.length < 2) continue
 
-      // Broad-discovery phrases before "this weekend" are not places ("what's on this weekend").
-      if (/^what['\u2019]s\s+on$/i.test(placeClean)) continue
-      if (/^things\s+to\s+do$/i.test(placeClean)) continue
+      // Broad-discovery / question fragments before "this weekend" are not places.
+      if (/^what['\u2019]s\b/i.test(placeClean)) continue
+      if (/^things\s+to\s+do\b/i.test(placeClean)) continue
 
       if (COMMON_NON_LOCATION_WORDS.has(placeClean.toLowerCase())) continue
       if (isCalendarMonthPlace(placeClean)) continue

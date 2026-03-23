@@ -36,6 +36,7 @@ describe("Eventa trust: intent -> plan foundation", () => {
 
     expect(intent.scope).toBe("broad")
     expect(plan.filters.strictCategory).toBe(false)
+    expect(plan.filters.strictTimeOverlap).toBe(false)
     expect(plan.location.city).toBe("Melbourne")
   })
 

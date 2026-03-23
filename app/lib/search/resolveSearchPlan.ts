@@ -23,6 +23,8 @@ export type SearchPlan = {
   filters: {
     strictCategory: boolean
     applyLocationRestriction: boolean
+    /** True when parser produced a full date range; ranking may hard-exclude non-overlapping rows (independent of broad). */
+    strictTimeOverlap: boolean
   }
 }
 
@@ -34,6 +36,7 @@ export type SearchPlan = {
  * - Weak/implicit query place (e.g. non-anchored trailing city) keeps URL/picker scope.
  * - Region scope: resolve to `location.countries`; never use selected UI city/country.
  * - Global scope: no structured location restriction at execution time.
+ * - `strictTimeOverlap`: true when `intent.time` has both ends of a parsed window (ranking may exclude non-overlapping rows; independent of broad scope).
  */
 export function resolveSearchPlan(
   intent: SearchIntent,
@@ -90,6 +93,7 @@ export function resolveSearchPlan(
 
   const strictCategory = scope !== "broad"
   const applyLocationRestriction = scope !== "global"
+  const strictTimeOverlap = Boolean(intent.time?.date_from && intent.time?.date_to)
 
   return {
     location: {
@@ -112,6 +116,7 @@ export function resolveSearchPlan(
     filters: {
       strictCategory,
       applyLocationRestriction,
+      strictTimeOverlap,
     },
   }
 }

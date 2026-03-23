@@ -282,7 +282,10 @@ function detectScope(query: string, place?: SearchIntent["place"]): SearchIntent
   if (place?.country && !place?.city) return "country"
   if (place?.city) return "city"
 
-  if (/\b(things\s+to\s+do|what'?s\s+on|events?)\b/i.test(lower) && !/\bin\s+[a-z]/i.test(lower)) {
+  if (
+    /\b(things\s+to\s+do|what'?s\s+on|what'?s\s+happening|what'?s\s+going\s+on|events?)\b/i.test(lower) &&
+    !/\bin\s+[a-z]/i.test(lower)
+  ) {
     return "broad"
   }
 

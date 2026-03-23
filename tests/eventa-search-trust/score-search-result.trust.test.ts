@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { parseSearchIntent } from "@/app/lib/search/parseSearchIntent"
 import { resolveSearchPlan } from "@/app/lib/search/resolveSearchPlan"
 import { scoreSearchResult } from "@/lib/search/score-search-result"
@@ -156,6 +156,7 @@ describe("Eventa trust: deterministic scoreSearchResult", () => {
     const q = "things to do"
     const intent = parseSearchIntent(q)
     const plan = resolveSearchPlan(intent, { city: "Melbourne", country: "Australia" })
+    expect(plan.filters.strictTimeOverlap).toBe(false)
     const past = new Date(NOW.getTime() - 3 * 86400 * 1000).toISOString()
 
     const row = {
@@ -217,4 +218,153 @@ describe("Eventa trust: deterministic scoreSearchResult", () => {
     expect(internal.sourceScore).toBeGreaterThan(web.sourceScore)
     expect(internal.total).toBeGreaterThan(web.total)
   })
+})
+
+describe("Eventa trust: broad + parsed time uses strict overlap in ranking", () => {
+  const frozenNow = new Date("2026-03-18T12:00:00.000Z")
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-18T10:00:00.000Z"))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("what's happening this weekend drops rows outside the weekend window", () => {
+    const intent = parseSearchIntent("what's happening this weekend")
+    expect(intent.scope).toBe("broad")
+    expect(intent.time?.date_from).toBeTruthy()
+    expect(intent.time?.date_to).toBeTruthy()
+    const plan = resolveSearchPlan(intent, { city: "Melbourne", country: "Australia" })
+    expect(plan.filters.strictCategory).toBe(false)
+    expect(plan.filters.strictTimeOverlap).toBe(true)
+
+    const saturday = new Date("2026-03-21T15:00:00.000Z").toISOString()
+    const followingTuesday = new Date("2026-03-24T12:00:00.000Z").toISOString()
+
+    expect(
+      scoreSearchResult({
+        result: {
+          title: "Weekend fair",
+          city: "Melbourne",
+          country: "Australia",
+          startAt: saturday,
+          endAt: saturday,
+        },
+        intent,
+        searchPlan: plan,
+        now: frozenNow,
+        kind: "internal",
+      }),
+    ).not.toBeNull()
+
+    expect(
+      scoreSearchResult({
+        result: {
+          title: "Tuesday talk",
+          city: "Melbourne",
+          country: "Australia",
+          startAt: followingTuesday,
+          endAt: followingTuesday,
+        },
+        intent,
+        searchPlan: plan,
+        now: frozenNow,
+        kind: "internal",
+      }),
+    ).toBeNull()
+  })
+
+  it("what's on next week drops rows outside next calendar week", () => {
+    const intent = parseSearchIntent("what's on next week")
+    expect(intent.scope).toBe("broad")
+    expect(planFrom(intent).filters.strictTimeOverlap).toBe(true)
+
+    const thisWeekSaturday = new Date("2026-03-21T12:00:00.000Z").toISOString()
+    const nextWeekWednesday = new Date("2026-03-25T12:00:00.000Z").toISOString()
+
+    const plan = planFrom(intent)
+
+    expect(
+      scoreSearchResult({
+        result: {
+          title: "This week only",
+          city: "Melbourne",
+          country: "Australia",
+          startAt: thisWeekSaturday,
+          endAt: thisWeekSaturday,
+        },
+        intent,
+        searchPlan: plan,
+        now: frozenNow,
+        kind: "internal",
+      }),
+    ).toBeNull()
+
+    expect(
+      scoreSearchResult({
+        result: {
+          title: "Next week gig",
+          city: "Melbourne",
+          country: "Australia",
+          startAt: nextWeekWednesday,
+          endAt: nextWeekWednesday,
+        },
+        intent,
+        searchPlan: plan,
+        now: frozenNow,
+        kind: "internal",
+      }),
+    ).not.toBeNull()
+  })
+
+  it("events in Paris in May drops rows outside May window", () => {
+    const intent = parseSearchIntent("events in Paris in May")
+    expect(intent.scope).toBe("city")
+    expect(intent.place?.city).toBe("Paris")
+    const plan = resolveSearchPlan(intent, { city: "Lyon", country: "France" })
+    expect(plan.filters.strictCategory).toBe(true)
+    expect(plan.filters.strictTimeOverlap).toBe(true)
+
+    const inMay = new Date("2026-05-10T12:00:00.000Z").toISOString()
+    const inJune = new Date("2026-06-05T12:00:00.000Z").toISOString()
+
+    expect(
+      scoreSearchResult({
+        result: {
+          title: "May festival",
+          city: "Paris",
+          country: "France",
+          startAt: inMay,
+          endAt: inMay,
+        },
+        intent,
+        searchPlan: plan,
+        now: frozenNow,
+        kind: "internal",
+      }),
+    ).not.toBeNull()
+
+    expect(
+      scoreSearchResult({
+        result: {
+          title: "June show",
+          city: "Paris",
+          country: "France",
+          startAt: inJune,
+          endAt: inJune,
+        },
+        intent,
+        searchPlan: plan,
+        now: frozenNow,
+        kind: "internal",
+      }),
+    ).toBeNull()
+  })
+
+  function planFrom(i: ReturnType<typeof parseSearchIntent>) {
+    return resolveSearchPlan(i, { city: "Melbourne", country: "Australia" })
+  }
 })
