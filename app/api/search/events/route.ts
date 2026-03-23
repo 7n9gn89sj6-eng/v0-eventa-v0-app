@@ -136,10 +136,11 @@ export async function GET(req: NextRequest) {
   // Intent -> Plan resolution (deterministic, query-first precedence).
   let parsedIntent: SearchIntent = q ? parseSearchIntent(q) : parseSearchIntent("")
 
-  // Structured URL location wins over conflicting geography parsed from free text (e.g. q mentions Paris but `city=Berlin`).
+  // When place is only implicit, structured URL city/country wins over a conflicting weak parse.
+  // Explicit query geography (e.g. "live music Melbourne" with city=Sydney) must stay query-first — see resolveSearchPlan.
   const urlCityTrim = (city ?? "").trim()
   const urlCountryTrim = (country ?? "").trim()
-  if (urlCityTrim || urlCountryTrim) {
+  if ((urlCityTrim || urlCountryTrim) && parsedIntent.placeEvidence !== "explicit") {
     const p = parsedIntent.place
     const pc = p?.city?.trim().toLowerCase() ?? ""
     const pco = p?.country?.trim().toLowerCase() ?? ""
@@ -1722,7 +1723,7 @@ export async function GET(req: NextRequest) {
           webListingBoost: 0,
         })
         if (!breakdown) return null
-        return { ...e, _score: breakdown.total, _rankBreakdown: breakdown }
+        return { ...e, _score: breakdown.total, _rankBreakdown: breakdown, _resultKind: "internal" as const }
       })
       .filter(Boolean) as any[]
 
@@ -1734,22 +1735,34 @@ export async function GET(req: NextRequest) {
       return String(a.id ?? "").localeCompare(String(b.id ?? ""))
     })
 
-    const internalEvents = scoredInternal.map((row: any) => {
-      const { _score, _rankBreakdown, ...e } = row
-      return {
-        ...e,
-        source: "internal" as const,
-        isEventaEvent: true,
-        ...(debug && _rankBreakdown ? { _rankBreakdown } : {}),
-      }
-    })
-
     if (debug && scoredInternal.length > 0) {
       debugTrace.rankingInternalSample = scoredInternal.slice(0, 5).map((r: any) => ({
         id: r.id,
         title: r.title?.slice(0, 80),
         breakdown: r._rankBreakdown,
       }))
+    }
+
+    const toPublicInternalRow = (row: any) => {
+      const { _score, _rankBreakdown, _resultKind, ...e } = row
+      const base = { ...e, source: "internal" as const, isEventaEvent: true }
+      const devMeta =
+        process.env.NODE_ENV === "development"
+          ? { score: _score, scoreBreakdown: _rankBreakdown ?? null, sourceType: "internal" as const }
+          : {}
+      const dbg = debug && _rankBreakdown ? { _rankBreakdown } : {}
+      return { ...base, ...devMeta, ...dbg }
+    }
+
+    const toPublicWebRow = (row: any) => {
+      const { _eventnessBoost, _score, _rankBreakdown, _resultKind, ...e } = row
+      const base = { ...e, source: "web" as const, isWebResult: true }
+      const devMeta =
+        process.env.NODE_ENV === "development"
+          ? { score: _score, scoreBreakdown: _rankBreakdown ?? null, sourceType: "web" as const }
+          : {}
+      const dbg = debug && _rankBreakdown ? { _rankBreakdown } : {}
+      return { ...base, ...devMeta, ...dbg }
     }
 
     // Mark external events with source
@@ -1768,39 +1781,34 @@ export async function GET(req: NextRequest) {
       console.log(`[v0] 🎯 Event-intent query detected: "${q}" - applying event-first ranking to web results`)
     }
     
-    // E3: Boost gig guides / calendars without hardcoding a single city
-    // Add lightweight scoring for ranking (not filtering)
+    // E3: Small route-level web boosts/penalties; generic listing hubs are penalised in scoreSearchResult.
     const scoredWebResults = externalEventsUnranked.map((result: any) => {
       let boost = 0
       const url = (result._originalUrl || result.externalUrl || "").toLowerCase()
       const snippet = (result._originalSnippet || result.description || "").toLowerCase()
       const fullText = `${url} ${snippet}`.toLowerCase()
-      
-      // Boost if URL or snippet suggests a listing/calendar
-      if (/(gig|gig-guide|whats-on|whatson|events|calendar|what-s-on|program)/i.test(fullText)) {
-        boost += 3
-      }
-      
-      // Boost local civic/venue sources
-      if (url.includes('.gov.au') || url.includes('.gov/') || url.includes('/events')) {
+      const isGov = url.includes(".gov.au") || url.includes(".gov/")
+
+      if (isGov && /\/events?\b/i.test(url)) {
+        boost += 4
+      } else if (isGov) {
         boost += 2
       }
-      
-      // Penalty for Eventbrite (deprioritize to allow other sources to rank higher)
-      if (url.includes('eventbrite.com')) {
-        boost -= 3  // Penalize Eventbrite to rank lower than other sources
+
+      if (!isGov && /(whats-on|whatson|what-s-on|\/events\/|event-calendar|gig-guide)/i.test(fullText)) {
+        boost -= 8
       }
-      
-      // Penalty (ranking only) for forums/social posts
-      if (url.includes('reddit.com') || url.includes('facebook.com/posts')) {
-        boost -= 2
-      }
-      
-      // Penalty for global "choose your country" landing pages
-      if (url.includes('/choose') || url.includes('/select-country')) {
+
+      if (url.includes("eventbrite.com")) {
         boost -= 3
       }
-      
+      if (url.includes("reddit.com") || url.includes("facebook.com/posts")) {
+        boost -= 2
+      }
+      if (url.includes("/choose") || url.includes("/select-country")) {
+        boost -= 3
+      }
+
       return { ...result, _eventnessBoost: boost }
     })
     
@@ -1816,7 +1824,7 @@ export async function GET(req: NextRequest) {
           webListingBoost: result._eventnessBoost || 0,
         })
         if (!breakdown) return null
-        return { ...result, _score: breakdown.total, _rankBreakdown: breakdown }
+        return { ...result, _score: breakdown.total, _rankBreakdown: breakdown, _resultKind: "web" as const }
       })
       .filter(Boolean) as any[]
 
@@ -1832,64 +1840,97 @@ export async function GET(req: NextRequest) {
       return String(a.title ?? a.externalUrl ?? "").localeCompare(String(b.title ?? b.externalUrl ?? ""))
     })
 
-    const externalEvents = scoredWebRanked
+    const stubScoredWeb =
+      process.env.NODE_ENV === "production"
+        ? ([] as any[])
+        : EXTERNAL_STUB_EVENTS.map((stub: any) => {
+            const r = {
+              ...stub,
+              city: stub.location?.city ?? "",
+              country: stub.location?.country ?? "",
+              startAt:
+                stub.startAt instanceof Date ? stub.startAt.toISOString() : String(stub.startAt),
+              endAt: stub.endAt instanceof Date ? stub.endAt.toISOString() : String(stub.endAt),
+              description: stub.description || "",
+              source: "web" as const,
+              isWebResult: true,
+              externalUrl: stub.externalUrl,
+              _originalUrl: stub.externalUrl,
+              _originalSnippet: stub.description || "",
+            }
+            const breakdown = scoreSearchResult({
+              result: r,
+              intent: parsedIntent,
+              searchPlan: searchPlanForScoring,
+              now,
+              kind: "web",
+              rankingCategory: rankingCategorySignal,
+              webListingBoost: 0,
+            })
+            if (!breakdown) return null
+            return { ...r, _score: breakdown.total, _rankBreakdown: breakdown, _resultKind: "web" as const }
+          }).filter(Boolean)
 
-    debugTrace.webAfterEventinessCount = externalEvents.length
+    const unifiedRanked = [...scoredInternal, ...scoredWebRanked, ...stubScoredWeb].sort((a: any, b: any) => {
+      if ((b._score ?? 0) !== (a._score ?? 0)) return (b._score ?? 0) - (a._score ?? 0)
+      try {
+        const ta = new Date(a.startAt).getTime()
+        const tb = new Date(b.startAt).getTime()
+        if (!Number.isNaN(ta) && !Number.isNaN(tb) && ta !== tb) return ta - tb
+      } catch {
+        /* ignore */
+      }
+      const sa = a._resultKind === "internal" ? 0 : 1
+      const sb = b._resultKind === "internal" ? 0 : 1
+      if (sa !== sb) return sa - sb
+      return String(a.id ?? a.externalUrl ?? "").localeCompare(String(b.id ?? b.externalUrl ?? ""))
+    })
 
-    if (debug && externalEvents.length > 0) {
-      debugTrace.rankingWebSample = externalEvents.slice(0, 5).map((r: any) => ({
+    const eventsPublic = unifiedRanked.map((row: any) =>
+      row._resultKind === "internal" ? toPublicInternalRow(row) : toPublicWebRow(row),
+    )
+
+    const internalEvents = eventsPublic.filter((e: any) => e.source === "internal")
+    const externalEvents = eventsPublic.filter((e: any) => e.source === "web")
+
+    debugTrace.webAfterEventinessCount = scoredWebRanked.length
+
+    if (debug && scoredWebRanked.length > 0) {
+      debugTrace.rankingWebSample = scoredWebRanked.slice(0, 5).map((r: any) => ({
         title: r.title?.slice(0, 80),
         breakdown: r._rankBreakdown,
       }))
     }
 
-    if (isEventQuery && externalEvents.length > 0) {
-      console.log(`[v0] ✅ Deterministic ranking applied to ${externalEvents.length} web results`)
+    if (isEventQuery && scoredWebRanked.length > 0) {
+      console.log(`[v0] ✅ Deterministic ranking applied to ${scoredWebRanked.length} web results`)
     }
-    
-    // EVENT-INTENT QUERY BEHAVIOR:
-    // 1. Always return internal Eventa events first
-    // 2. Automatically include web results if no internal events found (for event-intent queries)
-    // 3. Empty state only if both internal events = 0 AND web events (after strict filtering) = 0
-    
-    const allEvents = [
-      ...internalEvents,
-      ...externalEvents.map(({ _eventnessBoost, ...e }: any) => e),
-    ]
-    
+
     debugTrace.finalReturnedInternalCount = internalEvents.length
     debugTrace.finalReturnedWebCount = externalEvents.length
-    
-    // Determine if we should return empty state flag
-    // Empty state = event-intent query + no internal events + no web events (after strict filtering)
-    const isEmptyState = isEventQuery && events.length === 0 && externalEvents.length === 0
+
+    const isEmptyState = isEventQuery && events.length === 0 && scoredWebRanked.length === 0 && stubScoredWeb.length === 0
 
     if (isEmptyState) {
       console.log(`[v0] 📭 Empty state: event-intent query with no internal events and no web events found (after strict location filtering)`)
-    } else if (isEventQuery && events.length === 0 && externalEvents.length > 0) {
-      console.log(`[v0] ✅ Web fallback successful: ${externalEvents.length} local web events found for event-intent query`)
+    } else if (isEventQuery && events.length === 0 && scoredWebRanked.length > 0) {
+      console.log(`[v0] ✅ Web fallback successful: ${scoredWebRanked.length} local web events found for event-intent query`)
     }
 
-    const stripDebug = (e: any) => {
-      const { _eventnessBoost, _score, _rankBreakdown, ...rest } = e
-      if (debug && _rankBreakdown) return { ...rest, _rankBreakdown }
+    const stripLegacyPrivateFields = (e: any) => {
+      const { _eventnessBoost, _score, _rankBreakdown, _resultKind, ...rest } = e
       return rest
     }
-    const allExternal = (
-      process.env.NODE_ENV === "production"
-        ? externalEvents
-        : [...externalEvents, ...stubExternalEvents]
-    ).map(stripDebug)
 
     const response: any = {
-      events: allEvents,
-      count: allEvents.length,
+      events: eventsPublic.map(stripLegacyPrivateFields),
+      count: eventsPublic.length,
       page,
       take,
       query: q,
-      internal: internalEvents,
-      external: allExternal,
-      total: allEvents.length,
+      internal: internalEvents.map(stripLegacyPrivateFields),
+      external: externalEvents.map(stripLegacyPrivateFields),
+      total: eventsPublic.length,
       // Empty state flag: true only if both internal and web events are 0
       emptyState: isEmptyState,
       // Indicate if web results were included (for UI labeling)
@@ -1908,8 +1949,8 @@ export async function GET(req: NextRequest) {
 
     emitSearchEventsComplete({
       internalCount: internalEvents.length,
-      externalCount: allExternal.length,
-      totalReturned: allEvents.length,
+      externalCount: externalEvents.length,
+      totalReturned: eventsPublic.length,
       includesWeb: externalEvents.length > 0,
       webCalled: debugTrace.webCalled,
       emptyState: isEmptyState,

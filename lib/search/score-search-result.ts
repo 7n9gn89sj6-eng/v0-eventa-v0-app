@@ -3,13 +3,20 @@ import type { SearchPlan } from "@/app/lib/search/resolveSearchPlan"
 import type { EventCategory } from "@prisma/client"
 
 export type SearchScoreBreakdown = {
+  /** Internal rows receive a large deterministic boost so strong internal beats strong web. */
   sourceScore: number
+  /** Overlap of meaningful query tokens with title/description/city. */
+  textOverlapScore: number
+  /** Minor boost for near-future events. */
+  freshnessScore: number
   scopeScore: number
   timeScore: number
   interestScore: number
   audienceScore: number
   qualityScore: number
   mismatchPenalty: number
+  /** Web-only: generic city calendars / what's-on landing pages. */
+  genericWebPenalty: number
   /** Optional extra boost applied to web rows in the route (URLs/snippets). */
   webListingBoost: number
   total: number
@@ -91,10 +98,79 @@ function structuredCategoryMatch(catKey: string | undefined, result: any): boole
 }
 
 function textBlob(result: any): string {
-  return [result.title, result.description, result.venueName, result.city]
+  return [result.title, result.description, result.venueName, result.city, result.location?.city]
     .filter(Boolean)
     .join(" ")
     .toLowerCase()
+}
+
+const TEXT_OVERLAP_STOPWORDS = new Set([
+  "the",
+  "and",
+  "for",
+  "with",
+  "from",
+  "this",
+  "that",
+  "your",
+  "our",
+  "are",
+  "was",
+  "has",
+  "have",
+  "will",
+  "near",
+  "around",
+  "into",
+  "about",
+  "event",
+  "events",
+])
+
+/**
+ * Deterministic query↔row text overlap (no AI).
+ */
+export function queryTextOverlapScore(intent: SearchIntent, result: any): number {
+  const raw = (intent.rawQuery || "").trim().toLowerCase()
+  if (!raw) return 0
+  const tokens = raw
+    .split(/\s+/)
+    .map((t) => t.replace(/[^a-z0-9'-]/gi, ""))
+    .filter((t) => t.length > 2 && !TEXT_OVERLAP_STOPWORDS.has(t))
+  if (tokens.length === 0) return 0
+  const blob = textBlob(result)
+  let hits = 0
+  for (const t of tokens) {
+    if (blob.includes(t)) hits += 1
+  }
+  return Math.min(14, hits * 2)
+}
+
+function computeFreshnessScore(result: any, now: Date): number {
+  const bounds = parseEventBounds(result, now)
+  if (!bounds) return 0
+  if (bounds.end.getTime() < now.getTime()) return 0
+  const days = (bounds.start.getTime() - now.getTime()) / (86400 * 1000)
+  if (days >= 0 && days <= 14) return 3
+  if (days <= 45) return 1
+  return 0
+}
+
+/**
+ * Penalise generic web listing / hub pages so specific rows (including internal) outrank them.
+ */
+export function genericWebListingPenalty(result: any): number {
+  const url = String(result.externalUrl || result._originalUrl || result.url || "").toLowerCase()
+  const title = String(result.title || "").toLowerCase()
+  const desc = String(result.description || "").toLowerCase()
+  const blob = `${url} ${title} ${desc}`
+  let p = 0
+  if (/\bwhat['']?s\s+on\b/i.test(title) || /\bwhat['']?s\s+on\b/i.test(desc)) p += 16
+  if (/\bbrowse\s+all\s+events?\b/i.test(blob) || /\ball\s+upcoming\s+events?\b/i.test(blob)) p += 14
+  if (/\/whats-?on\b|\/whatson\b|\/things-to-do\b/i.test(url)) p += 18
+  if (/\/events?\/?$/i.test(url) && url.split("/").filter(Boolean).length <= 4) p += 10
+  if (/\bevent\s+(calendar|guide|directory|listing)s?\b/i.test(blob)) p += 12
+  return Math.min(45, p)
 }
 
 function aggregatorPenalty(result: any): number {
@@ -103,19 +179,18 @@ function aggregatorPenalty(result: any): number {
   const url = String(result.externalUrl || result._originalUrl || result.url || "").toLowerCase()
   const fullText = `${title} ${description}`
   const phrases = [
-    /\bwhat['']?s\s+on\b/i,
     /\bbrowse\s+events?\b/i,
     /\ball\s+(concerts?|shows?|events?)\b/i,
-    /\bevent\s+(calendar|listing|guide|directory)\b/i,
   ]
-  if (phrases.some((p) => p.test(fullText))) return 12
+  let p = 0
+  if (phrases.some((re) => re.test(fullText))) p += 10
   if (
     url.includes("eventbrite.com") ||
     (url.includes("timeout.com") && fullText.includes("best"))
   ) {
-    return 10
+    p += 12
   }
-  return 0
+  return Math.min(22, p)
 }
 
 /**
@@ -135,7 +210,9 @@ export function scoreSearchResult(args: {
   const plan = searchPlan
   const restrict = plan.filters.applyLocationRestriction
 
-  let sourceScore = kind === "internal" ? 80 : 0
+  let sourceScore = kind === "internal" ? 115 : 0
+  const textOverlapScore = queryTextOverlapScore(intent, result)
+  const freshnessScore = computeFreshnessScore(result, now)
 
   let scopeScore = 0
   const targetCity = plan.location.city?.trim()
@@ -276,24 +353,32 @@ export function scoreSearchResult(args: {
     mismatchPenalty += aggregatorPenalty(result)
   }
 
+  const genericWebPenalty = kind === "web" ? genericWebListingPenalty(result) : 0
+
   const total =
     sourceScore +
+    textOverlapScore +
+    freshnessScore +
     scopeScore +
     timeScore +
     interestScore +
     audienceScore +
     qualityScore -
-    mismatchPenalty +
+    mismatchPenalty -
+    genericWebPenalty +
     webListingBoost
 
   return {
     sourceScore,
+    textOverlapScore,
+    freshnessScore,
     scopeScore,
     timeScore,
     interestScore,
     audienceScore,
     qualityScore,
     mismatchPenalty,
+    genericWebPenalty,
     webListingBoost,
     total,
   }

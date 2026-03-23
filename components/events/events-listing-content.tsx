@@ -237,55 +237,66 @@ export function EventsListingContent({
       const apiExecutionCity = data?.effectiveLocation?.city?.trim() || ""
       const externalCityFilter = apiExecutionCity || cityFilter
 
-      // Filter external results by city if city filter is active (non-web only).
-      // Web rows are locality-gated on the server; per-row city is not authoritative for CSE hits.
-      const filteredExternal = (data.external || []).filter((ext: any) => {
-        if (!externalCityFilter || externalCityFilter.trim() === "") return true
-        const isWeb = ext.source === "web" || ext.isWebResult
-        if (isWeb) return true
-        const extCity = (ext.location?.city || ext.city || "").toLowerCase().trim()
-        const filterCity = externalCityFilter.toLowerCase().trim()
-        return extCity.includes(filterCity) || filterCity.includes(extCity) || extCity === ""
-      })
+      const mapUnifiedSearchRowToEvent = (row: any): Event => {
+        const isWeb = row.source === "web" || row.isWebResult
+        if (isWeb) {
+          return {
+            id: row.id,
+            title: row.title,
+            description: row.description,
+            startAt: row.startAt,
+            endAt: row.endAt,
+            city: row.location?.city || row.city || "",
+            country: row.location?.country || row.country || "",
+            address: row.location?.address || row.address || "",
+            venueName: row.location?.address || row.venueName || "",
+            categories: row.categories || [],
+            priceFree: row.priceFree || false,
+            imageUrls: row.imageUrl ? [row.imageUrl] : (row.imageUrls || []),
+            status: row.status || "PUBLISHED",
+            aiStatus: row.aiStatus || "SAFE",
+            source: "web" as const,
+            isWebResult: true,
+            imageUrl: row.imageUrl,
+            externalUrl: row.externalUrl || row.url,
+          }
+        }
+        return {
+          ...row,
+          source: row.source || ("internal" as const),
+          isEventaEvent: true,
+        }
+      }
 
-      // PRIORITY: Internal events (user-created, curated) ALWAYS come FIRST
-      // External web results come AFTER and are clearly marked
-      // This ensures user satisfaction with accurate, curated events
-      const allEvents = [
-        // Internal events first (user-created, curated, accurate)
-        ...(data.internal || []).map((int: any) => ({
-          ...int,
-          source: int.source || "internal" as const,
-          isEventaEvent: true, // Mark as Eventa event for UI
-        })),
-        // External web results second (informational, may need verification) - filtered by city
-        ...filteredExternal.map((ext: any) => ({
-          id: ext.id,
-          title: ext.title,
-          description: ext.description,
-          startAt: ext.startAt,
-          endAt: ext.endAt,
-          city: ext.location?.city || ext.city || "",
-          country: ext.location?.country || ext.country || "",
-          address: ext.location?.address || ext.address || "",
-          venueName: ext.location?.address || ext.venueName || "",
-          categories: ext.categories || [],
-          priceFree: ext.priceFree || false,
-          imageUrls: ext.imageUrl ? [ext.imageUrl] : (ext.imageUrls || []),
-          status: "PUBLISHED",
-          aiStatus: "SAFE",
-          source: ext.source || "web" as const,
-          isWebResult: true, // Mark as web result for UI
-          imageUrl: ext.imageUrl,
-          externalUrl: ext.externalUrl || ext.url,
-        })),
-      ]
+      const useUnifiedEvents = Array.isArray(data.events) && data.events.length > 0
+
+      let allEvents: Event[]
+      if (useUnifiedEvents) {
+        allEvents = data.events.map(mapUnifiedSearchRowToEvent)
+      } else {
+        const filteredExternal = (data.external || []).filter((ext: any) => {
+          if (!externalCityFilter || externalCityFilter.trim() === "") return true
+          const isWeb = ext.source === "web" || ext.isWebResult
+          if (isWeb) return true
+          const extCity = (ext.location?.city || ext.city || "").toLowerCase().trim()
+          const filterCity = externalCityFilter.toLowerCase().trim()
+          return extCity.includes(filterCity) || filterCity.includes(extCity) || extCity === ""
+        })
+        allEvents = [
+          ...(data.internal || []).map((int: any) => ({
+            ...int,
+            source: int.source || ("internal" as const),
+            isEventaEvent: true,
+          })),
+          ...filteredExternal.map((ext: any) => mapUnifiedSearchRowToEvent({ ...ext, source: "web", isWebResult: true })),
+        ]
+      }
 
       console.log("[v0] Combined events:", {
         totalEvents: allEvents.length,
+        unifiedFromApi: useUnifiedEvents,
         internalEvents: data.internal?.length || 0,
-        externalEventsBeforeFilter: data.external?.length || 0,
-        externalEventsAfterFilter: filteredExternal.length,
+        externalEvents: data.external?.length || 0,
         cityFilter: cityFilter || "none",
         firstEvent: allEvents[0],
       })
@@ -407,12 +418,7 @@ export function EventsListingContent({
       return true
     })
     .sort((a, b) => {
-      // Always rank internal Eventa events before external/web results
-      const aPriority = a.isEventaEvent ? 0 : 1
-      const bPriority = b.isEventaEvent ? 0 : 1
-      if (aPriority !== bPriority) return aPriority - bPriority
-
-      // Then apply existing sortBy logic
+      // Order comes from API (`events` unified ranking); only apply user sortBy here.
       switch (sortBy) {
         case "date-asc":
           return new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
