@@ -113,6 +113,25 @@ function extractTime(query: string): SearchIntent["time"] {
   else {
     const weekday = lower.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i)?.[1]
     if (weekday) label = weekday.toLowerCase()
+    else {
+      const inMonth = lower.match(
+        /\bin\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)(?:\s+(\d{4}))?\b/,
+      )
+      if (inMonth) {
+        label = inMonth[2] ? `${inMonth[1]} ${inMonth[2]}` : inMonth[1]
+      } else {
+        const monthYear = lower.match(
+          /\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s+(\d{4})\b/,
+        )
+        if (monthYear) label = `${monthYear[1]} ${monthYear[2]}`
+        else {
+          const trailing = lower.match(
+            /\b(january|february|march|april|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\s*$/i,
+          )
+          if (trailing) label = trailing[1].toLowerCase()
+        }
+      }
+    }
   }
 
   return {

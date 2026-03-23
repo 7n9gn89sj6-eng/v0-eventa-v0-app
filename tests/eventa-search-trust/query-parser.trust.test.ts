@@ -116,5 +116,79 @@ describe("Eventa trust: parseDateExpression time intent", () => {
     expect(to.getMonth()).toBe(5)
     expect(to.getDate()).toBe(3)
   })
+
+  it("parses `in June` as full calendar month when June is still ahead (March ref)", () => {
+    const res = parseDateExpression("markets in paris in june")
+    expect(res.date_from).toBeTruthy()
+    expect(res.date_to).toBeTruthy()
+    const from = new Date(res.date_from!)
+    const to = new Date(res.date_to!)
+    expect(from.getMonth()).toBe(5)
+    expect(from.getDate()).toBe(1)
+    expect(from.getFullYear()).toBe(2026)
+    expect(to.getMonth()).toBe(5)
+    expect(to.getDate()).toBe(30)
+  })
+
+  it("parses `in May` as next calendar year when May has already passed (June ref)", () => {
+    vi.setSystemTime(new Date("2026-06-15T10:00:00.000Z"))
+    const res = parseDateExpression("family events in berlin in may")
+    expect(res.date_from).toBeTruthy()
+    expect(res.date_to).toBeTruthy()
+    const from = new Date(res.date_from!)
+    const to = new Date(res.date_to!)
+    expect(from.getMonth()).toBe(4)
+    expect(from.getFullYear()).toBe(2027)
+    expect(to.getMonth()).toBe(4)
+    expect(to.getDate()).toBe(31)
+    vi.setSystemTime(new Date("2026-03-18T10:00:00.000Z"))
+  })
+
+  it("explicit `in May 2026` wins over rolling year rule", () => {
+    const res = parseDateExpression("exhibitions in rome in may 2026")
+    expect(res.date_from).toBeTruthy()
+    expect(res.date_to).toBeTruthy()
+    const from = new Date(res.date_from!)
+    const to = new Date(res.date_to!)
+    expect(from.getFullYear()).toBe(2026)
+    expect(from.getMonth()).toBe(4)
+    expect(to.getFullYear()).toBe(2026)
+    expect(to.getMonth()).toBe(4)
+    expect(to.getDate()).toBe(31)
+  })
+
+  it("parses `May 2026` month + year without `in`", () => {
+    const res = parseDateExpression("may 2026 art shows")
+    expect(res.date_from).toBeTruthy()
+    const from = new Date(res.date_from!)
+    expect(from.getFullYear()).toBe(2026)
+    expect(from.getMonth()).toBe(4)
+  })
+
+  it("parses leading `June markets` as full June window (rolling year from March ref)", () => {
+    const res = parseDateExpression("june markets near me")
+    expect(res.date_from).toBeTruthy()
+    const from = new Date(res.date_from!)
+    expect(from.getMonth()).toBe(5)
+    expect(from.getFullYear()).toBe(2026)
+  })
+
+  it("parses trailing month token `… Berlin June` as full June window (May excluded at tail)", () => {
+    const res = parseDateExpression("family events berlin june")
+    expect(res.date_from).toBeTruthy()
+    const from = new Date(res.date_from!)
+    expect(from.getMonth()).toBe(5)
+    expect(from.getFullYear()).toBe(2026)
+  })
+
+  it("explicit day range still beats month window", () => {
+    const res = parseDateExpression("Markets in Athens Greece 01 May to 03 May 2026")
+    expect(res.date_from).toBeTruthy()
+    expect(res.date_to).toBeTruthy()
+    const from = new Date(res.date_from!)
+    const to = new Date(res.date_to!)
+    expect(from.getDate()).toBe(1)
+    expect(to.getDate()).toBe(3)
+  })
 })
 

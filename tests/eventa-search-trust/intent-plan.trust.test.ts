@@ -121,5 +121,47 @@ describe("Eventa trust: intent -> plan foundation", () => {
       expect(plan.location.city).toBe("Melbourne")
     })
   })
+
+  describe("month window intent -> plan", () => {
+    it("family events in Berlin in May carries Berlin query + full May window on plan", () => {
+      const intent = parseSearchIntent("family events in Berlin in May")
+      const plan = resolveSearchPlan(intent, { city: "Melbourne", country: "Australia" })
+
+      expect(plan.location.source).toBe("query")
+      expect(plan.location.city).toBe("Berlin")
+      expect(plan.location.country).toBe("Germany")
+      expect(intent.time?.date_from).toBeTruthy()
+      expect(intent.time?.date_to).toBeTruthy()
+      const from = new Date(intent.time!.date_from!)
+      expect(from.getMonth()).toBe(4)
+      expect(intent.time?.label).toMatch(/may/i)
+    })
+
+    it("markets in Paris in June keeps Paris + June window", () => {
+      const intent = parseSearchIntent("markets in Paris in June")
+      const plan = resolveSearchPlan(intent, { city: "Sydney", country: "Australia" })
+
+      expect(plan.location.source).toBe("query")
+      expect(plan.location.city).toBe("Paris")
+      expect(plan.location.country).toBe("France")
+      expect(intent.interest).toContain("markets")
+      const from = new Date(intent.time!.date_from!)
+      expect(from.getMonth()).toBe(5)
+      expect(intent.time?.label).toMatch(/june/i)
+    })
+
+    it("exhibitions in Rome in May 2026 uses explicit year on time range", () => {
+      const intent = parseSearchIntent("exhibitions in Rome in May 2026")
+      const plan = resolveSearchPlan(intent, { city: "Melbourne", country: "Australia" })
+
+      expect(plan.location.city).toBe("Rome")
+      const from = new Date(intent.time!.date_from!)
+      const to = new Date(intent.time!.date_to!)
+      expect(from.getFullYear()).toBe(2026)
+      expect(to.getFullYear()).toBe(2026)
+      expect(from.getMonth()).toBe(4)
+      expect(intent.time?.label).toMatch(/may\s+2026/i)
+    })
+  })
 })
 

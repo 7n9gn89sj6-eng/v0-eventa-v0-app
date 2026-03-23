@@ -296,6 +296,92 @@ function buildCalendarRangeIso(
 }
 
 /**
+ * Full calendar month: "in May", "May 2026", "June markets …" (leading month + event noun).
+ * Runs after explicit day ranges. Year: explicit 4-digit wins; else current year if the month
+ * is strictly after the current calendar month, or the same month as today; otherwise next year.
+ */
+function tryParseMonthWindow(normalized: string, today: Date): {
+  date_from?: string
+  date_to?: string
+} {
+  const monthCap = `(${MONTH_NAME_ALT})`
+  const y4 = `(\\d{4})`
+
+  type Hit = { monthToken: string; explicitYear: number | null }
+  let hit: Hit | null = null
+
+  const inMonth = normalized.match(new RegExp(`\\bin\\s+${monthCap}(?:\\s+${y4})?\\b`, "i"))
+  if (inMonth) {
+    hit = {
+      monthToken: inMonth[1],
+      explicitYear: inMonth[2] ? Number.parseInt(inMonth[2], 10) : null,
+    }
+  }
+
+  if (!hit) {
+    const monthYear = normalized.match(new RegExp(`\\b${monthCap}\\s+${y4}\\b`, "i"))
+    if (monthYear) {
+      hit = {
+        monthToken: monthYear[1],
+        explicitYear: Number.parseInt(monthYear[2], 10),
+      }
+    }
+  }
+
+  if (!hit) {
+    // Trailing month, but not bare `may` (modal / ambiguity with "next may", etc.).
+    const trailingAlt =
+      "january|february|march|april|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec"
+    const trailingMonth = normalized.match(new RegExp(`\\b(${trailingAlt})\\s*$`, "i"))
+    if (trailingMonth) {
+      hit = { monthToken: trailingMonth[1], explicitYear: null }
+    }
+  }
+
+  if (!hit) {
+    const afterEventNoun = new RegExp(
+      `^${monthCap}\\s+(?:events?|markets?|exhibitions?|festival|festivals?|fair|fairs|show|shows|gigs?|concerts?|things\\s+to\\s+do)\\b`,
+      "i",
+    )
+    const lead = normalized.match(afterEventNoun)
+    if (lead) {
+      hit = { monthToken: lead[1], explicitYear: null }
+    }
+  }
+
+  if (!hit) return {}
+
+  const monthIndex = monthIndexFromToken(hit.monthToken)
+  if (monthIndex === null) return {}
+
+  let year: number
+  if (
+    hit.explicitYear !== null &&
+    Number.isFinite(hit.explicitYear) &&
+    hit.explicitYear >= 1900 &&
+    hit.explicitYear <= 2100
+  ) {
+    year = hit.explicitYear
+  } else {
+    const cy = today.getFullYear()
+    const cm = today.getMonth()
+    if (monthIndex > cm) year = cy
+    else if (monthIndex < cm) year = cy + 1
+    else year = cy
+  }
+
+  const start = new Date(year, monthIndex, 1)
+  start.setHours(0, 0, 0, 0)
+  const end = new Date(year, monthIndex + 1, 0)
+  end.setHours(23, 59, 59, 999)
+
+  return {
+    date_from: start.toISOString(),
+    date_to: end.toISOString(),
+  }
+}
+
+/**
  * Parse natural language date expressions into ISO date strings
  */
 export function parseDateExpression(dateExpr: string): {
@@ -414,6 +500,11 @@ export function parseDateExpression(dateExpr: string): {
   const explicitRange = tryParseExplicitCalendarRange(normalized)
   if (explicitRange.date_from && explicitRange.date_to) {
     return explicitRange
+  }
+
+  const monthWindow = tryParseMonthWindow(normalized, today)
+  if (monthWindow.date_from && monthWindow.date_to) {
+    return monthWindow
   }
 
   // If we can't parse, return empty
