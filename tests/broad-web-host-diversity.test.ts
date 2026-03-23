@@ -8,7 +8,7 @@ function web(id: string, host: string, score: number) {
     id,
     _resultKind: "web" as const,
     _score: score,
-    externalUrl: `https://${host}/e/${id}`,
+    url: `https://${host}/e/${id}`,
     startAt: future,
   }
 }
@@ -23,13 +23,13 @@ function internal(id: string, score: number) {
 }
 
 describe("applyBroadWebHostDiversity", () => {
-  it("spaces repeated same-host web results when another host scores between them (linear penalty)", () => {
-    // K=4: second EB at preIdx 2 → penalty 4 → eff 96; timeout at 97 stays between 100 and 96.
+  it("spaces repeated same-host web results when another host scores between them (K=3)", () => {
+    // Second EB at preIdx 2: penalty 3 → eff 97; timeout at 98 between 100 and 97.
     const rows = [
       internal("lead", 300),
       web("a", "eventbrite.com", 100),
       web("b", "eventbrite.com", 100),
-      web("c", "timeout.com", 97),
+      web("c", "timeout.com", 98),
     ]
     const out = applyBroadWebHostDiversity(rows)
     expect(out.map((r) => r.id)).toEqual(["lead", "a", "c", "b"])
@@ -47,7 +47,7 @@ describe("applyBroadWebHostDiversity", () => {
     expect(out.map((r) => r.id)).toEqual(["int", "a", "c", "b"])
   })
 
-  it("does not reorder internal-only results (stable effective scores)", () => {
+  it("does not reorder internal-only results", () => {
     const rows = [internal("i1", 80), internal("i2", 90), internal("i3", 85)]
     const out = applyBroadWebHostDiversity(rows)
     expect(out.map((r) => r.id)).toEqual(["i2", "i3", "i1"])
@@ -63,18 +63,18 @@ describe("applyBroadWebHostDiversity", () => {
     expect((out[0] as any)._diversityPenalty).toBe(0)
   })
 
-  it("softens penalty in top two overall slots so a strong same-host pair is not over-penalized", () => {
+  it("softens penalty for top two overall slots (strong same-host pair near top)", () => {
     const rows = [
       web("a", "eventbrite.com", 100),
       web("b", "eventbrite.com", 100),
       web("c", "timeout.com", 97),
     ]
     const out = applyBroadWebHostDiversity(rows)
-    // b at preIdx 1: occurrence 1 → raw 4, softened floor(4 * 0.25) = 1 → eff 99, still above 97
+    // b at preIdx 1: raw penalty 3 → floor(3 * 0.25) = 0 → eff 100; still above c at 97
     expect(out.map((r) => r.id)).toEqual(["a", "b", "c"])
   })
 
-  it("first occurrence of a host stays at full score (single dominant same-host result)", () => {
+  it("first occurrence of a host keeps full score (single strong same-host result)", () => {
     const rows = [
       web("solo", "eventbrite.com", 100),
       web("other", "timeout.com", 50),
@@ -82,5 +82,15 @@ describe("applyBroadWebHostDiversity", () => {
     const out = applyBroadWebHostDiversity(rows)
     expect(out.map((r) => r.id)).toEqual(["solo", "other"])
     expect((out[0] as any)._diversityPenalty).toBe(0)
+  })
+
+  it("uses url field with new URL().hostname (invalid URL skipped safely)", () => {
+    const rows = [
+      { id: "bad", _resultKind: "web" as const, _score: 50, url: "http://[", startAt: future },
+      web("good", "example.com", 40),
+    ]
+    const out = applyBroadWebHostDiversity(rows)
+    expect(out).toHaveLength(2)
+    expect((out[0] as any)._diversityHost).toBe("(unknown)")
   })
 })

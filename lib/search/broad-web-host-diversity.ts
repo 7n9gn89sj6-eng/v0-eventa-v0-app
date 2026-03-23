@@ -1,20 +1,7 @@
 /**
- * Broad-query only: reduce same-host web stacking via diversityPenalty on effective score + stable re-sort.
- * Internal rows unchanged; tie-breaks preserve pre-pass order.
+ * Broad-query only: same-host web stacking reduced via diversityPenalty + stable re-sort.
+ * Internals unchanged; equal effectiveScore ties break by original list order (_preDiversityIndex).
  */
-
-export function normalizeWebHostKey(rawUrl: string): string | null {
-  const u = String(rawUrl || "").trim()
-  if (!u) return null
-  try {
-    const parsed = u.startsWith("http://") || u.startsWith("https://") ? new URL(u) : new URL(`https://${u}`)
-    let h = parsed.hostname.toLowerCase()
-    if (h.startsWith("www.")) h = h.slice(4)
-    return h || null
-  } catch {
-    return null
-  }
-}
 
 export type BroadDiversityRow = {
   _score: number
@@ -28,15 +15,35 @@ export type BroadDiversityRow = {
   [key: string]: unknown
 }
 
-/** Penalty for occurrence index n is n * K (n=0 → no penalty). */
-const DIVERSITY_K = 4
+/** diversityPenalty = hostOccurrenceIndex * DIVERSITY_K (index 0 → no penalty). */
+const DIVERSITY_K = 3
 const TOP_SLOTS_SOFTEN = 2
 const TOP_SLOT_FACTOR = 0.25
 
 /**
+ * Prefer `url`, then externalUrl / _originalUrl. Uses new URL(...).hostname; never throws.
+ */
+function hostnameFromWebRow(r: BroadDiversityRow): string {
+  const candidates = [r.url, r.externalUrl, r._originalUrl]
+  for (const raw of candidates) {
+    const u = String(raw ?? "").trim()
+    if (!u) continue
+    try {
+      const href = u.startsWith("http://") || u.startsWith("https://") ? u : `https://${u}`
+      let h = new URL(href).hostname.toLowerCase()
+      if (h.startsWith("www.")) h = h.slice(4)
+      if (h) return h
+    } catch {
+      /* try next candidate */
+    }
+  }
+  return "(unknown)"
+}
+
+/**
  * Returns a new array sorted by `_effectiveRankScore` (desc), stable on ties.
- * Web rows: `_diversityPenalty`, `_effectiveRankScore`, `_diversityHost`, `_hostOccurrenceIndex`, `_preDiversityIndex`.
- * Internal rows: `_effectiveRankScore === _score`, `_preDiversityIndex` only.
+ * Web: `_diversityPenalty`, `_effectiveRankScore`, `_diversityHost`, `_hostOccurrenceIndex`, `_preDiversityIndex`.
+ * Internal: `_effectiveRankScore === _score`, `_preDiversityIndex` only.
  */
 export function applyBroadWebHostDiversity(rows: BroadDiversityRow[]): BroadDiversityRow[] {
   if (rows.length === 0) return rows
@@ -48,8 +55,7 @@ export function applyBroadWebHostDiversity(rows: BroadDiversityRow[]): BroadDive
       return { ...base, _effectiveRankScore: r._score }
     }
 
-    const url = String(r.externalUrl || r._originalUrl || r.url || "")
-    const host = normalizeWebHostKey(url) ?? "(unknown)"
+    const host = hostnameFromWebRow(r)
     const occurrenceIndex = hostCounts.get(host) ?? 0
     hostCounts.set(host, occurrenceIndex + 1)
 
