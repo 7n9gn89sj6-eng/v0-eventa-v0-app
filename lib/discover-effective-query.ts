@@ -15,6 +15,9 @@ const INTEREST_PATTERNS: Array<{ pattern: RegExp; value: string }> = [
   { pattern: /\b(comedy|stand[-\s]?up)\b/gi, value: "comedy" },
   { pattern: /\b(art|arts|gallery|exhibition|museum|theatre|theater)\b/gi, value: "art" },
   { pattern: /\b(festival|festivals)\b/gi, value: "festival" },
+  { pattern: /\b(sport|sports|fitness|run|running|yoga)\b/gi, value: "sports" },
+  { pattern: /\b(community|volunteer|charity)\b/gi, value: "community" },
+  { pattern: /\b(learn|talk|workshop|course)\b/gi, value: "learning" },
 ]
 
 function collapseWhitespace(s: string): string {

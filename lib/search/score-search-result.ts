@@ -1,5 +1,6 @@
 import type { SearchIntent } from "@/app/lib/search/parseSearchIntent"
 import type { SearchPlan } from "@/app/lib/search/resolveSearchPlan"
+import { scoreContextAgainstTextBlob } from "@/lib/search/search-intent-context"
 import type { EventCategory } from "@prisma/client"
 
 export type SearchScoreBreakdown = {
@@ -13,6 +14,7 @@ export type SearchScoreBreakdown = {
   timeScore: number
   interestScore: number
   audienceScore: number
+  contextScore: number
   qualityScore: number
   mismatchPenalty: number
   /** Web-only: generic city calendars / what's-on landing pages. */
@@ -308,6 +310,7 @@ export function scoreSearchResult(args: {
           arts: ["gallery", "exhibition", "museum"],
           markets: ["market", "fair", "bazaar"],
           family: ["kids", "children"],
+          sports: ["fitness", "yoga", "run", "outdoor", "trail"],
         }
         const syns = synonymMap[catKey] || []
         if (syns.some((s) => blob.includes(s))) interestScore += broad ? 6 : 10
@@ -341,6 +344,19 @@ export function scoreSearchResult(args: {
     else if (/\bfree\b|\bcheap\b/i.test(textBlob(result))) audienceScore += 5
   }
 
+  const blobLower = textBlob(result)
+  const contextScore = scoreContextAgainstTextBlob(intent.context, blobLower)
+
+  if (
+    intent.context?.includes("farmers_market") &&
+    strictCat &&
+    !broad &&
+    /\bmarkets?\b/.test(blobLower) &&
+    !/\b(farmers?|farm\s+market|producer|growers?|organic)\b/.test(blobLower)
+  ) {
+    mismatchPenalty += 5
+  }
+
   let qualityScore = 0
   const title = String(result.title || "")
   const desc = String(result.description || "")
@@ -363,6 +379,7 @@ export function scoreSearchResult(args: {
     timeScore +
     interestScore +
     audienceScore +
+    contextScore +
     qualityScore -
     mismatchPenalty -
     genericWebPenalty +
@@ -376,6 +393,7 @@ export function scoreSearchResult(args: {
     timeScore,
     interestScore,
     audienceScore,
+    contextScore,
     qualityScore,
     mismatchPenalty,
     genericWebPenalty,

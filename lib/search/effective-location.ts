@@ -68,10 +68,13 @@ const COMMON_NON_LOCATION_WORDS = new Set([
   "free",
   "near",
   "around",
+  "where",
   "me",
   "nearby",
   "do",
   "see",
+  "hiking",
+  "hike",
 ])
 
 const INTENT_PREFIX_WORDS = new Set([
@@ -199,6 +202,7 @@ export function extractPlaceFromQuery(query: string): string | null {
       if (COMMON_NON_LOCATION_WORDS.has(placeClean.toLowerCase())) continue
       if (isCalendarMonthPlace(placeClean)) continue
       if (isQuerySpanNotAPlace(placeClean)) continue
+      if (/^where\b/i.test(placeClean.trim())) continue
 
       return placeClean
     }

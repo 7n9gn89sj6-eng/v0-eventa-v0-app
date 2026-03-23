@@ -7,6 +7,8 @@ import {
 } from "@/lib/search/effective-location"
 import { normalizeSearchUtterance, stripTrailingAustralianStateTokens } from "@/lib/search/normalize-search-utterance"
 import { parseDateExpression } from "@/lib/search/query-parser"
+import type { SearchIntentContext } from "@/lib/search/search-intent-context"
+import { extractSearchIntentContext } from "@/lib/search/search-intent-context"
 
 /** Whether query text clearly names a place (override selected scope) vs weak trailing inference. */
 export type PlaceEvidence = "explicit" | "implicit" | "none"
@@ -36,6 +38,9 @@ export type SearchIntent = {
   audience?: string[]
   price?: string[]
 
+  /** Activity/context facets (closed vocabulary); not categories and not place. */
+  context?: SearchIntentContext[]
+
   confidence?: number
 }
 
@@ -47,6 +52,9 @@ const INTEREST_PATTERNS: Array<{ pattern: RegExp; value: string }> = [
   { pattern: /\b(comedy|stand[-\s]?up)\b/i, value: "comedy" },
   { pattern: /\b(art|arts|gallery|exhibition|museum|theatre|theater)\b/i, value: "art" },
   { pattern: /\b(festival|festivals)\b/i, value: "festival" },
+  { pattern: /\b(sport|sports|fitness|run|running|yoga)\b/i, value: "sports" },
+  { pattern: /\b(community|volunteer|charity)\b/i, value: "community" },
+  { pattern: /\b(learn|talk|workshop|course)\b/i, value: "learning" },
 ]
 
 const REGION_PATTERNS: Array<{ pattern: RegExp; value: string }> = [
@@ -210,6 +218,8 @@ function extractPlaceWithEvidence(query: string): {
       const captured = trimPlaceCaptureTail(m[1]?.trim() ?? "")
       if (!captured || isCalendarMonthPlace(captured)) continue
       if (isQuerySpanNotAPlace(captured)) continue
+      // "near where I'm hiking" → not a place name
+      if (/^where\b/i.test(captured.trim())) continue
 
       let cityRaw = stripCountryTokensFromPlace(captured, country)
       if (!cityRaw) continue
@@ -279,6 +289,29 @@ function detectScope(query: string, place?: SearchIntent["place"]): SearchIntent
   return "local"
 }
 
+/**
+ * Maps multi-interest app intent to a single ranking category (aligned with score-search-result keys).
+ */
+export function rankingCategoryFromParsedIntent(intent: SearchIntent): string | undefined {
+  const list = intent.interest ?? []
+  const priority: Array<{ key: string; category: string }> = [
+    { key: "markets", category: "markets" },
+    { key: "music", category: "music" },
+    { key: "food", category: "food" },
+    { key: "sports", category: "sports" },
+    { key: "art", category: "arts" },
+    { key: "kids", category: "family" },
+    { key: "comedy", category: "arts" },
+    { key: "festival", category: "arts" },
+    { key: "community", category: "community" },
+    { key: "learning", category: "learning" },
+  ]
+  for (const { key, category } of priority) {
+    if (list.includes(key)) return category
+  }
+  return undefined
+}
+
 export function parseSearchIntent(query: string): SearchIntent {
   const rawQuery = String(query || "").trim()
   const nq = normalizeSearchUtterance(rawQuery)
@@ -288,12 +321,14 @@ export function parseSearchIntent(query: string): SearchIntent {
   const time = extractTime(nq)
   const { place, placeEvidence } = extractPlaceWithEvidence(nq)
   const scope = detectScope(nq, place)
+  const context = extractSearchIntentContext(nq)
 
   let confidence = 0.3
   if (interests.length > 0) confidence += 0.15
   if (time?.date_from || time?.date_to) confidence += 0.2
   if (place?.city || place?.country || place?.region) confidence += 0.2
   if (audience.length > 0 || price.length > 0) confidence += 0.1
+  if (context.length > 0) confidence += 0.05
   if (scope !== "broad") confidence += 0.1
 
   return {
@@ -305,6 +340,7 @@ export function parseSearchIntent(query: string): SearchIntent {
     scope,
     audience: audience.length > 0 ? audience : undefined,
     price: price.length > 0 ? price : undefined,
+    context: context.length > 0 ? context : undefined,
     confidence: Math.max(0, Math.min(1, confidence)),
   }
 }

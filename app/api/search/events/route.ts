@@ -15,12 +15,13 @@ import {
   resolvePlace,
   shouldAttemptPlaceResolve,
 } from "@/lib/search/resolve-place"
-// Two modules both export `parseSearchIntent` (different shapes): app = full planning intent for
-// `resolveSearchPlan` / execution; lib `parse-search-intent` = lightweight category hint for ranking/web only.
-import { parseSearchIntent as parseRankingIntent } from "@/lib/search/parse-search-intent"
 import { interpretSearchIntent, type InterpretedSearchIntent } from "@/lib/search/ai-intent"
 import { buildPhase1Interpretation } from "@/lib/search/phase1-interpretation"
-import { parseSearchIntent, type SearchIntent } from "@/app/lib/search/parseSearchIntent"
+import {
+  parseSearchIntent,
+  rankingCategoryFromParsedIntent,
+  type SearchIntent,
+} from "@/app/lib/search/parseSearchIntent"
 import { resolveSearchPlan } from "@/app/lib/search/resolveSearchPlan"
 import { EXECUTION_CITY_VARIATIONS } from "@/lib/search/city-variations"
 import { fetchParentMetroFromStoredEvents } from "@/lib/search/ambient-parent-metro"
@@ -1162,8 +1163,8 @@ export async function GET(req: NextRequest) {
         }
         
         // Query 2/3: Activity-specific web fallbacks (avoid always using "live music")
-        const parsedIntentForWeb = q ? parseRankingIntent(q) : {}
-        const webIntentCategory = category && category !== "all" ? category : parsedIntentForWeb.detectedCategory
+        const webIntentCategory =
+          category && category !== "all" ? category : rankingCategoryFromParsedIntent(parsedIntent)
         const webActivity = (() => {
           switch ((webIntentCategory || "").toLowerCase()) {
             case "music":
@@ -1699,12 +1700,11 @@ export async function GET(req: NextRequest) {
     // This ensures user satisfaction with accurate, curated events
     
     // Deterministic ranking (lib/search/score-search-result): internal-first order unchanged; scores explain relevance.
-    const parsedRanking = q ? parseRankingIntent(q) : {}
     const explicitCategoryTrimmed = category?.trim()
     const rankingCategorySignal =
       explicitCategoryTrimmed && explicitCategoryTrimmed.toLowerCase() !== "all"
         ? explicitCategoryTrimmed.toLowerCase()
-        : parsedRanking.detectedCategory
+        : rankingCategoryFromParsedIntent(parsedIntent)
 
     const searchPlanForScoring =
       ambientParentExpansionApplied && effectiveCity

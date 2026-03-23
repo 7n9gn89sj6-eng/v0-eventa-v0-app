@@ -1,4 +1,5 @@
 import type { SearchIntent } from "./parseSearchIntent"
+import type { SearchIntentContext } from "@/lib/search/search-intent-context"
 import { resolveRegionCountries } from "@/lib/search/region-map"
 
 export type SearchPlan = {
@@ -18,6 +19,7 @@ export type SearchPlan = {
   }
   audience: string[]
   price: string[]
+  context: SearchIntentContext[]
   filters: {
     strictCategory: boolean
     applyLocationRestriction: boolean
@@ -106,6 +108,7 @@ export function resolveSearchPlan(
     },
     audience: intent.audience ?? [],
     price: intent.price ?? [],
+    context: intent.context ?? [],
     filters: {
       strictCategory,
       applyLocationRestriction,
