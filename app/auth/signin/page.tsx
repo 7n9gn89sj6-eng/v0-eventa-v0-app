@@ -2,6 +2,7 @@ import { SignInForm } from "@/components/auth/sign-in-form"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
 import { getTranslations } from "@/lib/i18n/server"
+import { adminCredentialsConfigured } from "@/lib/next-auth-options"
 
 export async function generateMetadata() {
   const t = await getTranslations("metadata")
@@ -11,13 +12,19 @@ export async function generateMetadata() {
   }
 }
 
-const isAuthConfigured = !!(
-  process.env.EMAIL_SERVER_HOST &&
-  process.env.EMAIL_SERVER_PORT &&
-  process.env.EMAIL_SERVER_USER &&
-  process.env.EMAIL_SERVER_PASSWORD &&
-  process.env.EMAIL_FROM
-)
+const AUTH_ENABLED = process.env.NEXT_PUBLIC_AUTH_ENABLED === "true"
+
+const emailMagicLinkReady =
+  AUTH_ENABLED &&
+  !!(
+    process.env.EMAIL_SERVER_HOST &&
+    process.env.EMAIL_SERVER_PORT &&
+    process.env.EMAIL_SERVER_USER &&
+    process.env.EMAIL_SERVER_PASSWORD &&
+    process.env.EMAIL_FROM
+  )
+
+const noSignInMethod = AUTH_ENABLED && !emailMagicLinkReady && !adminCredentialsConfigured
 
 export default async function SignInPage() {
   const t = await getTranslations("auth")
@@ -30,7 +37,7 @@ export default async function SignInPage() {
           <p className="mt-2 text-muted-foreground">{t("signInSubtitle")}</p>
         </div>
 
-        {!isAuthConfigured && (
+        {noSignInMethod && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>{t("authError")}</AlertTitle>
@@ -38,7 +45,20 @@ export default async function SignInPage() {
           </Alert>
         )}
 
-        <SignInForm />
+        {AUTH_ENABLED && !emailMagicLinkReady && adminCredentialsConfigured && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Magic link unavailable</AlertTitle>
+            <AlertDescription>
+              Email sign-in is not configured. You can still sign in with the admin account below.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <SignInForm
+          emailMagicLinkReady={emailMagicLinkReady}
+          showAdminLogin={adminCredentialsConfigured}
+        />
       </div>
     </div>
   )

@@ -1,76 +1,8 @@
-// app/api/auth/[...nextauth]/route.ts
-import NextAuth from "next-auth";
-import EmailProvider from "next-auth/providers/email";
-import { sendEmailAPI } from "@/lib/email"; // ⬅️ changed
-import { db } from "@/lib/db";
-import { createSession } from "@/lib/jwt";
+import NextAuth from "next-auth"
+import { authOptions } from "@/lib/next-auth-options"
 
-export const runtime = "nodejs";
+export const runtime = "nodejs"
 
-const AUTH_ENABLED = process.env.NEXT_PUBLIC_AUTH_ENABLED === "true";
-const emailReady =
-  !!process.env.EMAIL_SERVER_HOST &&
-  !!process.env.EMAIL_SERVER_PORT &&
-  !!process.env.EMAIL_SERVER_USER &&
-  !!process.env.EMAIL_SERVER_PASSWORD &&
-  !!process.env.EMAIL_FROM;
+const handler = NextAuth(authOptions)
 
-const providers =
-  AUTH_ENABLED && emailReady
-    ? [
-        EmailProvider({
-          server: {
-            host: process.env.EMAIL_SERVER_HOST!,
-            port: Number(process.env.EMAIL_SERVER_PORT!),
-            auth: {
-              user: process.env.EMAIL_SERVER_USER!,
-              pass: process.env.EMAIL_SERVER_PASSWORD!,
-            },
-          },
-          from: process.env.EMAIL_FROM!,
-          sendVerificationRequest: async ({ identifier: email, url }) => {
-            console.log("[v0] NextAuth sending magic link to:", email);
-            console.log("[v0] Magic link URL:", url);
-
-            const html = `...same HTML as before...`;
-
-            try {
-              await sendEmailAPI({
-                to: email,
-                subject: "Sign in to Eventa",
-                html,
-              });
-
-              console.log("[v0] ✓ Magic link email sent successfully to:", email);
-            } catch (error) {
-              console.error("[v0] ✗ Failed to send magic link email:", error);
-              throw error;
-            }
-          },
-        }),
-      ]
-    : [];
-
-const handler = NextAuth({
-  secret: process.env.NEXTAUTH_SECRET,
-  providers,
-  ...(AUTH_ENABLED ? {} : { pages: { signIn: "/" } }),
-  callbacks: {
-    async signIn({ user }) {
-      // Bridge: create app session so /admin and other getSession() routes work
-      if (user?.email) {
-        const dbUser = await db.user.findUnique({
-          where: { email: user.email },
-          select: { id: true },
-        });
-        if (dbUser) await createSession(dbUser.id);
-      }
-      return true;
-    },
-    async session({ session }) {
-      return session;
-    },
-  },
-});
-
-export { handler as GET, handler as POST };
+export { handler as GET, handler as POST }
