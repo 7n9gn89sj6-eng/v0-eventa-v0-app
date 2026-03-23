@@ -120,6 +120,8 @@ export function EventsListingContent({
   const didInitUrlSync = useRef(false)
   const searchBarWrapRef = useRef<HTMLDivElement>(null)
   const placeFieldWrapRef = useRef<HTMLDivElement>(null)
+  const searchSeqRef = useRef(0)
+  const searchAbortRef = useRef<AbortController | null>(null)
 
   const [q, setQ] = useState(initialQuery || "")
   const [loading, setLoading] = useState(false)
@@ -138,7 +140,12 @@ export function EventsListingContent({
   const [countryFilter, setCountryFilter] = useState(() => initialCountry ?? "")
 
   async function runSearch() {
-    if (loading) return
+    searchSeqRef.current += 1
+    const seq = searchSeqRef.current
+    searchAbortRef.current?.abort()
+    const ac = new AbortController()
+    searchAbortRef.current = ac
+
     setLoading(true)
     setError(null)
     setAiSuggestionChip(null)
@@ -169,8 +176,10 @@ export function EventsListingContent({
         method: "GET",
         headers: { accept: "application/json" },
         cache: "no-store",
+        signal: ac.signal,
       })
       const data = await r.json()
+      if (seq !== searchSeqRef.current) return
       if (!r.ok) throw new Error(data?.error || `Search failed (${r.status})`)
 
       console.log("[v0] Search API response:", {
@@ -242,11 +251,15 @@ export function EventsListingContent({
         firstEvent: allEvents[0],
       })
 
+      if (seq !== searchSeqRef.current) return
+
       setResults(allEvents)
       setTotal(data.count ?? allEvents.length)
       setInterpretationSnapshot(normalizeInterpretationSnapshot(data))
       setAiSuggestionChip(extractAiSuggestionFacet(data))
     } catch (e: any) {
+      if (seq !== searchSeqRef.current) return
+      if (e?.name === "AbortError") return
       console.error(e)
       setError(e?.message || "Search failed")
       setResults([])
@@ -254,7 +267,9 @@ export function EventsListingContent({
       setInterpretationSnapshot(null)
       setAiSuggestionChip(null)
     } finally {
-      setLoading(false)
+      if (seq === searchSeqRef.current) {
+        setLoading(false)
+      }
     }
   }
 
@@ -286,7 +301,11 @@ export function EventsListingContent({
   }, [selectedCategory])
 
   useEffect(() => {
-    runSearch()
+    void runSearch()
+    return () => {
+      searchSeqRef.current += 1
+      searchAbortRef.current?.abort()
+    }
   }, [q, cityFilter, countryFilter, selectedCategory, initialDateFrom, initialDateTo])
 
   // Mobile + desktop consistency: keep `q`, `city`, and `category` synchronized with the URL.
