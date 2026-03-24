@@ -30,6 +30,29 @@ function isReliableStructuredCity(city: string | null | undefined): boolean {
   return x !== "unknown location" && x !== "current location"
 }
 
+/** Natural-language examples; a random subset is shown each mount (see TRY_THESE_VISIBLE_COUNT). */
+const SEARCH_SUGGESTION_POOL = [
+  "Paris HYROX",
+  "Melbourne International Comedy Festival",
+  "London theatre",
+  "live music Sydney",
+  "events in Melbourne",
+  "things to do in Brisbane",
+  "what's on in Sydney this weekend",
+  "something fun in Melbourne tonight",
+] as const
+
+const TRY_THESE_VISIBLE_COUNT = 5
+
+function pickRandomSuggestions(pool: readonly string[], count: number): string[] {
+  const copy = [...pool]
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[copy[i], copy[j]] = [copy[j]!, copy[i]!]
+  }
+  return copy.slice(0, Math.min(count, pool.length))
+}
+
 export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
   ({ onSearch, onError, className, initialQuery, alwaysShowSuggestions = false }, ref) => {
     const { t } = useI18n()
@@ -43,6 +66,9 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
     const [error, setError] = useState<string | null>(null)
     const [locationError, setLocationError] = useState<string | null>(null)
     const [manualLocationLoading, setManualLocationLoading] = useState(false)
+    const [searchExamples] = useState(() =>
+      pickRandomSuggestions(SEARCH_SUGGESTION_POOL, TRY_THESE_VISIBLE_COUNT),
+    )
 
     useEffect(() => {
       if (initialQuery) {
@@ -83,8 +109,13 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
       }
     }
 
-    const handleSubmit = async () => {
-      if (!query.trim()) return
+    const handleSubmit = async (overrideQuery?: string) => {
+      const effectiveQuery = String(overrideQuery ?? query).trim()
+      if (!effectiveQuery) return
+
+      if (overrideQuery !== undefined) {
+        setQuery(effectiveQuery)
+      }
 
       setError(null)
       setIsProcessing(true)
@@ -92,7 +123,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
 
       try {
         // CRITICAL: Always include defaultLocation in the request if available
-        const requestBody: any = { query }
+        const requestBody: any = { query: effectiveQuery }
         if (defaultLocation && isReliableStructuredCity(defaultLocation.city)) {
           requestBody.userLocation = {
             lat: defaultLocation.lat,
@@ -115,8 +146,8 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
 
           const params = intentToURLParams(intent)
 
-          if (query && !params.has("q")) {
-            params.set("q", query)
+          if (effectiveQuery && !params.has("q")) {
+            params.set("q", effectiveQuery)
           }
 
           // CRITICAL: Always ensure defaultLocation is in URL params if available
@@ -159,17 +190,17 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
           console.warn("[v0] Intent API failed, using fallback:", errorData.error || "Unknown error")
           
           const fallbackParams = new URLSearchParams()
-          fallbackParams.set("q", query)
+          fallbackParams.set("q", effectiveQuery)
           
           // Time intent should still narrow results, even if the intent API fails.
-          const dateRange = parseDateExpression(query)
+          const dateRange = parseDateExpression(effectiveQuery)
           if (dateRange.date_from) fallbackParams.set("date_from", dateRange.date_from)
           if (dateRange.date_to) fallbackParams.set("date_to", dateRange.date_to)
           
           // ALWAYS add defaultLocation if available (unless user specified a different location in query)
           // Check if query contains a city name that's different from detected location
           // Note: fallback is intentionally forgiving (case-insensitive, accepts lowercase).
-          const cityMatch = query.match(/\b(in|at|near|around)\s+([A-Za-z][A-Za-z'-]*(?:\s+[A-Za-z][A-Za-z'-]*){0,2})\b/i)
+          const cityMatch = effectiveQuery.match(/\b(in|at|near|around)\s+([A-Za-z][A-Za-z'-]*(?:\s+[A-Za-z][A-Za-z'-]*){0,2})\b/i)
           let extractedCity = cityMatch ? cityMatch[2].trim() : null
           if (extractedCity) {
             const extractedLower = extractedCity.toLowerCase()
@@ -215,11 +246,11 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
           router.push(`/discover?${fallbackParams.toString()}`)
         }
 
-        await onSearch?.(query)
+        await onSearch?.(effectiveQuery)
       } catch (error: any) {
         console.error("[v0] Smart input error:", error)
         const errorParams = new URLSearchParams()
-        errorParams.set("q", query)
+        errorParams.set("q", effectiveQuery)
         if (defaultLocation && isReliableStructuredCity(defaultLocation.city)) {
           errorParams.set("city", defaultLocation.city)
           if (defaultLocation.country) {
@@ -242,15 +273,6 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
         handleSubmit()
       }
     }
-
-    const searchExamples = [
-      "Music this weekend",
-      "Markets near me",
-      "Food & drinks",
-      "Art & exhibitions",
-      "Family events",
-      "Free events",
-    ]
 
     const guidanceText = tHome("search.searchGuidance")
 
@@ -366,8 +388,7 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
                   key={example}
                   type="button"
                   onClick={() => {
-                    setQuery(example)
-                    setShowExamples(alwaysShowSuggestions)
+                    void handleSubmit(example)
                   }}
                   className="rounded-full bg-secondary px-3 py-1.5 text-xs text-secondary-foreground transition-colors hover:bg-secondary/80"
                 >
