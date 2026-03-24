@@ -4,6 +4,7 @@ import {
   isCalendarMonthPlace,
   isQuerySpanNotAPlace,
   trimPlaceCaptureTail,
+  tryLeadingNonAustraliaKnownCity,
 } from "@/lib/search/effective-location"
 import { normalizeSearchUtterance, stripTrailingAustralianStateTokens } from "@/lib/search/normalize-search-utterance"
 import { parseDateExpression } from "@/lib/search/query-parser"
@@ -202,7 +203,15 @@ function extractPlaceWithEvidence(query: string): {
   let city: string | undefined
   let raw: string | undefined
 
-  const fromPhrase = extractPlaceFromQuery(q)
+  const leadingOverseas = tryLeadingNonAustraliaKnownCity(q)
+  if (leadingOverseas) {
+    city = leadingOverseas.city
+    raw = leadingOverseas.raw
+    country = country ?? leadingOverseas.country
+    geoEvidence = "explicit"
+  }
+
+  const fromPhrase = !city ? extractPlaceFromQuery(q) : null
   if (fromPhrase) {
     let cityRaw = stripCountryTokensFromPlace(fromPhrase, country)
     if (cityRaw) {

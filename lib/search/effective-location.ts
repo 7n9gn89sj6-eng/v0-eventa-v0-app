@@ -142,6 +142,36 @@ export function countryForKnownCity(city: string): string | null {
   return COUNTRY_BY_CITY[city.toLowerCase()] || null
 }
 
+function titleCaseCityKey(key: string): string {
+  return key
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((t) => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase())
+    .join(" ")
+}
+
+/**
+ * When the query starts with a known city whose country is not Australia, treat geography as
+ * explicit so it overrides a conflicting AU UI location (e.g. "Paris HYROX" with Melbourne selected).
+ * Australian leading cities stay implicit so patterns like "Brisbane comedy" + Melbourne URL still use the picker.
+ */
+export function tryLeadingNonAustraliaKnownCity(query: string): {
+  city: string
+  country: string
+  raw: string
+} | null {
+  const ql = query.trim().toLowerCase().replace(/\s+/g, " ")
+  const sortedKeys = Object.keys(COUNTRY_BY_CITY).sort((a, b) => b.length - a.length)
+  for (const key of sortedKeys) {
+    if (COUNTRY_BY_CITY[key] === "Australia") continue
+    if (ql === key || ql.startsWith(`${key} `)) {
+      const city = titleCaseCityKey(key)
+      return { city, country: COUNTRY_BY_CITY[key], raw: city }
+    }
+  }
+  return null
+}
+
 /**
  * True when a Title Case / trailing span is category or intent wording, not a place
  * (e.g. "Music" in "Music this weekend").
