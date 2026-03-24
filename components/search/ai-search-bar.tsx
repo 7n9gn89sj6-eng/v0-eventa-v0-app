@@ -1,5 +1,7 @@
 "use client"
 
+/* LEGACY — not used in production search (calls POST /api/search/dual). Canonical: GET /api/search/events. */
+
 import type React from "react"
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react"
 import { Search, Mic, MicOff, Loader2, Sparkles, RotateCcw, Volume2, VolumeX } from "lucide-react"

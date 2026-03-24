@@ -1,3 +1,7 @@
+/**
+ * LEGACY — not used in production search.
+ * Canonical: GET /api/search/events.
+ */
 import { type NextRequest, NextResponse } from "next/server"
 
 function levenshteinDistance(a: string, b: string): number {

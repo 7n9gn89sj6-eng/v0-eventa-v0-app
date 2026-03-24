@@ -1,5 +1,7 @@
 "use client"
 
+/* LEGACY — not used in production search (POST /api/search). Canonical: GET /api/search/events. */
+
 import useSWR from "swr"
 import type { SearchResponse, SearchFilters } from "@/lib/types"
 

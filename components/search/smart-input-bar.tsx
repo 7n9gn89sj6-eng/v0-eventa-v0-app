@@ -1,5 +1,7 @@
 "use client"
 
+/* Listing search runs in EventsListingContent: GET /api/search/events only. This bar uses POST /api/search/intent then navigates to /discover. */
+
 import type React from "react"
 
 import { useState, forwardRef, useImperativeHandle, useEffect } from "react"

@@ -1,3 +1,6 @@
+/**
+ * Canonical production search: GET /api/search/events (listing, SmartInputBar → /discover, eval harness).
+ */
 import { type NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/db"
 import { PUBLIC_EVENT_WHERE } from "@/lib/events"
@@ -10,7 +13,7 @@ import { isEventIntentQuery } from "@/lib/search/event-ranking"
 import { applyBroadWebHostDiversity } from "@/lib/search/broad-web-host-diversity"
 import { scoreSearchResult } from "@/lib/search/score-search-result"
 import { getExpandedTermGroups } from "@/lib/search/search-taxonomy"
-import { normalizeSearchUtterance, stripTextSearchStopwords } from "@/lib/search/normalize-search-utterance"
+import { normalizeSearchUtterance, sanitizeQueryParam, stripTextSearchStopwords } from "@/lib/search/core/normalize"
 import {
   buildPlaceResolveInput,
   isResolvedPlaceCompatibleWithParsed,
@@ -39,18 +42,7 @@ import {
 } from "@/lib/search/search-location-clause"
 import { microLocationForWebSearch } from "@/lib/search/micro-location-for-web"
 import { topicQueryForCityLevelWeb } from "@/lib/search/topic-query-for-city-level-web"
-import { sanitizeQueryParam } from "@/lib/search/sanitize-query-param"
-
-/**
- * Helper function to check if text contains Australian location indicators
- * @param text - Text to check
- * @returns true if text contains Australian indicators
- */
-function hasAustraliaIndicators(text: string): boolean {
-  if (!text) return false
-  const lower = text.toLowerCase()
-  return /\b(australia|australian|au|melbourne|sydney|brisbane|perth|adelaide|canberra|darwin|vic|victoria|naarm|tasmania|queensland|nsw|new south wales|western australia|wa|south australia|sa|northern territory|nt|australian capital territory|act)\b/i.test(lower)
-}
+import { hasAustraliaIndicators, hasUSIndicatorsInText } from "@/lib/search/core/geo"
 
 /** Structured OR filter: event.country matches any resolved region member. */
 function applyRegionCountriesWhere(where: any, countries: string[]) {
@@ -1614,8 +1606,8 @@ export async function GET(req: NextRequest) {
               }
               
               // Check for US country indicators without Australia indicators
-              const hasUSIndicators = /\b(usa|united states|us|america|u\.s\.|u\.s\.a\.)\b/i.test(resultText)
-              
+              const hasUSIndicators = hasUSIndicatorsInText(resultText)
+
               if (hasUSIndicators && !hasAustraliaIndicators(resultText)) {
                 console.log(`[v0] 🚫 EXCLUDED from /api/search/events: US indicators found but no Australia indicators in "${result.title?.substring(0, 50)}"`)
                 return false
@@ -1771,8 +1763,8 @@ export async function GET(req: NextRequest) {
           }
           
           // Check for US country indicators without Australia indicators
-          const hasUSIndicators = /\b(usa|united states|us|america|u\.s\.|u\.s\.a\.)\b/i.test(resultText)
-          
+          const hasUSIndicators = hasUSIndicatorsInText(resultText)
+
           if (hasUSIndicators && !hasAustraliaIndicators(resultText)) {
             console.log(`[v0] 🚫 STRICT FILTER: Excluded US indicators (no Australia) in "${result.title?.substring(0, 50)}"`)
             return false

@@ -1,5 +1,7 @@
 "use client"
 
+/* LEGACY — not used in production search. Canonical: components/search/smart-input-bar.tsx + GET /api/search/events. */
+
 import type React from "react"
 
 import { useState, forwardRef, useImperativeHandle, useEffect } from "react"

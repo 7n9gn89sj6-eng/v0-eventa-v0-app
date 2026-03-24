@@ -220,6 +220,7 @@ export function EventsListingContent({
       }
       console.log("[v0] Fetching /api/search/events with params:", params.toString())
 
+      // Canonical production search — do not switch to POST /api/search or /api/search/dual.
       const r = await fetch(`/api/search/events?${params.toString()}`, {
         method: "GET",
         headers: { accept: "application/json" },

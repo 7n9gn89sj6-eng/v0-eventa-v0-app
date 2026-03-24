@@ -1,3 +1,7 @@
+/**
+ * LEGACY — not used in production search.
+ * Canonical: GET /api/search/events (EventsListingContent, SmartInputBar → /discover, eval harness).
+ */
 import type { NextRequest } from "next/server"
 import { detectLanguage } from "@/lib/search/language-detection"
 import { normalizeQuery } from "@/lib/search/query-normalization"

@@ -1,5 +1,7 @@
 "use client"
 
+/* LEGACY — not used in production search. Canonical: GET /api/search/events via EventsListingContent. */
+
 import { useSearch } from "@/lib/search/use-search"
 import { ResultCard } from "./result-card"
 import { Button } from "@/components/ui/button"
