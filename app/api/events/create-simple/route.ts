@@ -9,6 +9,31 @@ export async function POST(req: Request) {
 
     console.log("[v0] Create-simple ALIAS: Received payload, transforming to canonical schema")
 
+    const categoryRaw =
+      body.category !== "auto" && body.category != null
+        ? body.category
+        : body.extraction?.category
+
+    const trimmedCategory =
+      categoryRaw != null && String(categoryRaw).trim() !== "" ? String(categoryRaw).trim() : ""
+
+    /**
+     * AI/import alias: if neither body nor extraction supplied a category, submit as OTHER with an
+     * explicit label (never a fake arts_culture / ART default).
+     */
+    const IMPORT_CATEGORY_UNSPECIFIED = "Imported (category not specified)"
+    const extraction = body.extraction as Record<string, unknown> | undefined
+    const extractionLabel =
+      typeof extraction?.customCategoryLabel === "string"
+        ? extraction.customCategoryLabel.trim().slice(0, 40)
+        : ""
+    const bodyLabel =
+      body.customCategoryLabel != null ? String(body.customCategoryLabel).trim().slice(0, 40) : ""
+    const resolvedImportLabel = (bodyLabel || extractionLabel || IMPORT_CATEGORY_UNSPECIFIED).slice(
+      0,
+      40,
+    )
+
     const canonicalPayload = {
       title: body.title || body.extraction?.title,
       description: body.description || body.extraction?.description || "",
@@ -16,14 +41,18 @@ export async function POST(req: Request) {
       end: body.end || body.extraction?.end,
       timezone: body.timezone || body.extraction?.timezone,
       location: body.location || body.extraction?.location,
-      category: body.category !== "auto" ? body.category : body.extraction?.category,
+      category: trimmedCategory || "OTHER",
+      tags: body.tags ?? body.extraction?.tags,
+      customCategoryLabel: trimmedCategory
+        ? body.customCategoryLabel ?? null
+        : resolvedImportLabel || IMPORT_CATEGORY_UNSPECIFIED,
+      originalLanguage: body.originalLanguage ?? null,
       price: body.price || body.extraction?.price,
       organizer_name: body.organizer_name || body.extraction?.organizer_name,
       organizer_contact: body.organizer_contact || body.contactInfo,
       source_text: body.source_text || body.sourceText,
       imageUrl: body.imageUrl,
       externalUrl: body.externalUrl,
-      tags: body.tags || body.extraction?.tags,
       extractionConfidence: body.extractionConfidence || body.extraction?.confidence,
       creatorEmail: body.creatorEmail,
     }

@@ -77,7 +77,7 @@ describe("Eventa trust: context scoring", () => {
       startAt: future,
       endAt: future,
       categories: ["markets"],
-      category: "MARKETS_FAIRS",
+      category: "MARKETS",
     }
     const generic = {
       title: "Saturday Market",
@@ -87,7 +87,7 @@ describe("Eventa trust: context scoring", () => {
       startAt: future,
       endAt: future,
       categories: ["markets"],
-      category: "MARKETS_FAIRS",
+      category: "MARKETS",
     }
 
     const a = scoreSearchResult({

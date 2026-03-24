@@ -313,8 +313,8 @@ export function rankingCategoryFromParsedIntent(intent: SearchIntent): string | 
     { key: "sports", category: "sports" },
     { key: "art", category: "arts" },
     { key: "kids", category: "family" },
-    { key: "comedy", category: "arts" },
-    { key: "festival", category: "arts" },
+    { key: "comedy", category: "comedy" },
+    { key: "festival", category: "festivals" },
     { key: "community", category: "community" },
     { key: "learning", category: "learning" },
   ]

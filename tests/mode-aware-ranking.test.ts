@@ -25,7 +25,7 @@ describe("mode-aware ranking (Phase 2.2)", () => {
       startAt: future,
       endAt: future,
       categories: ["music"],
-      category: "MUSIC_NIGHTLIFE",
+      category: "MUSIC",
     }
     const a = scoreSearchResult({
       result: row,
@@ -61,7 +61,7 @@ describe("mode-aware ranking (Phase 2.2)", () => {
       country: "France",
       startAt: future,
       endAt: future,
-      category: "SPORTS_OUTDOORS",
+      category: "SPORTS",
       categories: ["fitness"],
     }
     const genericWeb = {
@@ -131,7 +131,7 @@ describe("mode-aware ranking (Phase 2.2)", () => {
       startAt: future,
       endAt: future,
       categories: ["community"],
-      category: "COMMUNITY_CAUSES",
+      category: "COMMUNITY",
     }
     const cls = classifyQueryIntent(q, intent)
     expect(cls.mode).toBe("discovery")

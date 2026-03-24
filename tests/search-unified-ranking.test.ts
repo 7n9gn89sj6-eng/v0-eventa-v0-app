@@ -20,7 +20,7 @@ describe("unified search ranking (deterministic)", () => {
       startAt: future,
       endAt: future,
       categories: ["music"],
-      category: "MUSIC_NIGHTLIFE",
+      category: "MUSIC",
     }
     const genericWeb = {
       title: "What's On Melbourne",
@@ -71,7 +71,7 @@ describe("unified search ranking (deterministic)", () => {
       startAt: future,
       endAt: future,
       categories: ["food", "markets"],
-      category: "MARKETS_FAIRS",
+      category: "MARKETS",
     }
     const webCalendar = {
       title: "Melbourne Events Calendar",

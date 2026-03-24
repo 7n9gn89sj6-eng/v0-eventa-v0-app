@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/db"
 import { PUBLIC_EVENT_WHERE } from "@/lib/events"
 import type { EventCategory } from "@prisma/client"
+import { resolveUrlCategoryToPrismaEnum } from "@/lib/categories/canonical-event-category"
 import { searchWeb } from "@/lib/search/web-search"
 import { withLanguageColumnGuard, getEventSelectWithoutLanguage, isLanguageFilteringAvailable } from "@/lib/db-runtime-guard"
 import { buildDateOverlapWhere, buildDateRangeOverlapWhere } from "@/lib/search/date-overlap"
@@ -517,8 +518,8 @@ export async function GET(req: NextRequest) {
 
       // PRIORITY 3: CATEGORY - applied after location and date
       if (shouldStrictCategoryFilter && category && category !== "all") {
-        const categoryEnum = category.toUpperCase() as EventCategory
-        where.category = categoryEnum
+        const categoryEnum = resolveUrlCategoryToPrismaEnum(category)
+        if (categoryEnum) where.category = categoryEnum as EventCategory
       }
 
       let events, count
@@ -759,48 +760,27 @@ export async function GET(req: NextRequest) {
 
     // Apply category filter
     if (shouldStrictCategoryFilter && category && category !== "all") {
-      // Map category string to EventCategory enum
-      const categoryMap: Record<string, EventCategory> = {
-        food: "FOOD_DRINK",
-        music: "MUSIC_NIGHTLIFE",
-        arts: "ARTS_CULTURE",
-        art: "ARTS_CULTURE",
-        comedy: "ARTS_CULTURE",
-        festival: "ARTS_CULTURE",
-        festivals: "ARTS_CULTURE",
-        sports: "SPORTS_OUTDOORS",
-        family: "FAMILY_KIDS",
-        community: "COMMUNITY_CAUSES",
-        learning: "LEARNING_TALKS",
-        markets: "MARKETS_FAIRS",
-        online: "ONLINE_VIRTUAL",
-      }
       const normalizedCategory = category.toLowerCase()
-      const categoryEnum = categoryMap[normalizedCategory] || (category.toUpperCase() as EventCategory)
-      
-      // Check both the category field and the categories array
-      const categoryConditions: any[] = [
-        { category: categoryEnum },
-        { categories: { hasSome: [category, normalizedCategory, categoryEnum] } },
-      ]
-      
-      // Combine category filter with existing conditions
-      // Since we're using AND structure for text search, add category to AND as well
-      if (where.AND && Array.isArray(where.AND) && where.AND.length > 0) {
-        // We already have AND conditions (city filter and/or text search), add category
-        where.AND.push({ OR: categoryConditions })
-      } else if (where.OR && Array.isArray(where.OR) && where.OR.length > 0) {
-        // Legacy: if we somehow have OR conditions, convert to AND structure
-        const textSearchOR = where.OR
-        delete where.OR
-        where.AND = [
-          { OR: textSearchOR },
-          { OR: categoryConditions },
+      const categoryEnum =
+        resolveUrlCategoryToPrismaEnum(category) ?? resolveUrlCategoryToPrismaEnum(normalizedCategory)
+
+      if (categoryEnum) {
+        const prismaCategory = categoryEnum as EventCategory
+        const categoryConditions: any[] = [
+          { category: prismaCategory },
+          { categories: { hasSome: [category, normalizedCategory, prismaCategory] } },
         ]
-      } else {
-        // No text search or city filter, just filter by category
-        where.AND = where.AND || []
-        where.AND.push({ OR: categoryConditions })
+
+        if (where.AND && Array.isArray(where.AND) && where.AND.length > 0) {
+          where.AND.push({ OR: categoryConditions })
+        } else if (where.OR && Array.isArray(where.OR) && where.OR.length > 0) {
+          const textSearchOR = where.OR
+          delete where.OR
+          where.AND = [{ OR: textSearchOR }, { OR: categoryConditions }]
+        } else {
+          where.AND = where.AND || []
+          where.AND.push({ OR: categoryConditions })
+        }
       }
     }
 

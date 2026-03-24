@@ -10,6 +10,10 @@ import { PUBLIC_EVENT_WHERE } from "@/lib/events"
 import { detectEventLanguage } from "@/lib/search/language-detection-enhanced"
 import { generateEventEmbedding, shouldSkipEmbedding } from "@/lib/embeddings/generate"
 import { storeEventEmbedding } from "@/lib/embeddings/store"
+import {
+  parseEventCategoryPayload,
+  SEARCH_SLUG_BY_CATEGORY,
+} from "@/lib/categories/canonical-event-category"
 
 const EventCreate = z
   .object({
@@ -18,6 +22,11 @@ const EventCreate = z
     startAt: z.coerce.date({ required_error: "Start date is required" }),
     endAt: z.coerce.date({ required_error: "End date is required" }),
     url: z.string().url().optional(),
+    category: z.string().min(1, "Event type is required"),
+    subcategory: z.string().nullable().optional(),
+    tags: z.array(z.string()).nullable().optional(),
+    customCategoryLabel: z.string().nullable().optional(),
+    originalLanguage: z.string().nullable().optional(),
     categories: z.array(z.string()).max(10).optional(),
     images: z.array(z.string().url()).max(10).optional(),
     lat: z.number().min(-90).max(90).optional(),
@@ -27,6 +36,21 @@ const EventCreate = z
   .refine((d) => d.endAt > d.startAt, {
     path: ["endAt"],
     message: "End date must be after start date",
+  })
+  .superRefine((data, ctx) => {
+    try {
+      parseEventCategoryPayload({
+        category: data.category,
+        subcategory: data.subcategory,
+        tags: data.tags,
+        customCategoryLabel: data.customCategoryLabel,
+        originalLanguage: data.originalLanguage,
+      })
+    } catch (e) {
+      if (e instanceof z.ZodError) {
+        for (const issue of e.issues) ctx.addIssue(issue)
+      }
+    }
   })
 
 export async function GET(request: NextRequest) {
@@ -85,6 +109,18 @@ export async function POST(request: NextRequest) {
 
     const { title, description, categories, startAt, endAt } = data
 
+    const categoryFields = parseEventCategoryPayload({
+      category: data.category,
+      subcategory: data.subcategory,
+      tags: data.tags,
+      customCategoryLabel: data.customCategoryLabel,
+      originalLanguage: data.originalLanguage,
+    })
+    const slug = SEARCH_SLUG_BY_CATEGORY[categoryFields.category]
+    const mergedCategories = Array.from(
+      new Set([slug, ...(categories ?? [])].filter(Boolean)),
+    )
+
     let lat = data.lat
     let lng = data.lng
     let geocodedAddress: string | undefined
@@ -92,9 +128,10 @@ export async function POST(request: NextRequest) {
     let address: string | undefined
 
     if (body.address) {
-      address = body.address
+      const street = String(body.address)
+      address = street
       try {
-        const geocoded = await geocodeAddress(address)
+        const geocoded = await geocodeAddress(street)
         if (geocoded) {
           lat = geocoded.lat
           lng = geocoded.lng
@@ -115,7 +152,10 @@ export async function POST(request: NextRequest) {
       description,
       venueName,
       address,
-      ...(categories || []),
+      categoryFields.subcategory,
+      categoryFields.customCategoryLabel,
+      ...categoryFields.tags,
+      ...mergedCategories,
       ...(body.languages || []),
     ]
 
@@ -134,7 +174,15 @@ export async function POST(request: NextRequest) {
       data: {
         title,
         description: description || "",
-        categories: categories || [],
+        city: typeof body.city === "string" && body.city.trim() ? body.city.trim() : "Unknown",
+        country:
+          typeof body.country === "string" && body.country.trim() ? body.country.trim() : "Unknown",
+        categories: mergedCategories,
+        category: categoryFields.category,
+        subcategory: categoryFields.subcategory,
+        tags: categoryFields.tags,
+        customCategoryLabel: categoryFields.customCategoryLabel,
+        originalLanguage: categoryFields.originalLanguage,
         startAt: startAt.toISOString(),
         endAt: endAt.toISOString(),
         timezone: body.timezone || "UTC",
@@ -165,7 +213,10 @@ export async function POST(request: NextRequest) {
     // Generate and store embedding (async, non-blocking, errors don't fail event creation)
     if (!shouldSkipEmbedding()) {
       console.log("[events] Starting embedding generation for event:", { eventId: event.id, titlePreview: title.substring(0, 50) })
-      generateEventEmbedding(title, description || null, body.venueName, categories || [])
+      generateEventEmbedding(title, description || null, body.venueName, [
+        ...mergedCategories,
+        ...categoryFields.tags,
+      ])
         .then(async (embedding) => {
           if (embedding) {
             console.log("[events] Embedding generated, storing for event:", { eventId: event.id })

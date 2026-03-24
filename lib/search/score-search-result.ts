@@ -36,14 +36,18 @@ export type SearchScoreBreakdown = {
 export type SearchResultKind = "internal" | "web"
 
 const CATEGORY_KEY_TO_ENUM: Record<string, EventCategory> = {
-  music: "MUSIC_NIGHTLIFE",
-  markets: "MARKETS_FAIRS",
-  arts: "ARTS_CULTURE",
+  music: "MUSIC",
+  markets: "MARKETS",
+  arts: "ART",
+  art: "ART",
   food: "FOOD_DRINK",
-  sports: "SPORTS_OUTDOORS",
-  family: "FAMILY_KIDS",
-  community: "COMMUNITY_CAUSES",
-  learning: "LEARNING_TALKS",
+  sports: "SPORTS",
+  family: "FAMILY",
+  community: "COMMUNITY",
+  learning: "TALKS",
+  comedy: "COMEDY",
+  festival: "FESTIVALS",
+  festivals: "FESTIVALS",
 }
 
 function citiesCompatible(target: string, eventCity: string): boolean {

@@ -118,7 +118,7 @@ describe("extractConversationalIntent (Phase 2.3)", () => {
       startAt: NOW.toISOString(),
       endAt: NOW.toISOString(),
       categories: ["music"],
-      category: "MUSIC_NIGHTLIFE",
+      category: "MUSIC",
     }
     expect(queryTextOverlapScore(parsed, row, buildConversationalOverlapSupplement(e!))).toBeGreaterThanOrEqual(
       queryTextOverlapScore(parsed, row),

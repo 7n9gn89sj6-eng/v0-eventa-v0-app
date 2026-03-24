@@ -15,6 +15,18 @@ import { useRouter } from 'next/navigation'
 import { useI18n } from "@/lib/i18n/context"
 import type { EventSubmitResponse } from "@/lib/types"
 import { PlacesAutocomplete } from "@/components/forms/places-autocomplete"
+import {
+  CANONICAL_EVENT_CATEGORY_VALUES,
+  CATEGORY_UI_METADATA,
+  parseEventCategoryPayload,
+} from "@/lib/categories/canonical-event-category"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 const API_URL = "/api/events/submit"
 
@@ -22,14 +34,16 @@ const addEventSchema = z
   .object({
     name: z.string().min(2, "Name must be at least 2 characters"),
     email: z.string().email("Please enter a valid email address"),
-    humanCheck: z
-      .string()
-      .toLowerCase()
-      .refine((val) => val === "communities", {
-        message: "Please type the correct word from the challenge",
-      }),
+    humanCheck: z.string().refine((val) => val.trim().toLowerCase() === "communities", {
+      message: "Please type the correct word from the challenge",
+    }),
     title: z.string().min(5, "Event title must be at least 5 characters"),
     description: z.string().min(20, "Description must be at least 20 characters"),
+    category: z.string().min(1, "Please choose an event type"),
+    subcategory: z.string().optional(),
+    tagsInput: z.string().optional(),
+    customCategoryLabel: z.string().optional(),
+    originalLanguage: z.string().optional(),
     address: z.string().min(5, "Address is required"),
     postcode: z.string().optional(),
     city: z.string().min(2, "City is required"),
@@ -52,6 +66,27 @@ const addEventSchema = z
       path: ["endAt"],
     },
   )
+  .superRefine((data, ctx) => {
+    const tags = data.tagsInput
+      ? data.tagsInput
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean)
+      : []
+    try {
+      parseEventCategoryPayload({
+        category: data.category,
+        subcategory: data.subcategory,
+        tags,
+        customCategoryLabel: data.customCategoryLabel,
+        originalLanguage: data.originalLanguage,
+      })
+    } catch (e) {
+      if (e instanceof z.ZodError) {
+        for (const issue of e.issues) ctx.addIssue(issue)
+      }
+    }
+  })
 
 type AddEventFormData = z.infer<typeof addEventSchema>
 
@@ -86,6 +121,11 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
       humanCheck: "",
       title: "",
       description: "",
+      category: "",
+      subcategory: "",
+      tagsInput: "",
+      customCategoryLabel: "",
+      originalLanguage: "",
       address: "",
       postcode: "",
       city: "",
@@ -142,9 +182,11 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
         form.setValue("endAt", initialData.endAt)
       } else if (initialData.startAt || initialData.date) {
         try {
-          const startDate = new Date(initialData.startAt || initialData.date)
+          const startSrc = initialData.startAt || initialData.date
+          if (!startSrc) return
+          const startDate = new Date(startSrc)
           const endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000)
-          form.setValue("endAt", endDate.toISOString().slice(0, 16))
+          form.setValue("endAt", endDate.toISOString().slice(0, 16) as AddEventFormData["endAt"])
         } catch (e) {
         }
       }
@@ -162,6 +204,13 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
 
     try {
       console.log("[v0] Starting form submission...")
+
+      const tags = data.tagsInput
+        ? data.tagsInput
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : []
 
       const submitPayload = {
         title: data.title,
@@ -181,6 +230,11 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
         },
         imageUrl: data.imageUrl || "",
         externalUrl: data.externalUrl || "",
+        category: data.category,
+        subcategory: data.subcategory?.trim() || null,
+        tags,
+        customCategoryLabel: data.customCategoryLabel?.trim() || null,
+        originalLanguage: data.originalLanguage?.trim() || null,
         organizer_name: data.name,
         organizer_contact: data.email,
         creatorEmail: data.email,
@@ -273,6 +327,8 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
       setIsSubmitting(false)
     }
   }
+
+  const categoryWatch = form.watch("category")
 
   const onInvalid = (errors: any) => {
     console.error("[v0] Form validation errors:", errors)
@@ -442,6 +498,105 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                     <FormDescription>
                       {tForm("fields.descriptionHint")}
                     </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="category"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Event type</FormLabel>
+                    <Select
+                      disabled={isSubmitting}
+                      onValueChange={field.onChange}
+                      value={field.value || undefined}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {CANONICAL_EVENT_CATEGORY_VALUES.map((key) => (
+                          <SelectItem key={key} value={key}>
+                            {CATEGORY_UI_METADATA[key].defaultLabel}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {categoryWatch === "OTHER" ? (
+                <FormField
+                  control={form.control}
+                  name="customCategoryLabel"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Describe the event type</FormLabel>
+                      <FormControl>
+                        <Input maxLength={40} placeholder="Short label" {...field} disabled={isSubmitting} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              ) : null}
+
+              <FormField
+                control={form.control}
+                name="subcategory"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Subcategory</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Optional" {...field} disabled={isSubmitting} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="tagsInput"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Tags</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Optional, comma-separated" {...field} disabled={isSubmitting} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="originalLanguage"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Original language (optional)</FormLabel>
+                    <FormControl>
+                      <select
+                        className="border-input flex h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs"
+                        disabled={isSubmitting}
+                        value={field.value || ""}
+                        onChange={(e) => field.onChange(e.target.value)}
+                      >
+                        <option value="">Not set</option>
+                        <option value="en">English</option>
+                        <option value="it">Italiano</option>
+                        <option value="el">Ελληνικά</option>
+                        <option value="es">Español</option>
+                        <option value="fr">Français</option>
+                      </select>
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

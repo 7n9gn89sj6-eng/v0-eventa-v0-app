@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import db from "@/lib/db";
 import { validateEventEditToken } from "@/lib/eventEditToken";
 import { detectEventLanguage } from "@/lib/search/language-detection-enhanced";
 import { generateEventEmbedding, shouldSkipEmbedding } from "@/lib/embeddings/generate";
 import { storeEventEmbedding } from "@/lib/embeddings/store";
+import {
+  parseEventCategoryPayload,
+  SEARCH_SLUG_BY_CATEGORY,
+} from "@/lib/categories/canonical-event-category";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -33,18 +38,23 @@ async function handleUpdate(
   }
 
   const body = await req.json();
-  const { 
-    title, 
-    description, 
-    locationAddress, 
-    city, 
-    state, 
-    country, 
-    postcode, 
-    startAt, 
-    endAt, 
-    imageUrl, 
-    externalUrl 
+  const {
+    title,
+    description,
+    locationAddress,
+    city,
+    state,
+    country,
+    postcode,
+    startAt,
+    endAt,
+    imageUrl,
+    externalUrl,
+    category,
+    subcategory,
+    tags,
+    customCategoryLabel,
+    originalLanguage,
   } = body;
 
   if (!title) {
@@ -58,7 +68,17 @@ async function handleUpdate(
     // Fetch current event to check if title/description changed
     const currentEvent = await db.event.findUnique({
       where: { id: eventId },
-      select: { title: true, description: true, categories: true, venueName: true },
+      select: {
+        title: true,
+        description: true,
+        categories: true,
+        venueName: true,
+        category: true,
+        subcategory: true,
+        tags: true,
+        customCategoryLabel: true,
+        originalLanguage: true,
+      },
     });
 
     if (!currentEvent) {
@@ -96,11 +116,51 @@ async function handleUpdate(
     }
 
     // Build update data object with all provided fields
-    const updateData: any = {
+    const updateData: Record<string, unknown> = {
       title,
       description: description || "",
       ...(shouldRegenerate && detectedLanguage !== null ? { language: detectedLanguage } : {}),
     };
+
+    const categoryTouched =
+      category !== undefined ||
+      subcategory !== undefined ||
+      tags !== undefined ||
+      customCategoryLabel !== undefined ||
+      originalLanguage !== undefined;
+
+    if (categoryTouched && currentEvent) {
+      try {
+        const merged = {
+          category:
+            category !== undefined && category !== null && String(category).trim() !== ""
+              ? String(category)
+              : currentEvent.category,
+          subcategory: subcategory !== undefined ? subcategory : currentEvent.subcategory,
+          tags: tags !== undefined ? tags : currentEvent.tags,
+          customCategoryLabel:
+            customCategoryLabel !== undefined
+              ? customCategoryLabel
+              : currentEvent.customCategoryLabel,
+          originalLanguage:
+            originalLanguage !== undefined ? originalLanguage : currentEvent.originalLanguage,
+        };
+        const parsed = parseEventCategoryPayload(merged);
+        Object.assign(updateData, {
+          category: parsed.category,
+          subcategory: parsed.subcategory,
+          tags: parsed.tags,
+          customCategoryLabel: parsed.customCategoryLabel,
+          originalLanguage: parsed.originalLanguage,
+          categories: [SEARCH_SLUG_BY_CATEGORY[parsed.category]],
+        });
+      } catch (e) {
+        if (e instanceof z.ZodError) {
+          return NextResponse.json({ error: "Validation failed", issues: e.issues }, { status: 400 });
+        }
+        throw e;
+      }
+    }
 
     // Update location fields if provided
     if (locationAddress !== undefined) updateData.address = locationAddress;
@@ -117,10 +177,9 @@ async function handleUpdate(
     if (imageUrl !== undefined) updateData.imageUrls = imageUrl ? [imageUrl] : [];
     if (externalUrl !== undefined) updateData.externalUrl = externalUrl || null;
 
-    // Update event with all provided fields
     const event = await db.event.update({
       where: { id: eventId },
-      data: updateData,
+      data: updateData as any,
     });
 
     // Regenerate embedding if title/description changed (async, non-blocking)

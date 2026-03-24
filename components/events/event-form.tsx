@@ -11,34 +11,24 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Loader2, Plus } from "lucide-react"
 import { DateTime } from "luxon"
 
 import { PlaceAutocomplete } from "@/components/places/place-autocomplete"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import type { SelectedPlaceWire } from "@/lib/places/selected-place"
-
-// ----------------------
-// CONSTANTS
-// ----------------------
-
-const CATEGORIES = [
-  "market",
-  "food",
-  "music",
-  "festival",
-  "culture",
-  "art",
-  "exhibition",
-  "workshop",
-  "outdoor",
-  "traditional",
-  "shopping",
-  "wine",
-  "craft",
-  "cooking",
-]
+import {
+  CANONICAL_EVENT_CATEGORY_VALUES,
+  CATEGORY_UI_METADATA,
+  parseEventCategoryPayload,
+} from "@/lib/categories/canonical-event-category"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 const LANGUAGES = [
   { code: "en", label: "English" },
@@ -48,20 +38,21 @@ const LANGUAGES = [
   { code: "fr", label: "Français" },
 ]
 
-// ----------------------
-// FORM SCHEMA
-// ----------------------
-
 const eventFormSchema = z
   .object({
     title: z.string().min(1, "Title is required"),
     description: z.string().min(1, "Description is required"),
 
-    categories: z.array(z.string()),
+    category: z.string().min(1, "Choose an event type"),
+    subcategory: z.string().optional(),
+    tagsInput: z.string().optional(),
+    customCategoryLabel: z.string().optional(),
+    originalLanguage: z.string().optional(),
+
     languages: z.array(z.string()),
 
-    startAt: z.coerce.date({ required_error: "Start time required" }),
-    endAt: z.coerce.date({ required_error: "End time required" }),
+    startAt: z.string().min(1, "Start time required"),
+    endAt: z.string().min(1, "End time required"),
 
     venueName: z.string().optional(),
     address: z.string().optional(),
@@ -71,16 +62,40 @@ const eventFormSchema = z
 
     creatorEmail: z.string().email("Valid email required"),
   })
-  .refine((d) => d.endAt > d.startAt, {
-    message: "End time must be after start time",
-    path: ["endAt"],
+  .refine(
+    (d) => {
+      const a = new Date(d.startAt).getTime()
+      const b = new Date(d.endAt).getTime()
+      return !Number.isNaN(a) && !Number.isNaN(b) && b > a
+    },
+    {
+      message: "End time must be after start time",
+      path: ["endAt"],
+    },
+  )
+  .superRefine((data, ctx) => {
+    const tags = data.tagsInput
+      ? data.tagsInput
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean)
+      : []
+    try {
+      parseEventCategoryPayload({
+        category: data.category,
+        subcategory: data.subcategory,
+        tags,
+        customCategoryLabel: data.customCategoryLabel,
+        originalLanguage: data.originalLanguage,
+      })
+    } catch (e) {
+      if (e instanceof z.ZodError) {
+        for (const issue of e.issues) ctx.addIssue(issue)
+      }
+    }
   })
 
 type EventFormValues = z.infer<typeof eventFormSchema>
-
-// ----------------------
-// MAIN COMPONENT
-// ----------------------
 
 export function EventForm({ initialData, draftId }: any = {}) {
   const router = useRouter()
@@ -97,7 +112,11 @@ export function EventForm({ initialData, draftId }: any = {}) {
     defaultValues: {
       title: "",
       description: "",
-      categories: [],
+      category: "",
+      subcategory: "",
+      tagsInput: "",
+      customCategoryLabel: "",
+      originalLanguage: "",
       languages: ["en"],
 
       startAt: "",
@@ -108,15 +127,12 @@ export function EventForm({ initialData, draftId }: any = {}) {
       websiteUrl: "",
       imageUrls: [],
 
-      creatorEmail: "", // IMPORTANT
+      creatorEmail: "",
     },
   })
 
   const formData = watch()
-
-  // ----------------------
-  // SUBMIT HANDLER
-  // ----------------------
+  const categoryValue = formData.category
 
   const onSubmit = async (values: EventFormValues) => {
     try {
@@ -130,13 +146,19 @@ export function EventForm({ initialData, draftId }: any = {}) {
         return
       }
 
+      const tags = values.tagsInput
+        ? values.tagsInput
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : []
+
       const payload = {
         title: values.title,
         description: values.description,
 
-        // backend field names
-        start: values.startAt.toISOString(),
-        end: values.endAt.toISOString(),
+        start: new Date(values.startAt).toISOString(),
+        end: new Date(values.endAt).toISOString(),
         timezone: DateTime.local().zoneName,
 
         location: {
@@ -155,7 +177,12 @@ export function EventForm({ initialData, draftId }: any = {}) {
         externalUrl: values.websiteUrl || "",
         imageUrl: values.imageUrls?.[0] || "",
 
-        categories: values.categories,
+        category: values.category,
+        subcategory: values.subcategory?.trim() || null,
+        tags,
+        customCategoryLabel: values.customCategoryLabel?.trim() || null,
+        originalLanguage: values.originalLanguage?.trim() || null,
+
         languages: values.languages,
 
         creatorEmail: values.creatorEmail,
@@ -176,25 +203,10 @@ export function EventForm({ initialData, draftId }: any = {}) {
       }
 
       router.push(`/event/submitted?eventId=${data.eventId}`)
-
     } catch (err: any) {
       console.error("Submit error", err)
       alert("An unexpected error occurred.")
     }
-  }
-
-  // ----------------------
-  // TOGGLERS
-  // ----------------------
-
-  const toggleCategory = (category: string) => {
-    const current = formData.categories
-    setValue(
-      "categories",
-      current.includes(category)
-        ? current.filter((c) => c !== category)
-        : [...current, category],
-    )
   }
 
   const toggleLanguage = (lang: string) => {
@@ -207,16 +219,10 @@ export function EventForm({ initialData, draftId }: any = {}) {
     )
   }
 
-  // ----------------------
-  // UI
-  // ----------------------
-
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <Card>
         <CardContent className="pt-6 space-y-6">
-
-          {/* Creator Email */}
           <div className="space-y-2">
             <Label htmlFor="creatorEmail">
               Your Email <span className="text-destructive">*</span>
@@ -233,7 +239,6 @@ export function EventForm({ initialData, draftId }: any = {}) {
             )}
           </div>
 
-          {/* Title */}
           <div className="space-y-2">
             <Label htmlFor="title">Event Title *</Label>
             <Input
@@ -247,7 +252,6 @@ export function EventForm({ initialData, draftId }: any = {}) {
             )}
           </div>
 
-          {/* Description */}
           <div className="space-y-2">
             <Label htmlFor="description">Description *</Label>
             <Textarea
@@ -262,29 +266,86 @@ export function EventForm({ initialData, draftId }: any = {}) {
             )}
           </div>
 
-          {/* Categories */}
-          <div className="space-y-3">
-            <Label>Categories</Label>
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map((category) => (
-                <button
-                  key={category}
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => toggleCategory(category)}
-                  className={`rounded-full px-3 py-1 text-sm ${
-                    formData.categories.includes(category)
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary text-secondary-foreground"
-                  }`}
-                >
-                  {category}
-                </button>
-              ))}
-            </div>
+          <div className="space-y-2">
+            <Label>
+              Event type <span className="text-destructive">*</span>
+            </Label>
+            <Select
+              disabled={isSubmitting}
+              value={categoryValue || undefined}
+              onValueChange={(v) => setValue("category", v, { shouldValidate: true })}
+            >
+              <SelectTrigger className="w-full max-w-md" id="event-category">
+                <SelectValue placeholder="Select type" />
+              </SelectTrigger>
+              <SelectContent>
+                {CANONICAL_EVENT_CATEGORY_VALUES.map((key) => (
+                  <SelectItem key={key} value={key}>
+                    {CATEGORY_UI_METADATA[key].defaultLabel}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.category && (
+              <p className="text-sm text-destructive">{errors.category.message}</p>
+            )}
           </div>
 
-          {/* Date & Time */}
+          {categoryValue === "OTHER" ? (
+            <div className="space-y-2">
+              <Label htmlFor="customCategoryLabel">
+                Describe the event type <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="customCategoryLabel"
+                maxLength={40}
+                disabled={isSubmitting}
+                placeholder="Short label (max 40 characters)"
+                {...register("customCategoryLabel")}
+              />
+              {errors.customCategoryLabel && (
+                <p className="text-sm text-destructive">{errors.customCategoryLabel.message}</p>
+              )}
+            </div>
+          ) : null}
+
+          <div className="space-y-2">
+            <Label htmlFor="subcategory">Subcategory</Label>
+            <Input
+              id="subcategory"
+              disabled={isSubmitting}
+              placeholder="Optional"
+              {...register("subcategory")}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="tagsInput">Tags</Label>
+            <Input
+              id="tagsInput"
+              disabled={isSubmitting}
+              placeholder="Optional, comma-separated"
+              {...register("tagsInput")}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="originalLanguage">Original language (optional)</Label>
+            <select
+              id="originalLanguage"
+              className="border-input flex h-9 w-full max-w-md rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs"
+              disabled={isSubmitting}
+              {...register("originalLanguage")}
+            >
+              <option value="">Not set</option>
+              {LANGUAGES.map((lang) => (
+                <option key={lang.code} value={lang.code}>
+                  {lang.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Start *</Label>
@@ -323,7 +384,6 @@ export function EventForm({ initialData, draftId }: any = {}) {
             </Alert>
           ) : null}
 
-          {/* Venue */}
           <div className="space-y-2">
             <Label htmlFor="venueName">Venue name</Label>
             <Input
@@ -335,7 +395,6 @@ export function EventForm({ initialData, draftId }: any = {}) {
             <p className="text-xs text-muted-foreground">You can edit how the venue appears after selecting a place.</p>
           </div>
 
-          {/* Address */}
           <div className="space-y-2">
             <Label htmlFor="address">Address (full line)</Label>
             <Input
@@ -346,13 +405,11 @@ export function EventForm({ initialData, draftId }: any = {}) {
             />
           </div>
 
-          {/* Website */}
           <div className="space-y-2">
             <Label htmlFor="websiteUrl">Website</Label>
             <Input id="websiteUrl" {...register("websiteUrl")} />
           </div>
 
-          {/* Languages */}
           <div className="space-y-3">
             <Label>Event Languages</Label>
             <div className="flex flex-wrap gap-2">

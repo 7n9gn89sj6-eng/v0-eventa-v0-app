@@ -30,7 +30,7 @@ describe("Eventa trust: deterministic scoreSearchResult", () => {
       startAt: future,
       endAt: future,
       categories: ["music"],
-      category: "MUSIC_NIGHTLIFE",
+      category: "MUSIC",
     }
 
     const a = scoreSearchResult({
@@ -68,7 +68,7 @@ describe("Eventa trust: deterministic scoreSearchResult", () => {
       startAt: future,
       endAt: future,
       categories: ["markets"],
-      category: "MARKETS_FAIRS",
+      category: "MARKETS",
     }
     const melbourne = {
       title: "Inspired Berlin Sale",
@@ -78,7 +78,7 @@ describe("Eventa trust: deterministic scoreSearchResult", () => {
       startAt: future,
       endAt: future,
       categories: ["markets"],
-      category: "MARKETS_FAIRS",
+      category: "MARKETS",
     }
 
     expect(
@@ -194,7 +194,7 @@ describe("Eventa trust: deterministic scoreSearchResult", () => {
       startAt: future,
       endAt: future,
       categories: ["music"],
-      category: "MUSIC_NIGHTLIFE",
+      category: "MUSIC",
     }
 
     const internal = scoreSearchResult({

@@ -17,6 +17,10 @@ import {
 } from "@/lib/events/submit-place-resolution";
 import { geocodingResultFromMapboxFeature, mapboxPlaceFeatureById } from "@/lib/geocoding";
 import { mapGeocodingResultToResolvedPlace, resolvePlace } from "@/lib/search/resolve-place";
+import {
+  parseEventCategoryPayload,
+  SEARCH_SLUG_BY_CATEGORY,
+} from "@/lib/categories/canonical-event-category";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,7 +58,13 @@ const EventSubmitSchema = z
     imageUrl: z.string().url().optional().or(z.literal("")),
     externalUrl: z.string().url().optional().or(z.literal("")),
 
-    categories: z.array(z.string()).default([]),
+    category: z.string().min(1, "Event type is required"),
+    subcategory: z.string().nullable().optional(),
+    tags: z.array(z.string()).nullable().optional(),
+    customCategoryLabel: z.string().nullable().optional(),
+    originalLanguage: z.string().nullable().optional(),
+
+    categories: z.array(z.string()).optional().default([]),
     languages: z.array(z.string()).default(["en"]),
   })
   .refine((d) => !d.end || d.end > d.start, {
@@ -62,6 +72,25 @@ const EventSubmitSchema = z
     message: "End must be after start",
   })
   .superRefine((data, ctx) => {
+    try {
+      parseEventCategoryPayload({
+        category: data.category,
+        subcategory: data.subcategory,
+        tags: data.tags,
+        customCategoryLabel: data.customCategoryLabel,
+        originalLanguage: data.originalLanguage,
+      });
+    } catch (e) {
+      if (e instanceof z.ZodError) {
+        for (const issue of e.issues) ctx.addIssue(issue);
+      } else {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: e instanceof Error ? e.message : "Invalid category",
+          path: ["category"],
+        });
+      }
+    }
     const id = data.location?.mapboxPlaceId?.trim();
     if (!id) return;
     if (!data.location?.city?.trim()) {
@@ -105,7 +134,16 @@ export async function POST(request: NextRequest) {
 
     const validated = EventSubmitSchema.parse(body);
 
-    const categories = validated.categories ?? [];
+    const categoryFields = parseEventCategoryPayload({
+      category: validated.category,
+      subcategory: validated.subcategory,
+      tags: validated.tags,
+      customCategoryLabel: validated.customCategoryLabel,
+      originalLanguage: validated.originalLanguage,
+    });
+
+    const slug = SEARCH_SLUG_BY_CATEGORY[categoryFields.category];
+    const categories = [slug];
     const languages =
       validated.languages?.length > 0 ? validated.languages : ["en"];
 
@@ -261,9 +299,27 @@ export async function POST(request: NextRequest) {
 
         categories,
         languages,
+        category: categoryFields.category,
+        subcategory: categoryFields.subcategory,
+        tags: categoryFields.tags,
+        customCategoryLabel: categoryFields.customCategoryLabel,
+        originalLanguage: categoryFields.originalLanguage ?? undefined,
         ...(detectedLanguage ? { language: detectedLanguage } : {}), // Store detected language (only if detected)
 
-        searchText: `${validated.title} ${validated.description} ${persistedLoc.city} ${persistedLoc.region ? persistedLoc.region + " " : ""}${postcode ? postcode + " " : ""}${persistedLoc.country}`.toLowerCase(),
+        searchText: [
+          validated.title,
+          validated.description,
+          categoryFields.subcategory,
+          categoryFields.customCategoryLabel,
+          categoryFields.tags.join(" "),
+          persistedLoc.city,
+          persistedLoc.region ? persistedLoc.region + " " : "",
+          postcode ? postcode + " " : "",
+          persistedLoc.country,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase(),
 
         createdById: user.id,
 
@@ -283,7 +339,7 @@ export async function POST(request: NextRequest) {
         validated.title,
         validated.description || null,
         validated.location?.name || null,
-        categories || []
+        [...categories, ...categoryFields.tags]
       )
         .then(async (embedding) => {
           if (embedding) {
@@ -314,7 +370,7 @@ export async function POST(request: NextRequest) {
       const moderation = await moderateEvent({
         title: validated.title,
         description: validated.description,
-        categories,
+        categories: [...categories, ...categoryFields.tags],
         languages,
         city: persistedLoc.city,
         country: persistedLoc.country,

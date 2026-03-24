@@ -20,7 +20,7 @@ Enhanced Eventa's plain-language search to better understand trip/holiday querie
 - Detects trip phrases: "I'm going to...", "I'll be in...", "visiting...", "travelling to...", "Things on in [city] in [month]"
 - Extracts duration: "for a week" → 7, "for 5 days" → 5, "for two weeks" → 14
 - Extracts interests: "I like food and music" → ["food", "music"]
-- Maps interests to categories: food → FOOD_DRINK, music → MUSIC_NIGHTLIFE, etc.
+- Maps interests to categories: food → FOOD_DRINK, music → MUSIC, etc. (canonical `EventCategory` values in search filters).
 
 **Location:** `app/api/search/intent/route.ts` (lines 12-31, 138-174, 398-407)
 

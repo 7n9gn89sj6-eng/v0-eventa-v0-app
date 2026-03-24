@@ -142,7 +142,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["markets"],
-        category: "MARKETS_FAIRS",
+        category: "MARKETS",
       }),
       makeEvent({
         id: "melbourne-markets",
@@ -154,7 +154,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["markets"],
-        category: "MARKETS_FAIRS",
+        category: "MARKETS",
       }),
     ]
 
@@ -205,7 +205,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 3),
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
       makeEvent({
         id: "evt-markets-thin",
@@ -216,7 +216,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["markets"],
-        category: "MARKETS_FAIRS",
+        category: "MARKETS",
       }),
     ]
 
@@ -263,7 +263,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
       makeEvent({
         id: "townsville-food-leak",
@@ -306,7 +306,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
     ]
 
@@ -338,7 +338,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: start,
         endAt: end,
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
     ]
 
@@ -367,7 +367,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
     ]
 
@@ -398,7 +398,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
     ]
 
@@ -427,7 +427,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
     ]
 
@@ -455,7 +455,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
       makeEvent({
         id: "melb-music-leak",
@@ -466,7 +466,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
     ]
 
@@ -496,7 +496,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["festival", "music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
       makeEvent({
         id: "fest-berlin-global",
@@ -507,7 +507,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["festival", "music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
     ]
 
@@ -547,7 +547,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: start,
         endAt: end,
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
       makeEvent({
         id: "melb-music-weekend-weaker",
@@ -558,7 +558,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: start,
         endAt: end,
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
       makeEvent({
         id: "tville-music-weekend-should-not-leak",
@@ -569,7 +569,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: start,
         endAt: end,
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
       makeEvent({
         id: "melb-music-outside-weekend",
@@ -580,7 +580,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: outsideStart,
         endAt: outsideEnd,
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
     ]
 
@@ -664,7 +664,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: start,
         endAt: end,
         categories: ["family"],
-        category: "FAMILY_KIDS",
+        category: "FAMILY",
       }),
       makeEvent({
         id: "melb-kids-not-tomorrow",
@@ -675,7 +675,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: addHours(start, 36),
         endAt: addHours(start, 38),
         categories: ["family"],
-        category: "FAMILY_KIDS",
+        category: "FAMILY",
       }),
       makeEvent({
         id: "tville-kids-leak",
@@ -686,7 +686,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: start,
         endAt: end,
         categories: ["family"],
-        category: "FAMILY_KIDS",
+        category: "FAMILY",
       }),
     ]
 
@@ -722,7 +722,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: start,
         endAt: end,
         categories: ["arts"],
-        category: "ARTS_CULTURE",
+        category: "ART",
       }),
       makeEvent({
         id: "melb-arts-other-day",
@@ -733,7 +733,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: addHours(start, 24),
         endAt: addHours(start, 26),
         categories: ["arts"],
-        category: "ARTS_CULTURE",
+        category: "ART",
       }),
       makeEvent({
         id: "melb-music-friday",
@@ -744,7 +744,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: start,
         endAt: end,
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
     ]
 
@@ -755,7 +755,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     })
 
     expect(data.internal?.length).toBeGreaterThan(0)
-    expect(data.internal.every((e: any) => e.category === "ARTS_CULTURE")).toBe(true)
+    expect(data.internal.every((e: any) => e.category === "ART")).toBe(true)
   })
 
   it("weekday parsing: `music next friday` stays music and respects date window", async () => {
@@ -777,7 +777,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: thisFriStart,
         endAt: thisFriEnd,
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
       makeEvent({
         id: "melb-music-next-friday",
@@ -788,7 +788,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: start,
         endAt: end,
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
     ]
 
@@ -832,7 +832,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
     ]
 
@@ -859,7 +859,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
       makeEvent({
         id: "brunswick-food",
@@ -881,7 +881,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     })
 
     expect(data.internal?.length).toBeGreaterThan(0)
-    expect(data.internal.every((e: any) => e.category === "MUSIC_NIGHTLIFE")).toBe(true)
+    expect(data.internal.every((e: any) => e.category === "MUSIC")).toBe(true)
   })
 
   it("plain-language works: `cheap eats near me` finds the right concept in Melbourne", async () => {
@@ -938,7 +938,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: start,
         endAt: end,
         categories: ["family"],
-        category: "FAMILY_KIDS",
+        category: "FAMILY",
       }),
       makeEvent({
         id: "melb-kids-not-friday",
@@ -949,7 +949,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: addHours(start, 26),
         endAt: addHours(start, 28),
         categories: ["family"],
-        category: "FAMILY_KIDS",
+        category: "FAMILY",
       }),
     ]
 
@@ -1052,7 +1052,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     // broad scope should not force strict category enum filtering
     expect(findManyWhereHistory.length).toBeGreaterThan(0)
     expect(deepIncludesString(findManyWhereHistory[0], "FOOD_DRINK")).toBe(false)
-    expect(deepIncludesString(findManyWhereHistory[0], "MUSIC_NIGHTLIFE")).toBe(false)
+    expect(deepIncludesString(findManyWhereHistory[0], "MUSIC")).toBe(false)
 
     expect(data.internal[0].city).toBe("Melbourne")
   })
@@ -1179,7 +1179,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
       makeEvent({
         id: "camberwell-au-music",
@@ -1190,7 +1190,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
     ]
 
@@ -1248,7 +1248,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     expect(data.internal?.length).toBeGreaterThan(0)
     expect(data.emptyState).toBe(false)
     expect(findManyWhereHistory.length).toBeGreaterThan(0)
-    expect(deepIncludesString(findManyWhereHistory[0], "MUSIC_NIGHTLIFE")).toBe(false)
+    expect(deepIncludesString(findManyWhereHistory[0], "MUSIC")).toBe(false)
     expect((data.internal || []).every((e: any) => e.city === "Melbourne")).toBe(true)
   })
 
@@ -1267,7 +1267,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: addHours(start, 1),
         endAt: addHours(start, 3),
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
       makeEvent({
         id: "trust-afternoon-music",
@@ -1278,7 +1278,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: new Date(FIXED_NOW.getTime() + 9 * 86400 * 1000).toISOString(),
         endAt: new Date(FIXED_NOW.getTime() + 9 * 86400 * 1000 + 2 * 3600 * 1000).toISOString(),
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
     ]
 
@@ -1291,7 +1291,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     const titles = (data.internal || []).map((e: any) => e.title)
     expect(titles.some((t: string) => t.includes("Corner"))).toBe(true)
     expect(titles.some((t: string) => t.includes("Afternoon"))).toBe(false)
-    expect(deepIncludesString(findManyWhereHistory[0], "MUSIC_NIGHTLIFE")).toBe(true)
+    expect(deepIncludesString(findManyWhereHistory[0], "MUSIC")).toBe(true)
   })
 
   it("trust batch: `comedy tomorrow` targets tomorrow + comedy category signal", async () => {
@@ -1309,7 +1309,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: addHours(dayStart, 10),
         endAt: addHours(dayStart, 12),
         categories: ["comedy"],
-        category: "COMMUNITY_CAUSES",
+        category: "COMMUNITY",
       }),
       makeEvent({
         id: "trust-music-tomorrow",
@@ -1320,7 +1320,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: addHours(dayStart, 14),
         endAt: addHours(dayStart, 16),
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
     ]
 
@@ -1350,7 +1350,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: addHours(dayStart, 2),
         endAt: addHours(dayStart, 5),
         categories: ["markets"],
-        category: "MARKETS_FAIRS",
+        category: "MARKETS",
       }),
       makeEvent({
         id: "trust-garage-sun",
@@ -1361,7 +1361,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: addHours(dayEnd, 4),
         endAt: addHours(dayEnd, 8),
         categories: ["markets"],
-        category: "MARKETS_FAIRS",
+        category: "MARKETS",
       }),
     ]
 
@@ -1374,7 +1374,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     const titles = (data.internal || []).map((e: any) => e.title)
     expect(titles.some((t: string) => t.includes("garage sale"))).toBe(true)
     expect(titles.some((t: string) => t.includes("Sunday"))).toBe(false)
-    expect(deepIncludesString(findManyWhereHistory[0], "MARKETS_FAIRS")).toBe(true)
+    expect(deepIncludesString(findManyWhereHistory[0], "MARKETS")).toBe(true)
   })
 
   it("trust batch: `live music Melbourne` overrides UI city (Sydney selected)", async () => {
@@ -1390,7 +1390,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
       makeEvent({
         id: "trust-sydney-music",
@@ -1401,7 +1401,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
     ]
 
@@ -1431,7 +1431,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["fair", "markets"],
-        category: "MARKETS_FAIRS",
+        category: "MARKETS",
       }),
       makeEvent({
         id: "trust-berlin-book",
@@ -1442,7 +1442,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["markets"],
-        category: "MARKETS_FAIRS",
+        category: "MARKETS",
       }),
     ]
 
@@ -1472,7 +1472,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
       makeEvent({
         id: "trust-melb-music-south",
@@ -1483,7 +1483,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
     ]
 
@@ -1515,7 +1515,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["art", "exhibition"],
-        category: "ARTS_CULTURE",
+        category: "ART",
       }),
       makeEvent({
         id: "trust-melb-art-north",
@@ -1526,7 +1526,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["art"],
-        category: "ARTS_CULTURE",
+        category: "ART",
       }),
     ]
 
@@ -1599,7 +1599,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: future,
         endAt: addHours(future, 2),
         categories: ["festival", "music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
       makeEvent({
         id: "trust-fest-melb",
@@ -1610,7 +1610,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: addHours(future, 3),
         endAt: addHours(future, 5),
         categories: ["festival", "music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
     ]
 
@@ -1646,7 +1646,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
         startAt: start,
         endAt: end,
         categories: ["music"],
-        category: "MUSIC_NIGHTLIFE",
+        category: "MUSIC",
       }),
     ]
 

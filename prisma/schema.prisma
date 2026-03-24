@@ -150,7 +150,10 @@ model Event {
   aiAnalyzedAt         DateTime?
   aiReason             String?
   aiStatus             AIStatus?              @default(PENDING)
-  category             EventCategory?
+  category             EventCategory
+  subcategory          String?
+  customCategoryLabel  String?
+  originalLanguage     String?
   editCount            Int                    @default(0)
   extractionConfidence Json?
   lastEditedAt         DateTime?
@@ -286,15 +289,22 @@ enum ModerationSeverity {
 }
 
 enum EventCategory {
-  ARTS_CULTURE
-  MUSIC_NIGHTLIFE
+  MUSIC
+  THEATRE
+  COMEDY
+  ART
+  FILM
   FOOD_DRINK
-  FAMILY_KIDS
-  SPORTS_OUTDOORS
-  COMMUNITY_CAUSES
-  LEARNING_TALKS
-  MARKETS_FAIRS
-  ONLINE_VIRTUAL
+  FAMILY
+  COMMUNITY
+  MARKETS
+  NIGHTLIFE
+  WORKSHOPS
+  SPORTS
+  WELLNESS
+  FESTIVALS
+  TALKS
+  OTHER
 }
 
 enum AIStatus {
