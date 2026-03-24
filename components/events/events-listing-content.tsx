@@ -15,7 +15,11 @@ import ClientOnly from "@/components/ClientOnly"
 import { useI18n } from "@/lib/i18n/context"
 import { SmartInputBar } from "@/components/search/smart-input-bar"
 import { PlaceAutocomplete } from "@/components/places/place-autocomplete"
-import { normalizeDiscoverFreeTextForStructuredFilters } from "@/lib/discover-effective-query"
+import {
+  normalizeDiscoverFreeTextForStructuredFilters,
+  resolveDiscoverApiSearchParams,
+  type NormalizeDiscoverQueryArgs,
+} from "@/lib/discover-effective-query"
 
 const CATEGORIES = [
   "All",
@@ -144,6 +148,19 @@ export function EventsListingContent({
   const [cityFilter, setCityFilter] = useState(() => initialCity ?? "")
   const [countryFilter, setCountryFilter] = useState(() => initialCountry ?? "")
 
+  const getDiscoverArgs = useCallback((): NormalizeDiscoverQueryArgs => {
+    return {
+      rawQuery: q,
+      selectedCategory,
+      cityFilter,
+      countryFilter,
+      structuredCategoryAuthoritative: categoryStructuredTouchedRef.current,
+      structuredLocationAuthoritative:
+        locationStructuredTouchedRef.current &&
+        (cityFilter.trim().length > 0 || countryFilter.trim().length > 0),
+    }
+  }, [q, selectedCategory, cityFilter, countryFilter])
+
   useEffect(() => {
     selectedCategoryRef.current = selectedCategory
   }, [selectedCategory])
@@ -179,20 +196,11 @@ export function EventsListingContent({
     setError(null)
     setAiSuggestionChip(null)
     try {
-      const apiQuery = normalizeDiscoverFreeTextForStructuredFilters({
-        rawQuery: q,
-        selectedCategory,
-        cityFilter,
-        countryFilter,
-        structuredCategoryAuthoritative: categoryStructuredTouchedRef.current,
-        structuredLocationAuthoritative:
-          locationStructuredTouchedRef.current &&
-          (cityFilter.trim().length > 0 || countryFilter.trim().length > 0),
-      })
+      const { apiQuery, city: apiCity, country: apiCountry } = resolveDiscoverApiSearchParams(getDiscoverArgs())
       const params = new URLSearchParams()
       if (apiQuery) params.set("query", apiQuery)
-      if (cityFilter.trim()) params.set("city", cityFilter.trim())
-      if (countryFilter.trim()) params.set("country", countryFilter.trim())
+      if (apiCity.trim()) params.set("city", apiCity.trim())
+      if (apiCountry.trim()) params.set("country", apiCountry.trim())
 
       if (selectedCategory && selectedCategory !== "All") params.set("category", selectedCategory.toLowerCase())
       if (initialDateFrom) params.set("date_from", initialDateFrom)
@@ -371,11 +379,10 @@ export function EventsListingContent({
     }
 
     const params = new URLSearchParams()
-    const trimmedQuery = q.trim()
-    if (trimmedQuery) params.set("q", trimmedQuery)
-
-    if (cityFilter.trim()) params.set("city", cityFilter.trim())
-    if (countryFilter.trim()) params.set("country", countryFilter.trim())
+    const { apiQuery, city: urlCity, country: urlCountry } = resolveDiscoverApiSearchParams(getDiscoverArgs())
+    if (apiQuery.trim()) params.set("q", apiQuery.trim())
+    if (urlCity.trim()) params.set("city", urlCity.trim())
+    if (urlCountry.trim()) params.set("country", urlCountry.trim())
 
     if (selectedCategory && selectedCategory !== "All") {
       params.set("category", selectedCategory.toLowerCase())
@@ -397,6 +404,7 @@ export function EventsListingContent({
     initialDateFrom,
     initialDateTo,
     router,
+    getDiscoverArgs,
   ])
 
   const handleSmartSearch = (query: string) => {

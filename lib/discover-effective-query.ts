@@ -6,6 +6,7 @@
  */
 import { parseSearchIntent, type SearchIntent } from "@/app/lib/search/parseSearchIntent"
 import { normalizeSearchUtterance } from "@/lib/search/normalize-search-utterance"
+import { countryForKnownCity } from "@/lib/search/effective-location"
 
 const INTEREST_PATTERNS: Array<{ pattern: RegExp; value: string }> = [
   { pattern: /\b(techno|house|trance|dj|live\s+music|music|gig|concert|band)\b/gi, value: "music" },
@@ -133,10 +134,21 @@ export type NormalizeDiscoverQueryArgs = {
   structuredLocationAuthoritative: boolean
 }
 
+export type DiscoverApiSearchParams = {
+  apiQuery: string
+  city: string
+  country: string
+}
+
 /**
- * Produce the `query` string to send to `/api/search/events` (and mirror into URL `q` when filters change).
+ * Resolves `query`, `city`, and `country` for GET `/api/search/events` and Discover URL sync.
+ *
+ * Rule: if the query has **explicit** geography that **conflicts** with non-empty UI city/country,
+ * use the parsed query place for this request (and keep place tokens in `apiQuery`). Otherwise
+ * keep UI filters; when structured location is authoritative, strip conflicting implicit place
+ * tokens from the query text (Brisbane + Melbourne, etc.).
  */
-export function normalizeDiscoverFreeTextForStructuredFilters(args: NormalizeDiscoverQueryArgs): string {
+export function resolveDiscoverApiSearchParams(args: NormalizeDiscoverQueryArgs): DiscoverApiSearchParams {
   const {
     rawQuery,
     selectedCategory,
@@ -151,17 +163,43 @@ export function normalizeDiscoverFreeTextForStructuredFilters(args: NormalizeDis
   if (structuredCategoryAuthoritative && selectedCategory !== "All") {
     out = stripConflictingInterestTerms(out, selectedCategory)
   }
+  out = collapseWhitespace(out)
 
-  const hasStructuredPlace =
-    structuredLocationAuthoritative &&
-    (cityFilter.trim().length > 0 || countryFilter.trim().length > 0)
+  const parsed = out ? parseSearchIntent(out) : parseSearchIntent("")
+  const uiCity = cityFilter.trim()
+  const uiCountry = countryFilter.trim()
+  const hasUiPlace = uiCity.length > 0 || uiCountry.length > 0
 
-  if (hasStructuredPlace) {
-    const parsed = parseSearchIntent(out)
-    if (parsed.place && queryPlaceConflictsWithStructuredLocation(parsed, cityFilter, countryFilter)) {
-      out = removeParsedPlaceFromQuery(out, parsed.place)
-    }
+  if (
+    parsed.placeEvidence === "explicit" &&
+    parsed.place?.city?.trim() &&
+    hasUiPlace &&
+    queryPlaceConflictsWithStructuredLocation(parsed, cityFilter, countryFilter)
+  ) {
+    const city = parsed.place.city.trim()
+    const country =
+      (parsed.place.country ?? "").trim() || (countryForKnownCity(city) ?? "").trim()
+    return { apiQuery: out, city, country }
   }
 
-  return collapseWhitespace(out)
+  const hasStructuredPlace =
+    structuredLocationAuthoritative && (uiCity.length > 0 || uiCountry.length > 0)
+
+  let apiQuery = out
+  if (hasStructuredPlace && parsed.place && queryPlaceConflictsWithStructuredLocation(parsed, cityFilter, countryFilter)) {
+    apiQuery = collapseWhitespace(removeParsedPlaceFromQuery(out, parsed.place))
+  }
+
+  return {
+    apiQuery,
+    city: uiCity,
+    country: uiCountry,
+  }
+}
+
+/**
+ * Produce the `query` string to send to `/api/search/events` (and mirror into URL `q` when filters change).
+ */
+export function normalizeDiscoverFreeTextForStructuredFilters(args: NormalizeDiscoverQueryArgs): string {
+  return resolveDiscoverApiSearchParams(args).apiQuery
 }

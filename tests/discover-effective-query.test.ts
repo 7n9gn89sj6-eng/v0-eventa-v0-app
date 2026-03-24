@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest"
-import { normalizeDiscoverFreeTextForStructuredFilters } from "@/lib/discover-effective-query"
+import {
+  normalizeDiscoverFreeTextForStructuredFilters,
+  resolveDiscoverApiSearchParams,
+} from "@/lib/discover-effective-query"
 
 describe("normalizeDiscoverFreeTextForStructuredFilters", () => {
-  it("removes stale music and Paris when structured category is Markets and location is Berlin; keeps weekend phrasing", () => {
+  it("explicit query place overrides structured Berlin; strips conflicting category only", () => {
     const out = normalizeDiscoverFreeTextForStructuredFilters({
       rawQuery: "music in Paris this weekend",
       selectedCategory: "Markets",
@@ -13,7 +16,7 @@ describe("normalizeDiscoverFreeTextForStructuredFilters", () => {
     })
     const lower = out.toLowerCase()
     expect(lower).not.toContain("music")
-    expect(lower).not.toContain("paris")
+    expect(lower).toContain("paris")
     expect(lower).toMatch(/weekend/)
   })
 
@@ -42,5 +45,36 @@ describe("normalizeDiscoverFreeTextForStructuredFilters", () => {
     expect(out.toLowerCase()).toContain("free")
     expect(out.toLowerCase()).toContain("tonight")
     expect(out.toLowerCase()).not.toContain("music")
+  })
+})
+
+describe("resolveDiscoverApiSearchParams", () => {
+  it("Paris HYROX + Melbourne UI sends Paris/France and full query (no stale AU filter)", () => {
+    const r = resolveDiscoverApiSearchParams({
+      rawQuery: "Paris HYROX",
+      selectedCategory: "All",
+      cityFilter: "Melbourne",
+      countryFilter: "Australia",
+      structuredCategoryAuthoritative: false,
+      structuredLocationAuthoritative: true,
+    })
+    expect(r.apiQuery.toLowerCase()).toContain("paris")
+    expect(r.apiQuery.toLowerCase()).toContain("hyrox")
+    expect(r.city.toLowerCase()).toBe("paris")
+    expect(r.country.toLowerCase()).toContain("france")
+  })
+
+  it("London Theatre + Paris, France UI sends London/UK and full query", () => {
+    const r = resolveDiscoverApiSearchParams({
+      rawQuery: "London Theatre",
+      selectedCategory: "All",
+      cityFilter: "Paris",
+      countryFilter: "France",
+      structuredCategoryAuthoritative: false,
+      structuredLocationAuthoritative: true,
+    })
+    expect(r.apiQuery.toLowerCase()).toContain("london")
+    expect(r.city.toLowerCase()).toBe("london")
+    expect(r.country.toLowerCase()).toContain("kingdom")
   })
 })
