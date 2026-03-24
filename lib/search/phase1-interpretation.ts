@@ -1,4 +1,6 @@
 import type { InterpretedSearchIntent } from "@/lib/search/ai-intent"
+import type { QueryIntentClassification } from "@/lib/search/classifyQueryIntent"
+import type { ConversationalExtraction } from "@/lib/search/extractConversationalIntent"
 
 export type Phase1Facet =
   | { kind: "execution_time"; dateFrom: string; dateTo: string }
@@ -10,6 +12,10 @@ export type Phase1Interpretation = {
   schemaVersion: 1
   meta: { aiAttempted: boolean; aiSucceeded: boolean }
   facets: Phase1Facet[]
+  /** Phase 2.1 — deterministic query shape; does not change execution. */
+  queryIntent?: QueryIntentClassification
+  /** Phase 2.3 — conversational hints for scoring / UI; optional. */
+  conversationalExtraction?: ConversationalExtraction
 }
 
 type ParsedIntentForPhase1 = { interest?: string[] | null }
@@ -23,6 +29,8 @@ export type BuildPhase1InterpretationInput = {
   executionDateTo: string | null
   executionPlace: { city: string | null; country: string | null }
   parsedIntent: ParsedIntentForPhase1
+  queryIntent?: QueryIntentClassification | null
+  conversationalExtraction?: ConversationalExtraction | null
 }
 
 function normalizeCategoryToken(c: string | undefined | null): string | null {
@@ -137,9 +145,16 @@ export function buildPhase1Interpretation(input: BuildPhase1InterpretationInput)
     }
   }
 
-  return {
+  const out: Phase1Interpretation = {
     schemaVersion: 1,
     meta: { aiAttempted, aiSucceeded },
     facets,
   }
+  if (input.queryIntent) {
+    out.queryIntent = input.queryIntent
+  }
+  if (input.conversationalExtraction) {
+    out.conversationalExtraction = input.conversationalExtraction
+  }
+  return out
 }

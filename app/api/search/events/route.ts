@@ -18,6 +18,11 @@ import {
 } from "@/lib/search/resolve-place"
 import { interpretSearchIntent, type InterpretedSearchIntent } from "@/lib/search/ai-intent"
 import { buildPhase1Interpretation } from "@/lib/search/phase1-interpretation"
+import { classifyQueryIntentSafe } from "@/lib/search/classifyQueryIntent"
+import {
+  buildConversationalOverlapSupplement,
+  extractConversationalIntent,
+} from "@/lib/search/extractConversationalIntent"
 import {
   parseSearchIntent,
   rankingCategoryFromParsedIntent,
@@ -158,6 +163,19 @@ export async function GET(req: NextRequest) {
       }
     }
   }
+
+  const queryIntent = classifyQueryIntentSafe(q, parsedIntent)
+
+  const conversationalExtraction = extractConversationalIntent({
+    rawQuery: q,
+    parsedIntent,
+    queryIntentType: queryIntent.intentType,
+    searchMode: queryIntent.mode,
+  })
+  const textOverlapSupplement =
+    conversationalExtraction && conversationalExtraction.confidence >= 0.52
+      ? buildConversationalOverlapSupplement(conversationalExtraction)
+      : undefined
 
   let intentForPlan: SearchIntent = parsedIntent
   const explicitParsedCountry = parsedIntent.place?.country?.trim()
@@ -405,7 +423,17 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  console.log("[v0] Search params:", { q, city, country, category, dateFrom, dateTo, isEventQuery })
+  console.log("[v0] Search params:", {
+    q,
+    city,
+    country,
+    category,
+    dateFrom,
+    dateTo,
+    isEventQuery,
+    queryIntentType: queryIntent.intentType,
+    searchMode: queryIntent.mode,
+  })
   if (city) {
     console.log(`[v0] ⚠️ FILTERING BY CITY: "${city}"${country ? `, COUNTRY: "${country}"` : ""}`)
   } else {
@@ -425,7 +453,16 @@ export async function GET(req: NextRequest) {
     executionDateTo: dateTo,
     executionPlace: { city, country },
     parsedIntent,
+    queryIntent,
+    conversationalExtraction,
   })
+
+  const searchModeForRank = phase1Interpretation.queryIntent?.mode
+  const queryIntentConfidenceForRank = phase1Interpretation.queryIntent?.confidence
+
+  if (process.env.NODE_ENV === "development") {
+    console.log("[v0] queryIntent:", queryIntent.intentType, queryIntent.mode, queryIntent.confidence)
+  }
 
   try {
     if (!q) {
@@ -1726,6 +1763,9 @@ export async function GET(req: NextRequest) {
           kind: "internal",
           rankingCategory: rankingCategorySignal,
           webListingBoost: 0,
+          searchMode: searchModeForRank,
+          queryIntentConfidence: queryIntentConfidenceForRank,
+          textOverlapSupplement,
         })
         if (!breakdown) return null
         return { ...e, _score: breakdown.total, _rankBreakdown: breakdown, _resultKind: "internal" as const }
@@ -1856,6 +1896,9 @@ export async function GET(req: NextRequest) {
           kind: "web",
           rankingCategory: rankingCategorySignal,
           webListingBoost: result._eventnessBoost || 0,
+          searchMode: searchModeForRank,
+          queryIntentConfidence: queryIntentConfidenceForRank,
+          textOverlapSupplement,
         })
         if (!breakdown) return null
         return { ...result, _score: breakdown.total, _rankBreakdown: breakdown, _resultKind: "web" as const }
@@ -1900,6 +1943,9 @@ export async function GET(req: NextRequest) {
               kind: "web",
               rankingCategory: rankingCategorySignal,
               webListingBoost: 0,
+              searchMode: searchModeForRank,
+              queryIntentConfidence: queryIntentConfidenceForRank,
+              textOverlapSupplement,
             })
             if (!breakdown) return null
             return { ...r, _score: breakdown.total, _rankBreakdown: breakdown, _resultKind: "web" as const }

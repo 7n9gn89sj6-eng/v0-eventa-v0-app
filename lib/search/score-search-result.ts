@@ -1,5 +1,12 @@
 import type { SearchIntent } from "@/app/lib/search/parseSearchIntent"
 import type { SearchPlan } from "@/app/lib/search/resolveSearchPlan"
+import type { SearchMode } from "@/lib/search/classifyQueryIntent"
+import {
+  computePhraseTitleBoost,
+  extraWeakGenericWebPenalty,
+  getModeScoreTuning,
+  shouldApplySearchMode,
+} from "@/lib/search/mode-aware-ranking"
 import { scoreContextAgainstTextBlob } from "@/lib/search/search-intent-context"
 import type { EventCategory } from "@prisma/client"
 
@@ -21,6 +28,8 @@ export type SearchScoreBreakdown = {
   genericWebPenalty: number
   /** Optional extra boost applied to web rows in the route (URLs/snippets). */
   webListingBoost: number
+  /** Phase 2.2: net change from search mode tuning (0 when inactive). */
+  modeAdjustment: number
   total: number
 }
 
@@ -130,8 +139,13 @@ const TEXT_OVERLAP_STOPWORDS = new Set([
 /**
  * Deterministic query↔row text overlap (no AI).
  */
-export function queryTextOverlapScore(intent: SearchIntent, result: any): number {
-  const raw = (intent.rawQuery || "").trim().toLowerCase()
+export function queryTextOverlapScore(
+  intent: SearchIntent,
+  result: any,
+  /** Phase 2.3: extra tokens for conversational/fuzzy overlap only. */
+  textOverlapSupplement?: string,
+): number {
+  const raw = [intent.rawQuery, textOverlapSupplement].filter(Boolean).join(" ").trim().toLowerCase()
   if (!raw) return 0
   const tokens = raw
     .split(/\s+/)
@@ -205,13 +219,29 @@ export function scoreSearchResult(args: {
   rankingCategory?: string
   /** Merged URL/snippet boost from the route (web only). */
   webListingBoost?: number
+  /** Phase 2.1 classification; omitted or low confidence → baseline scoring. */
+  searchMode?: SearchMode
+  queryIntentConfidence?: number
+  /** Phase 2.3: merged into text overlap only; omit for baseline. */
+  textOverlapSupplement?: string
 }): SearchScoreBreakdown | null {
-  const { result, intent, searchPlan, now, kind, rankingCategory, webListingBoost = 0 } = args
+  const {
+    result,
+    intent,
+    searchPlan,
+    now,
+    kind,
+    rankingCategory,
+    webListingBoost = 0,
+    searchMode,
+    queryIntentConfidence,
+    textOverlapSupplement,
+  } = args
   const plan = searchPlan
   const restrict = plan.filters.applyLocationRestriction
 
   let sourceScore = kind === "internal" ? 115 : 0
-  const textOverlapScore = queryTextOverlapScore(intent, result)
+  const textOverlapScore = queryTextOverlapScore(intent, result, textOverlapSupplement)
   const freshnessScore = computeFreshnessScore(result, now)
 
   let scopeScore = 0
@@ -369,7 +399,43 @@ export function scoreSearchResult(args: {
 
   const genericWebPenalty = kind === "web" ? genericWebListingPenalty(result) : 0
 
-  const total =
+  const modeActive = shouldApplySearchMode(searchMode, queryIntentConfidence)
+  const effectiveTuning =
+    modeActive && searchMode
+      ? getModeScoreTuning(searchMode)
+      : {
+          textOverlapMultiplier: 1,
+          sourceDeltaInternal: 0,
+          sourceDeltaWeb: 0,
+          genericWebPenaltyMultiplier: 1,
+          scopeDelta: 0,
+          interestDelta: 0,
+          weakGenericWebExtra: 0,
+          phraseTitleBoostCap: 0,
+        }
+
+  const sourceDelta = kind === "internal" ? effectiveTuning.sourceDeltaInternal : effectiveTuning.sourceDeltaWeb
+  const textOverlapAdj = Math.round(textOverlapScore * (effectiveTuning.textOverlapMultiplier - 1))
+  const phraseBoost = computePhraseTitleBoost(
+    intent,
+    result,
+    searchMode,
+    modeActive && Boolean(searchMode),
+    effectiveTuning.phraseTitleBoostCap,
+    kind,
+  )
+  const extraGeneric = extraWeakGenericWebPenalty({
+    mode: searchMode,
+    active: modeActive && Boolean(searchMode),
+    kind,
+    textOverlapScore,
+    baseGenericWebPenalty: genericWebPenalty,
+    extraCap: effectiveTuning.weakGenericWebExtra,
+  })
+  const genericWebPenaltyTotal =
+    Math.round(genericWebPenalty * effectiveTuning.genericWebPenaltyMultiplier) + extraGeneric
+
+  const baselineTotal =
     sourceScore +
     textOverlapScore +
     freshnessScore +
@@ -382,6 +448,27 @@ export function scoreSearchResult(args: {
     mismatchPenalty -
     genericWebPenalty +
     webListingBoost
+
+  const total =
+    sourceScore +
+    sourceDelta +
+    textOverlapScore +
+    textOverlapAdj +
+    phraseBoost +
+    freshnessScore +
+    scopeScore +
+    effectiveTuning.scopeDelta +
+    timeScore +
+    interestScore +
+    effectiveTuning.interestDelta +
+    audienceScore +
+    contextScore +
+    qualityScore -
+    mismatchPenalty -
+    genericWebPenaltyTotal +
+    webListingBoost
+
+  const modeAdjustment = total - baselineTotal
 
   return {
     sourceScore,
@@ -396,6 +483,7 @@ export function scoreSearchResult(args: {
     mismatchPenalty,
     genericWebPenalty,
     webListingBoost,
+    modeAdjustment,
     total,
   }
 }
