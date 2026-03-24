@@ -727,6 +727,7 @@ export async function GET(req: NextRequest) {
         food: "FOOD_DRINK",
         music: "MUSIC_NIGHTLIFE",
         arts: "ARTS_CULTURE",
+        art: "ARTS_CULTURE",
         comedy: "ARTS_CULTURE",
         sports: "SPORTS_OUTDOORS",
         family: "FAMILY_KIDS",

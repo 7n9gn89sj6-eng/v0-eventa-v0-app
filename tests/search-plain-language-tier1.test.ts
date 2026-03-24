@@ -46,4 +46,9 @@ describe("Tier 1 plain-language search", () => {
     const flat = groups.flat().map((t) => t.toLowerCase())
     expect(flat.some((t) => t === "search")).toBe(false)
   })
+
+  it("stripTextSearchStopwords removes event/events glue (city-only queries after city strip)", () => {
+    expect(stripTextSearchStopwords("events")).toBe("")
+    expect(stripTextSearchStopwords("event")).toBe("")
+  })
 })

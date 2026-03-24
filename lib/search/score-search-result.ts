@@ -31,7 +31,7 @@ const CATEGORY_KEY_TO_ENUM: Record<string, EventCategory> = {
   markets: "MARKETS_FAIRS",
   arts: "ARTS_CULTURE",
   food: "FOOD_DRINK",
-  sports: "SPORTS_OUTdoors",
+  sports: "SPORTS_OUTDOORS",
   family: "FAMILY_KIDS",
   community: "COMMUNITY_CAUSES",
   learning: "LEARNING_TALKS",

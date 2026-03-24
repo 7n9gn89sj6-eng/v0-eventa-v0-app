@@ -113,7 +113,7 @@ const TEXT_SEARCH_STOPWORD_PHRASES = [
 ]
 
 const TEXT_SEARCH_STOPWORD_SINGLE_REGEX =
-  /\b(?:search|find|show|give|get|list|me|please|the|a|an|in|at|on|for|to|near|around|of|with)\b/gi
+  /\b(?:search|find|show|give|get|list|me|please|the|a|an|in|at|on|for|to|near|around|of|with|events?)\b/gi
 
 /**
  * Remove glue / instruction tokens so they do not become mandatory AND term groups.
