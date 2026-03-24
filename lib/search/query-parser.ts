@@ -381,6 +381,55 @@ function tryParseMonthWindow(normalized: string, today: Date): {
   }
 }
 
+/** Gregorian Easter Sunday (local calendar); Anonymous Gregorian algorithm. */
+function westernEasterSundayLocal(year: number): Date {
+  const a = year % 19
+  const b = Math.floor(year / 100)
+  const c = year % 100
+  const d = Math.floor(b / 4)
+  const e = b % 4
+  const f = Math.floor((b + 8) / 25)
+  const g = Math.floor((b - f + 1) / 3)
+  const h = (19 * a + b - d - g + 15) % 30
+  const i = Math.floor(c / 4)
+  const k = c % 4
+  const l = (32 + 2 * e + 2 * i - h - k) % 7
+  const m = Math.floor((a + 11 * h + 22 * l) / 451)
+  const month = Math.floor((h + l - 7 * m + 114) / 31)
+  const day = ((h + l - 7 * m + 114) % 31) + 1
+  return new Date(year, month - 1, day, 12, 0, 0, 0)
+}
+
+function tryParseEasterWindow(
+  normalized: string,
+  today: Date,
+): { date_from?: string; date_to?: string } {
+  if (!/\beaster\b/i.test(normalized)) return {}
+
+  const yMatch = normalized.match(/\b(20\d{2})\b/)
+  let year = yMatch ? Number.parseInt(yMatch[1], 10) : today.getFullYear()
+  if (!yMatch) {
+    const sun = westernEasterSundayLocal(year)
+    const monEnd = addDays(sun, 1)
+    monEnd.setHours(23, 59, 59, 999)
+    const startOfToday = new Date(today)
+    startOfToday.setHours(0, 0, 0, 0)
+    if (startOfToday.getTime() > monEnd.getTime()) {
+      year += 1
+    }
+  }
+
+  const sun = westernEasterSundayLocal(year)
+  const from = addDays(sun, -2)
+  from.setHours(0, 0, 0, 0)
+  const to = addDays(sun, 1)
+  to.setHours(23, 59, 59, 999)
+  return {
+    date_from: from.toISOString(),
+    date_to: to.toISOString(),
+  }
+}
+
 /**
  * Parse natural language date expressions into ISO date strings
  */
@@ -425,6 +474,13 @@ export function parseDateExpression(dateExpr: string): {
       date_from: tomorrow.toISOString(),
       date_to: endOfTomorrow.toISOString(),
     }
+  }
+
+  // Easter (Western): Good Friday 00:00 .. Easter Monday 23:59 (approx public-holiday long weekend).
+  // Must run before generic "weekend" handling so "Easter long weekend" is not treated as Sat–Sun of current week.
+  const easterWindow = tryParseEasterWindow(normalized, today)
+  if (easterWindow.date_from && easterWindow.date_to) {
+    return easterWindow
   }
 
   // Weekday names (e.g., "Friday", "this Friday", "next Friday")

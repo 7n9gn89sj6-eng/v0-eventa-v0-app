@@ -186,10 +186,68 @@ export function isQuerySpanNotAPlace(span: string): boolean {
   )
 }
 
+/** Words that end a place span when they appear after the first token (time / holiday cues). */
+const PLACE_TIME_BREAK_TOKENS = new Set([
+  "this",
+  "next",
+  "today",
+  "tomorrow",
+  "tonight",
+  "weekend",
+  "week",
+  "easter",
+])
+
+const CALENDAR_MONTH_TOKENS = new Set([
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+  "jan",
+  "feb",
+  "mar",
+  "apr",
+  "jun",
+  "jul",
+  "aug",
+  "sep",
+  "sept",
+  "oct",
+  "nov",
+  "dec",
+])
+
+/**
+ * Truncate greedy `in X Y Z` captures so time/holiday tails (e.g. "Echuca this weekend") become "Echuca".
+ */
+export function stripTrailingTimeTokensFromPlaceSpan(span: string): string {
+  const tokens = span.trim().split(/\s+/).filter(Boolean)
+  if (tokens.length <= 1) return span.trim()
+
+  const out: string[] = [tokens[0]!]
+  for (let i = 1; i < tokens.length; i++) {
+    const low = tokens[i]!.toLowerCase().replace(/\.$/, "")
+    if (PLACE_TIME_BREAK_TOKENS.has(low)) break
+    if (CALENDAR_MONTH_TOKENS.has(low)) break
+    if (low === "long" && tokens[i + 1]?.toLowerCase().replace(/\.$/, "") === "weekend") break
+    out.push(tokens[i]!)
+  }
+  return out.join(" ").trim()
+}
+
 /** Shared A4 / extractPlaceFromQuery: month-tail trim then strip trailing today|tonight|tomorrow. */
 export function trimPlaceCaptureTail(span: string): string {
   const afterMonth = trimInMonthTailFromPlace(span.trim())
-  return afterMonth.replace(/\s+\b(tonight|today|tomorrow)\b$/i, "").trim()
+  const noDayTail = afterMonth.replace(/\s+\b(tonight|today|tomorrow)\b$/i, "").trim()
+  return stripTrailingTimeTokensFromPlaceSpan(noDayTail)
 }
 
 /**

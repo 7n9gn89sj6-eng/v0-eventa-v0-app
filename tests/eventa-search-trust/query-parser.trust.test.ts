@@ -190,5 +190,36 @@ describe("Eventa trust: parseDateExpression time intent", () => {
     expect(from.getDate()).toBe(1)
     expect(to.getDate()).toBe(3)
   })
+
+  it("parses Easter as multi-day window around Western Easter 2026", () => {
+    const res = parseDateExpression("events in echuca easter")
+    expect(res.date_from).toBeTruthy()
+    expect(res.date_to).toBeTruthy()
+    const from = new Date(res.date_from!)
+    const to = new Date(res.date_to!)
+    expect(res.date_from!.startsWith("2026-")).toBe(true)
+    expect(res.date_to!.startsWith("2026-")).toBe(true)
+    expect(to.getTime()).toBeGreaterThan(from.getTime())
+    const spanDays = (to.getTime() - from.getTime()) / (86400 * 1000)
+    expect(spanDays).toBeGreaterThanOrEqual(3)
+    expect(spanDays).toBeLessThanOrEqual(5)
+  })
+
+  it("Easter long weekend uses same window as Easter (not generic Sat–Sun)", () => {
+    const easter = parseDateExpression("echuca easter")
+    const longW = parseDateExpression("echuca easter long weekend")
+    expect(easter.date_from).toBe(longW.date_from)
+    expect(easter.date_to).toBe(longW.date_to)
+  })
+
+  it("parseSearchIntent: Echuca place is not polluted by time tails; time attaches", () => {
+    expect(parseSearchIntent("Events in Echuca this weekend").place?.city).toBe("Echuca")
+    expect(parseSearchIntent("Events in Echuca Easter").place?.city).toBe("Echuca")
+    expect(parseSearchIntent("Events in Echuca Easter long weekend").place?.city).toBe("Echuca")
+    expect(parseSearchIntent("Events in Echuca").place?.city).toBe("Echuca")
+    expect(parseSearchIntent("Events in Echuca this weekend").time?.date_from).toBeTruthy()
+    expect(parseSearchIntent("Events in Echuca Easter").time?.date_from).toBeTruthy()
+    expect(parseSearchIntent("Events in Echuca Easter long weekend").time?.date_from).toBeTruthy()
+  })
 })
 

@@ -807,6 +807,9 @@ export async function GET(req: NextRequest) {
 
     const whereSnapshotForAmbientRetry = structuredClone(where)
 
+    /** Last Prisma `where` used for internal listing (for strict-date fallback). */
+    let internalWhereUsed: any = where
+
     let events, count
     try {
       [events, count] = await Promise.all([
@@ -864,6 +867,7 @@ export async function GET(req: NextRequest) {
     // This keeps category as an intent signal (filter/boost) without collapsing relevant results.
     if (count === 0 && shouldStrictCategoryFilter && category && category !== "all" && whereWithoutCategory) {
       console.log("[v0] ⚠️ Category filter returned 0 results; retrying without strict category constraint.")
+      internalWhereUsed = whereWithoutCategory
       try {
         ;[events, count] = await Promise.all([
           withLanguageColumnGuard(() =>
@@ -900,6 +904,55 @@ export async function GET(req: NextRequest) {
           console.warn(
             "[v0] Category-relax retry failed; keeping original empty results.",
             retryError?.message || String(retryError),
+          )
+        }
+      }
+    }
+
+    const hadStrictDateRange = Boolean(dateFrom && dateTo)
+    if (count === 0 && hadStrictDateRange) {
+      const whereRelaxedDate: any = structuredClone(internalWhereUsed)
+      delete whereRelaxedDate.startAt
+      delete whereRelaxedDate.endAt
+      Object.assign(whereRelaxedDate, buildDateOverlapWhere(now, null))
+      console.log(
+        "[v0] ⚠️ Strict date range returned 0 internal rows; retrying with default forward date window (endAt >= now).",
+      )
+      try {
+        ;[events, count] = await Promise.all([
+          withLanguageColumnGuard(() =>
+            prisma.event.findMany({
+              where: whereRelaxedDate,
+              orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
+              take,
+              skip,
+            }),
+          ),
+          prisma.event.count({ where: whereRelaxedDate }),
+        ])
+      } catch (retryErr: any) {
+        if (!isLanguageFilteringAvailable()) {
+          try {
+            ;[events, count] = await Promise.all([
+              prisma.event.findMany({
+                where: whereRelaxedDate,
+                select: getEventSelectWithoutLanguage(),
+                orderBy: [{ startAt: "asc" }, { createdAt: "desc" }],
+                take,
+                skip,
+              }),
+              prisma.event.count({ where: whereRelaxedDate }),
+            ])
+          } catch (retryErr2: any) {
+            console.warn(
+              "[v0] Date-relax retry failed; keeping prior empty internal results.",
+              retryErr2?.message || String(retryErr2),
+            )
+          }
+        } else {
+          console.warn(
+            "[v0] Date-relax retry failed; keeping prior empty internal results.",
+            retryErr?.message || String(retryErr),
           )
         }
       }

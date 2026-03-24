@@ -3,6 +3,7 @@ import {
   extractPlaceFromQuery,
   isCalendarMonthPlace,
   isQuerySpanNotAPlace,
+  stripTrailingTimeTokensFromPlaceSpan,
   trimPlaceCaptureTail,
   tryLeadingNonAustraliaKnownCity,
 } from "@/lib/search/effective-location"
@@ -115,7 +116,11 @@ function extractTime(query: string): SearchIntent["time"] {
 
   let label: string | undefined
   const lower = query.toLowerCase()
-  if (lower.includes("tonight")) label = "tonight"
+  if (/\beaster\b/.test(lower)) {
+    if (/\beaster\s+long\s+weekend\b/.test(lower)) label = "easter long weekend"
+    else if (/\beaster\s+weekend\b/.test(lower)) label = "easter weekend"
+    else label = "easter"
+  } else if (lower.includes("tonight")) label = "tonight"
   else if (lower.includes("today")) label = "today"
   else if (lower.includes("tomorrow")) label = "tomorrow"
   else if (lower.includes("weekend")) label = "weekend"
@@ -224,7 +229,7 @@ function extractPlaceWithEvidence(query: string): {
   if (!city) {
     const inPattern = /\b(?:in|at|near|around)\s+([A-Za-z][A-Za-z'\\-]*(?:\s+[A-Za-z][A-Za-z'\\-]*){0,3})\b/gi
     for (const m of q.matchAll(inPattern)) {
-      const captured = trimPlaceCaptureTail(m[1]?.trim() ?? "")
+      const captured = stripTrailingTimeTokensFromPlaceSpan(trimPlaceCaptureTail(m[1]?.trim() ?? ""))
       if (!captured || isCalendarMonthPlace(captured)) continue
       if (isQuerySpanNotAPlace(captured)) continue
       // "near where I'm hiking" → not a place name
@@ -234,7 +239,7 @@ function extractPlaceWithEvidence(query: string): {
       if (!cityRaw) continue
 
       city = titleCaseTokens(cityRaw)
-      raw = captured
+      raw = city
       geoEvidence = "explicit"
       break
     }
@@ -245,7 +250,7 @@ function extractPlaceWithEvidence(query: string): {
     const candidate = trailing?.[trailing.length - 1]
     if (
       candidate &&
-      !/\b(today|tonight|tomorrow|weekend|friday|saturday|sunday)\b/i.test(candidate) &&
+      !/\b(today|tonight|tomorrow|weekend|friday|saturday|sunday|easter)\b/i.test(candidate) &&
       !isCalendarMonthPlace(candidate) &&
       !isQuerySpanNotAPlace(candidate) &&
       countryForKnownCity(candidate) !== null

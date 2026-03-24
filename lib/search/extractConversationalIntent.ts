@@ -50,6 +50,9 @@ function detectBrowseFraming(q: string): boolean {
 
 function detectTimeText(q: string): string | null {
   const s = q.toLowerCase()
+  if (/\beaster\s+long\s+weekend\b/.test(s)) return "easter long weekend"
+  if (/\beaster\s+weekend\b/.test(s)) return "easter weekend"
+  if (/\beaster\b/.test(s)) return "easter"
   const mWeekend = s.match(/\b(this|next)\s+weekend\b/)
   if (mWeekend) return `${mWeekend[1]} weekend`
   const mWeek = s.match(/\b(this|next)\s+week\b/)
