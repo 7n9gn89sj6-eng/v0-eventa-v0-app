@@ -135,7 +135,7 @@ async function handleUpdate(
           category:
             category !== undefined && category !== null && String(category).trim() !== ""
               ? String(category)
-              : currentEvent.category,
+              : String(currentEvent.category ?? ""),
           subcategory: subcategory !== undefined ? subcategory : currentEvent.subcategory,
           tags: tags !== undefined ? tags : currentEvent.tags,
           customCategoryLabel:
