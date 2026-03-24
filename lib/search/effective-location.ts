@@ -203,7 +203,10 @@ export function extractPlaceFromQuery(query: string): string | null {
 
   const patterns = [
     /\bgoing\s+to\s+([A-Za-z][A-Za-z'\\-]*(?:\s+[A-Za-z][A-Za-z'\\-]*){0,2})/gi,
-    /\b(in|near|around|to)\s+([A-Za-z][A-Za-z'\\-]*(?:\s+[A-Za-z][A-Za-z'\\-]*){0,2})/gi,
+    // Before `in|…` so "travelling to Berlin in May" matches `to Berlin…` (not `in May…`).
+    // `(?!do\b)` avoids "things to do Sydney" → "do Sydney".
+    /\bto\s+(?!do\b)([A-Za-z][A-Za-z'\\-]*(?:\s+[A-Za-z][A-Za-z'\\-]*){0,2})/gi,
+    /\b(in|near|around)\s+([A-Za-z][A-Za-z'\\-]*(?:\s+[A-Za-z][A-Za-z'\\-]*){0,2})/gi,
     /([A-Za-z][a-zA-Z'\\-]*(?:\s+[A-Za-z][a-zA-Z'\\-]*){0,2})\s+this\s+weekend/gi,
   ]
 

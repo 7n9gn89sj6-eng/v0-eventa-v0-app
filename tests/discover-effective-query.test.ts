@@ -77,4 +77,17 @@ describe("resolveDiscoverApiSearchParams", () => {
     expect(r.city.toLowerCase()).toBe("london")
     expect(r.country.toLowerCase()).toContain("kingdom")
   })
+
+  it("things to do Sydney + stale Paris UI sends Sydney/Australia (not to-do false place)", () => {
+    const r = resolveDiscoverApiSearchParams({
+      rawQuery: "things to do Sydney",
+      selectedCategory: "All",
+      cityFilter: "Paris",
+      countryFilter: "France",
+      structuredCategoryAuthoritative: false,
+      structuredLocationAuthoritative: true,
+    })
+    expect(r.city.toLowerCase()).toBe("sydney")
+    expect(r.country.toLowerCase()).toContain("australia")
+  })
 })
