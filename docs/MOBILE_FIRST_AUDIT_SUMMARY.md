@@ -21,13 +21,13 @@ This audit consolidated search date logic, improved mobile-first UX, and complet
 
 **Changes Made:**
 
-1. **Search Input Components** (`components/search/smart-input-bar.tsx`, `components/search/ai-search-bar.tsx`):
+1. **Search Input Components** (`components/search/smart-input-bar.tsx`; legacy `ai-search-bar` later removed — production search is GET `/api/search/events`):
    - Added `min-h-[44px]` to input fields
    - Added `inputMode="search"` for mobile search keyboard
    - Added `autoComplete="off"` to prevent unwanted autocomplete
    - Location button: Added `min-h-[44px] min-w-[44px]`, `touchAction: 'manipulation'`, `WebkitTapHighlightColor: 'transparent'`, `active:scale-95` for visual feedback
 
-2. **Voice Input Button** (`components/search/ai-search-bar.tsx`):
+2. **Voice Input Button** (historical: `ai-search-bar.tsx`; file removed, not on canonical path):
    - Increased size from `h-8 w-8` to `h-10 w-10` with `min-h-[44px] min-w-[44px]`
    - Added touch optimization and aria-label
 
@@ -174,18 +174,15 @@ Event relevance: event.startAt <= searchEnd AND event.endAt >= searchStart
 2. **`components/search/smart-input-bar.tsx`**
    - Added mobile touch targets and input optimization
 
-3. **`components/search/ai-search-bar.tsx`**
-   - Added mobile touch targets and input optimization
-
-4. **`components/search/search-filters.tsx`**
+3. **`components/search/search-filters.tsx`**
    - Added mobile touch targets to filter buttons
 
-5. **`components/events/edit-event-form.tsx`**
+4. **`components/events/edit-event-form.tsx`**
    - Added `state` field
    - Integrated Places autocomplete
    - Updated form to handle all address components
 
-6. **`app/api/events/[id]/route.ts`**
+5. **`app/api/events/[id]/route.ts`**
    - Updated PUT handler to accept all edit form fields
 
 ### Files Verified (No Changes Needed)

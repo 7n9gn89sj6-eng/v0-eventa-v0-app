@@ -7,8 +7,8 @@ test("home renders", async ({ page }) => {
   await expect(page.getByRole("heading")).toBeVisible()
 })
 
-test("search API responds", async ({ request }) => {
-  const res = await request.post("/api/search", { data: { query: "music" } })
+test("canonical search API responds", async ({ request }) => {
+  const res = await request.get("/api/search/events?q=music")
   expect(res.ok()).toBeTruthy()
 })
 

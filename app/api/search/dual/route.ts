@@ -1,8 +1,17 @@
 /**
- * LEGACY — not used in production search.
+ * LEGACY — not used in production search (scheduled for removal).
  * Canonical: GET /api/search/events.
+ * Orchestrates POST /api/search/internal + POST /api/search/external only — not GET /events.
+ *
+ * Deprecation: success responses include `X-Eventa-Legacy-Route` / `X-Eventa-Legacy-Id: dual-search`.
+ * Non-test invocations log `[dual-search][LEGACY]`.
  */
 import { type NextRequest, NextResponse } from "next/server"
+
+const LEGACY_DUAL_HEADERS: Record<string, string> = {
+  "X-Eventa-Legacy-Route": "true",
+  "X-Eventa-Legacy-Id": "dual-search",
+}
 
 function levenshteinDistance(a: string, b: string): number {
   const matrix: number[][] = []
@@ -421,6 +430,12 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { entities, query, input_mode = "text", uiLang = "en", isTripIntent, duration, interests } = body
 
+  if (process.env.NODE_ENV !== "test") {
+    console.warn(
+      "[dual-search][LEGACY] POST /api/search/dual invoked — migrate to GET /api/search/events; this route will be removed.",
+    )
+  }
+
   console.log(`[v0] Dual search request - uiLang: ${uiLang}`, { 
     entities, 
     query, 
@@ -618,20 +633,23 @@ export async function POST(request: NextRequest) {
     message = "Some web sources aren't responding. Showing what we have."
   }
 
-  return NextResponse.json({
-    results: mergedResults,
-    count: mergedResults.length,
-    internal_count: finalInternal.length,
-    external_count: finalExternal.length,
-    latency_ms: totalLatency,
-    message,
-    errors: {
-      internal: internalError,
-      external: externalError,
+  return NextResponse.json(
+    {
+      results: mergedResults,
+      count: mergedResults.length,
+      internal_count: finalInternal.length,
+      external_count: finalExternal.length,
+      latency_ms: totalLatency,
+      message,
+      errors: {
+        internal: internalError,
+        external: externalError,
+      },
+      stats: {
+        deduped: deduped.droppedDedupe,
+        external_stats: externalData?.stats,
+      },
     },
-    stats: {
-      deduped: deduped.droppedDedupe,
-      external_stats: externalData?.stats,
-    },
-  })
+    { headers: LEGACY_DUAL_HEADERS },
+  )
 }

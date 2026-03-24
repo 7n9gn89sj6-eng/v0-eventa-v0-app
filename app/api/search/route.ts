@@ -1,8 +1,11 @@
 /**
- * LEGACY — not used in production search.
+ * LEGACY — not used in production search (scheduled for removal).
  * Canonical: GET /api/search/events (EventsListingContent, SmartInputBar → /discover, eval harness).
+ *
+ * Deprecation: responses include `X-Eventa-Legacy-Route` / `X-Eventa-Legacy-Id: post-search`.
+ * Non-test invocations log `[search][LEGACY]`.
  */
-import type { NextRequest } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { detectLanguage } from "@/lib/search/language-detection"
 import { normalizeQuery } from "@/lib/search/query-normalization"
 import { searchDatabase } from "@/lib/search/database-search"
@@ -11,6 +14,11 @@ import { ok, fail } from "@/lib/http"
 import { logger } from "@/lib/logger"
 import { checkRateLimit, getClientIdentifier, rateLimiters } from "@/lib/rate-limit"
 import type { SearchFilters, SearchResult } from "@/lib/types"
+
+const LEGACY_SEARCH_HEADERS: Record<string, string> = {
+  "X-Eventa-Legacy-Route": "true",
+  "X-Eventa-Legacy-Id": "post-search",
+}
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now()
@@ -39,6 +47,12 @@ export async function POST(request: NextRequest) {
 
     if (!query || query.trim().length === 0) {
       return fail("Query is required", 400)
+    }
+    if (process.env.NODE_ENV !== "test") {
+      logger.warn(
+        "[search][LEGACY] POST /api/search invoked — migrate to GET /api/search/events; this route will be removed.",
+        { queryPreview: String(query).slice(0, 80) },
+      )
     }
     logger.info("[search] Request received", { query, userLat, userLng, filters, includeWeb })
 
@@ -86,7 +100,7 @@ export async function POST(request: NextRequest) {
       durationMs: duration,
     })
 
-    return ok(allResults)
+    return NextResponse.json(allResults, { status: 200, headers: LEGACY_SEARCH_HEADERS })
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     const duration = Date.now() - startTime

@@ -264,7 +264,7 @@ eventa-v0/
 - `PUT /api/events/:id` - Update event (requires edit token, triggers re-moderation)
 - `GET /api/events/:id/calendar` - Download event as .ics file
 - `POST /api/events/:id/appeal` - Submit appeal for rejected event
-- `POST /api/search` - AI-powered hybrid search
+- `GET /api/search/events` - Canonical listing search (query `q` / `query`, optional `city`, `country`, filters)
 - `POST /api/auth/*` - NextAuth endpoints
 - `GET /api/cron/events-maintenance` - Automated event maintenance
 - `GET /api/status` - Health endpoint
