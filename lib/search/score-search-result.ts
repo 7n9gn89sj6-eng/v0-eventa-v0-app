@@ -228,6 +228,8 @@ export function scoreSearchResult(args: {
   queryIntentConfidence?: number
   /** Phase 2.3: merged into text overlap only; omit for baseline. */
   textOverlapSupplement?: string
+  /** Web-only: do not hard-drop on strict time non-overlap; penalize instead (discovery / weak internal). */
+  relaxStrictTimeForWeb?: boolean
 }): SearchScoreBreakdown | null {
   const {
     result,
@@ -240,9 +242,11 @@ export function scoreSearchResult(args: {
     searchMode,
     queryIntentConfidence,
     textOverlapSupplement,
+    relaxStrictTimeForWeb = false,
   } = args
   const plan = searchPlan
   const restrict = plan.filters.applyLocationRestriction
+  let mismatchPenalty = 0
 
   let sourceScore = kind === "internal" ? 115 : 0
   const textOverlapScore = queryTextOverlapScore(intent, result, textOverlapSupplement)
@@ -279,6 +283,11 @@ export function scoreSearchResult(args: {
     }
     if (strongCityMatch || strongParentMatch) scopeScore += 32
     else scopeScore += 6
+    if (kind === "web" && (strongCityMatch || strongParentMatch)) {
+      const cityNeedle = targetCity.toLowerCase()
+      const headline = `${result.title || ""} ${result.description || ""}`.toLowerCase()
+      if (cityNeedle.length >= 3 && headline.includes(cityNeedle)) scopeScore += 6
+    }
     if (targetCountry) {
       const cty = String(result.country || result.location?.country || "").trim()
       if (cty && countryMatchesTarget(targetCountry, cty)) scopeScore += 14
@@ -300,9 +309,15 @@ export function scoreSearchResult(args: {
       const wStart = new Date(intent.time!.date_from!)
       const wEnd = new Date(intent.time!.date_to!)
       if (!rangesOverlap(bounds.start, bounds.end, wStart, wEnd)) {
-        return null
+        if (kind === "web" && relaxStrictTimeForWeb) {
+          mismatchPenalty += 16
+          timeScore += 2
+        } else {
+          return null
+        }
+      } else {
+        timeScore += 28
       }
-      timeScore += 28
     } else {
       if (bounds.end.getTime() >= now.getTime()) {
         const days = (bounds.start.getTime() - now.getTime()) / (86400 * 1000)
@@ -319,7 +334,6 @@ export function scoreSearchResult(args: {
 
   const catKey = primaryInterestKey(intent, rankingCategory)
   let interestScore = 0
-  let mismatchPenalty = 0
 
   const broad = isBroadScope(plan)
   const strictCat = plan.filters.strictCategory
@@ -389,6 +403,8 @@ export function scoreSearchResult(args: {
     mismatchPenalty += 5
   }
 
+  const genericWebPenaltyRaw = kind === "web" ? genericWebListingPenalty(result) : 0
+
   let qualityScore = 0
   const title = String(result.title || "")
   const desc = String(result.description || "")
@@ -399,9 +415,14 @@ export function scoreSearchResult(args: {
 
   if (kind === "web") {
     mismatchPenalty += aggregatorPenalty(result)
+    if (!bounds && genericWebPenaltyRaw >= 10) {
+      mismatchPenalty += 10
+    } else if (bounds && genericWebPenaltyRaw <= 8) {
+      qualityScore += 5
+    }
   }
 
-  const genericWebPenalty = kind === "web" ? genericWebListingPenalty(result) : 0
+  const genericWebPenalty = genericWebPenaltyRaw
 
   const modeActive = shouldApplySearchMode(searchMode, queryIntentConfidence)
   const effectiveTuning =

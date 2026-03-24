@@ -20,6 +20,7 @@ import {
   resolveDiscoverApiSearchParams,
   type NormalizeDiscoverQueryArgs,
 } from "@/lib/discover-effective-query"
+import { sanitizeQueryParam } from "@/lib/search/sanitize-query-param"
 
 const CATEGORIES = [
   "All",
@@ -380,7 +381,8 @@ export function EventsListingContent({
 
     const params = new URLSearchParams()
     const { apiQuery, city: urlCity, country: urlCountry } = resolveDiscoverApiSearchParams(getDiscoverArgs())
-    if (apiQuery.trim()) params.set("q", apiQuery.trim())
+    const safeQ = sanitizeQueryParam(apiQuery).trim()
+    if (safeQ) params.set("q", safeQ)
     if (urlCity.trim()) params.set("city", urlCity.trim())
     if (urlCountry.trim()) params.set("country", urlCountry.trim())
 

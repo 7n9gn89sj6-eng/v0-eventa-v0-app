@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "queries": [
+    { "id": "disc-01", "bucket": "broad_discovery", "q": "events in Melbourne" },
+    { "id": "disc-02", "bucket": "broad_discovery", "q": "music Melbourne" },
+    { "id": "disc-03", "bucket": "broad_discovery", "q": "things to do Sydney" },
+    { "id": "disc-04", "bucket": "broad_discovery", "q": "weekend markets Brisbane" },
+    { "id": "disc-05", "bucket": "broad_discovery", "q": "paris hyrox" },
+    { "id": "disc-06", "bucket": "broad_discovery", "q": "london theatre" },
+    { "id": "exact-01", "bucket": "exact_entity", "q": "Taylor Swift Melbourne" },
+    { "id": "exact-02", "bucket": "exact_entity", "q": "Australian Open 2026" },
+    { "id": "exact-03", "bucket": "exact_entity", "q": "Malthouse Theatre season" },
+    { "id": "exact-04", "bucket": "exact_entity", "q": "Dark Mofo Hobart" },
+    { "id": "cat-01", "bucket": "city_category", "q": "comedy Melbourne", "params": { "city": "Melbourne", "country": "Australia" } },
+    { "id": "cat-02", "bucket": "city_category", "q": "jazz Sydney tonight", "params": { "city": "Sydney", "country": "Australia" } },
+    { "id": "cat-03", "bucket": "city_category", "q": "family events Perth", "params": { "city": "Perth", "country": "Australia" } },
+    { "id": "cat-04", "bucket": "city_category", "q": "food festival Adelaide", "params": { "city": "Adelaide", "country": "Australia" } },
+    { "id": "time-01", "bucket": "city_relative_time", "q": "events in Echuca this weekend" },
+    { "id": "time-02", "bucket": "city_relative_time", "q": "events in Echuca next weekend" },
+    { "id": "time-03", "bucket": "city_relative_time", "q": "gigs Melbourne tonight" },
+    { "id": "time-04", "bucket": "city_relative_time", "q": "markets Bendigo this weekend" },
+    { "id": "time-05", "bucket": "city_relative_time", "q": "what's on Canberra today" },
+    { "id": "hol-01", "bucket": "holiday_window", "q": "events in Echuca Easter" },
+    { "id": "hol-02", "bucket": "holiday_window", "q": "events in Echuca Easter long weekend" },
+    { "id": "hol-03", "bucket": "holiday_window", "q": "Melbourne Cup events Melbourne" },
+    { "id": "hol-04", "bucket": "holiday_window", "q": "ANZAC Day dawn service Sydney" },
+    { "id": "geo-01", "bucket": "geo_edge", "q": "events in Echuca" },
+    { "id": "geo-02", "bucket": "geo_edge", "q": "events in Byron Bay" },
+    { "id": "geo-03", "bucket": "geo_edge", "q": "Berlin techno this weekend" },
+    { "id": "mix-01", "bucket": "internal_web_mix", "q": "live music Fitzroy", "params": { "city": "Melbourne", "country": "Australia" } },
+    { "id": "mix-02", "bucket": "internal_web_mix", "q": "community festival regional Victoria" }
+  ]
+}

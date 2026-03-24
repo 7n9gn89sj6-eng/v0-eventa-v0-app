@@ -111,16 +111,19 @@ export function computePhraseTitleBoost(
   cap: number,
   kind: "internal" | "web",
 ): number {
-  if (!active || mode !== "exact" || kind !== "internal" || cap <= 0) return 0
+  if (!active || mode !== "exact" || cap <= 0) return 0
+  const capUse =
+    kind === "internal" ? cap : Math.min(14, Math.round(cap * 0.52))
+  if (kind === "web" && capUse <= 0) return 0
   const q = normalizeTitleMatch(intent.rawQuery || "")
   const t = normalizeTitleMatch(result.title || "")
   if (!q || !t) return 0
-  if (t.includes(q) || q.includes(t)) return cap
+  if (t.includes(q) || q.includes(t)) return capUse
   const tokens = q.split(/\s+/).filter((x) => x.length > 2)
   if (tokens.length === 0) return 0
   const hits = tokens.filter((x) => t.includes(x)).length
-  if (hits === tokens.length) return cap
-  if (hits >= Math.ceil(tokens.length * 0.66)) return Math.round(cap * 0.62)
+  if (hits === tokens.length) return capUse
+  if (hits >= Math.ceil(tokens.length * 0.66)) return Math.round(capUse * 0.62)
   return 0
 }
 

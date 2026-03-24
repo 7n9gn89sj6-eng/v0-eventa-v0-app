@@ -3,6 +3,7 @@
  */
 
 import { addDays, startOfWeek, endOfWeek, addWeeks } from "date-fns"
+import { sanitizeQueryParam } from "@/lib/search/sanitize-query-param"
 
 /**
  * Convert Intent API response to URL search parameters
@@ -11,12 +12,12 @@ export function intentToURLParams(intentResponse: any): URLSearchParams {
   const params = new URLSearchParams()
   const extracted = intentResponse.extracted || {}
 
-  // Add original query if present (use the original query from the request, not from extracted)
-  // The query should be passed separately or we can use the paraphrase
-  if (intentResponse.query) {
-    params.set("q", intentResponse.query)
-  } else if (intentResponse.description) {
-    params.set("q", intentResponse.description)
+  const qFromIntent = sanitizeQueryParam(intentResponse.query)
+  const qFromDesc = sanitizeQueryParam(intentResponse.description)
+  if (qFromIntent) {
+    params.set("q", qFromIntent)
+  } else if (qFromDesc) {
+    params.set("q", qFromDesc)
   }
 
   // Add city if extracted (check for empty strings too)
@@ -400,14 +401,34 @@ function westernEasterSundayLocal(year: number): Date {
   return new Date(year, month - 1, day, 12, 0, 0, 0)
 }
 
-function tryParseEasterWindow(
-  normalized: string,
-  today: Date,
-): { date_from?: string; date_to?: string } {
+export type ParsedDateExpression = {
+  date_from?: string
+  date_to?: string
+  timeWasRolledForward?: boolean
+  relativeWindowType?: string
+}
+
+/** Next Sat–Sun window from ISO week of `todayStart`; roll +7d if that Sun has ended vs `clock`. */
+function weekendSatSunForwardFrom(todayStart: Date, clock: Date): { from: Date; to: Date; rolled: boolean } {
+  const weekStart = startOfWeek(todayStart, { weekStartsOn: 1 })
+  let sat = addDays(weekStart, 5)
+  sat.setHours(0, 0, 0, 0)
+  let sunEnd = addDays(weekStart, 6)
+  sunEnd.setHours(23, 59, 59, 999)
+  if (sunEnd.getTime() < clock.getTime()) {
+    sat = addDays(sat, 7)
+    sunEnd = addDays(sunEnd, 7)
+    return { from: sat, to: sunEnd, rolled: true }
+  }
+  return { from: sat, to: sunEnd, rolled: false }
+}
+
+function tryParseEasterWindow(normalized: string, today: Date): ParsedDateExpression {
   if (!/\beaster\b/i.test(normalized)) return {}
 
   const yMatch = normalized.match(/\b(20\d{2})\b/)
   let year = yMatch ? Number.parseInt(yMatch[1], 10) : today.getFullYear()
+  let rolled = false
   if (!yMatch) {
     const sun = westernEasterSundayLocal(year)
     const monEnd = addDays(sun, 1)
@@ -416,6 +437,7 @@ function tryParseEasterWindow(
     startOfToday.setHours(0, 0, 0, 0)
     if (startOfToday.getTime() > monEnd.getTime()) {
       year += 1
+      rolled = true
     }
   }
 
@@ -427,45 +449,60 @@ function tryParseEasterWindow(
   return {
     date_from: from.toISOString(),
     date_to: to.toISOString(),
+    timeWasRolledForward: rolled,
+    relativeWindowType: normalized.includes("long") ? "easter_long_weekend" : "easter",
   }
 }
 
 /**
- * Parse natural language date expressions into ISO date strings
+ * Parse natural language date expressions into ISO date strings (+ optional roll / window metadata).
  */
-export function parseDateExpression(dateExpr: string): {
-  date_from?: string
-  date_to?: string
-} {
+export function parseDateExpression(dateExpr: string): ParsedDateExpression {
   if (!dateExpr) return {}
 
   const normalized = dateExpr.toLowerCase().trim()
   const today = new Date()
-  today.setHours(0, 0, 0, 0) // Start of day
+  today.setHours(0, 0, 0, 0)
+  const clock = new Date()
 
-  // Tonight
+  // Tonight — remaining slice of “today evening”; if already past, emit no range (avoid dead Prisma windows).
   if (normalized.includes("tonight")) {
-    const tonight = new Date()
-    tonight.setHours(18, 0, 0, 0)
-    const endOfNight = new Date()
+    const eveningStart = new Date(clock)
+    eveningStart.setHours(18, 0, 0, 0)
+    const endOfNight = new Date(clock)
     endOfNight.setHours(23, 59, 59, 999)
+    if (clock.getTime() > endOfNight.getTime()) {
+      return { timeWasRolledForward: true, relativeWindowType: "tonight" }
+    }
+    const from = clock.getTime() > eveningStart.getTime() ? clock : eveningStart
+    if (from.getTime() > endOfNight.getTime()) {
+      return { timeWasRolledForward: true, relativeWindowType: "tonight" }
+    }
     return {
-      date_from: tonight.toISOString(),
+      date_from: from.toISOString(),
       date_to: endOfNight.toISOString(),
+      relativeWindowType: "tonight",
     }
   }
 
-  // Today
+  // Today — remaining hours; if day finished, no range.
   if (normalized.includes("today")) {
     const endOfDay = new Date(today)
     endOfDay.setHours(23, 59, 59, 999)
+    if (clock.getTime() > endOfDay.getTime()) {
+      return { timeWasRolledForward: true, relativeWindowType: "today" }
+    }
+    const from = clock.getTime() > today.getTime() ? clock : today
+    if (from.getTime() > endOfDay.getTime()) {
+      return { timeWasRolledForward: true, relativeWindowType: "today" }
+    }
     return {
-      date_from: today.toISOString(),
+      date_from: from.toISOString(),
       date_to: endOfDay.toISOString(),
+      relativeWindowType: "today",
     }
   }
 
-  // Tomorrow
   if (normalized.includes("tomorrow")) {
     const tomorrow = addDays(today, 1)
     const endOfTomorrow = new Date(tomorrow)
@@ -473,17 +510,16 @@ export function parseDateExpression(dateExpr: string): {
     return {
       date_from: tomorrow.toISOString(),
       date_to: endOfTomorrow.toISOString(),
+      relativeWindowType: "tomorrow",
     }
   }
 
-  // Easter (Western): Good Friday 00:00 .. Easter Monday 23:59 (approx public-holiday long weekend).
-  // Must run before generic "weekend" handling so "Easter long weekend" is not treated as Sat–Sun of current week.
+  // Easter before generic weekend (handles "Easter long weekend").
   const easterWindow = tryParseEasterWindow(normalized, today)
   if (easterWindow.date_from && easterWindow.date_to) {
     return easterWindow
   }
 
-  // Weekday names (e.g., "Friday", "this Friday", "next Friday")
   const weekdayToDow: Record<string, number> = {
     sunday: 0,
     monday: 1,
@@ -499,70 +535,81 @@ export function parseDateExpression(dateExpr: string): {
     const weekdayName = weekdayMatch[1].toLowerCase()
     const targetDow = weekdayToDow[weekdayName]
     const todayDow = today.getDay()
-
-    // How many days until the next occurrence of that weekday
     let daysUntil = (targetDow - todayDow + 7) % 7
-
     const isNextWeek = /\bnext\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/.test(normalized)
     if (isNextWeek) {
-      // "next <weekday>" always means the upcoming weekday in the following week.
       daysUntil += 7
     }
-
     const targetDate = addDays(today, daysUntil)
     targetDate.setHours(0, 0, 0, 0)
     const endOfDay = new Date(targetDate)
     endOfDay.setHours(23, 59, 59, 999)
-
     return {
       date_from: targetDate.toISOString(),
       date_to: endOfDay.toISOString(),
+      relativeWindowType: "weekday",
     }
   }
 
-  // This weekend
-  if (normalized.includes("weekend") || normalized.includes("this weekend")) {
-    const weekStart = startOfWeek(today, { weekStartsOn: 1 }) // Monday
-    const saturday = addDays(weekStart, 5) // Saturday
-    const sunday = addDays(weekStart, 6) // Sunday
-    const endOfSunday = new Date(sunday)
-    endOfSunday.setHours(23, 59, 59, 999)
+  // Next weekend — the Sat–Sun after the upcoming / current “this weekend” window.
+  if (/\bnext\s+weekend\b/.test(normalized)) {
+    const tw = weekendSatSunForwardFrom(today, clock)
+    const nextFrom = addDays(tw.from, 7)
+    const nextTo = addDays(tw.to, 7)
     return {
-      date_from: saturday.toISOString(),
-      date_to: endOfSunday.toISOString(),
+      date_from: nextFrom.toISOString(),
+      date_to: nextTo.toISOString(),
+      relativeWindowType: "next_weekend",
     }
   }
 
-  // This week
+  // This weekend / bare "weekend" — roll forward if this calendar weekend has ended.
+  if (normalized.includes("weekend") || normalized.includes("this weekend")) {
+    const w = weekendSatSunForwardFrom(today, clock)
+    return {
+      date_from: w.from.toISOString(),
+      date_to: w.to.toISOString(),
+      timeWasRolledForward: w.rolled,
+      relativeWindowType: "this_weekend",
+    }
+  }
+
   if (normalized.includes("this week")) {
-    const weekStart = startOfWeek(today, { weekStartsOn: 1 })
-    const weekEnd = endOfWeek(today, { weekStartsOn: 1 })
+    let weekStart = startOfWeek(today, { weekStartsOn: 1 })
+    let weekEnd = endOfWeek(today, { weekStartsOn: 1 })
+    let rolled = false
+    if (weekEnd.getTime() < clock.getTime()) {
+      weekStart = addWeeks(weekStart, 1)
+      weekEnd = addWeeks(weekEnd, 1)
+      rolled = true
+    }
     return {
       date_from: weekStart.toISOString(),
       date_to: weekEnd.toISOString(),
+      timeWasRolledForward: rolled,
+      relativeWindowType: "this_week",
     }
   }
 
-  // Next week
   if (normalized.includes("next week")) {
     const nextWeekStart = addWeeks(startOfWeek(today, { weekStartsOn: 1 }), 1)
     const nextWeekEnd = endOfWeek(nextWeekStart, { weekStartsOn: 1 })
     return {
       date_from: nextWeekStart.toISOString(),
       date_to: nextWeekEnd.toISOString(),
+      relativeWindowType: "next_week",
     }
   }
 
   const explicitRange = tryParseExplicitCalendarRange(normalized)
   if (explicitRange.date_from && explicitRange.date_to) {
-    return explicitRange
+    return { ...explicitRange, relativeWindowType: "explicit_range" }
   }
 
   const monthWindow = tryParseMonthWindow(normalized, today)
   if (monthWindow.date_from && monthWindow.date_to) {
-    return monthWindow
+    return { ...monthWindow, relativeWindowType: "month" }
   }
 
-  // If we can't parse, return empty
   return {}
 }

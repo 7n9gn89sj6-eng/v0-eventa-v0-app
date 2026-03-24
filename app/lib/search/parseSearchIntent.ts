@@ -23,6 +23,8 @@ export type SearchIntent = {
     date_from?: string
     date_to?: string
     label?: string
+    timeWasRolledForward?: boolean
+    relativeWindowType?: string
   }
 
   place?: {
@@ -123,6 +125,7 @@ function extractTime(query: string): SearchIntent["time"] {
   } else if (lower.includes("tonight")) label = "tonight"
   else if (lower.includes("today")) label = "today"
   else if (lower.includes("tomorrow")) label = "tomorrow"
+  else if (/\bnext\s+weekend\b/.test(lower)) label = "next weekend"
   else if (lower.includes("weekend")) label = "weekend"
   else {
     const weekday = lower.match(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i)?.[1]
@@ -152,6 +155,8 @@ function extractTime(query: string): SearchIntent["time"] {
     date_from: range.date_from,
     date_to: range.date_to,
     label,
+    timeWasRolledForward: range.timeWasRolledForward,
+    relativeWindowType: range.relativeWindowType,
   }
 }
 

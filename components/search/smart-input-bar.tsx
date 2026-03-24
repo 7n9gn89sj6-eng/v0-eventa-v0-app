@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
 import { useI18n } from "@/lib/i18n/context"
 import { intentToURLParams, parseDateExpression } from "@/lib/search/query-parser"
+import { sanitizeQueryParam } from "@/lib/search/sanitize-query-param"
 import { useRouter } from "next/navigation"
 import { useLocation } from "@/lib/location-context"
 
@@ -145,9 +146,12 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
           console.log("[v0] Intent extraction:", intent)
 
           const params = intentToURLParams(intent)
-
-          if (effectiveQuery && !params.has("q")) {
+          if (effectiveQuery) {
             params.set("q", effectiveQuery)
+          } else {
+            const safe = sanitizeQueryParam(params.get("q"))
+            if (safe) params.set("q", safe)
+            else params.delete("q")
           }
 
           // CRITICAL: Always ensure defaultLocation is in URL params if available

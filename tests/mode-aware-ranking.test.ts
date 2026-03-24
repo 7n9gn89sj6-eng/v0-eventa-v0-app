@@ -162,6 +162,8 @@ describe("mode-aware ranking (Phase 2.2)", () => {
     expect(
       computePhraseTitleBoost(intent, internal, "exact", true, 20, "internal"),
     ).toBeGreaterThan(0)
+    const webRow = { title: "Melbourne Lantern Festival Alpha — tickets" }
+    expect(computePhraseTitleBoost(intent, webRow, "exact", true, 20, "web")).toBe(10)
     expect(computePhraseTitleBoost(intent, internal, "category", true, 20, "internal")).toBe(0)
 
     expect(

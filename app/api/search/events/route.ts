@@ -19,7 +19,7 @@ import {
 } from "@/lib/search/resolve-place"
 import { interpretSearchIntent, type InterpretedSearchIntent } from "@/lib/search/ai-intent"
 import { buildPhase1Interpretation } from "@/lib/search/phase1-interpretation"
-import { classifyQueryIntentSafe } from "@/lib/search/classifyQueryIntent"
+import { classifyQueryIntentSafe, hasBroadBrowsePhrase } from "@/lib/search/classifyQueryIntent"
 import {
   buildConversationalOverlapSupplement,
   extractConversationalIntent,
@@ -39,6 +39,7 @@ import {
 } from "@/lib/search/search-location-clause"
 import { microLocationForWebSearch } from "@/lib/search/micro-location-for-web"
 import { topicQueryForCityLevelWeb } from "@/lib/search/topic-query-for-city-level-web"
+import { sanitizeQueryParam } from "@/lib/search/sanitize-query-param"
 
 /**
  * Helper function to check if text contains Australian location indicators
@@ -62,6 +63,23 @@ function applyRegionCountriesWhere(where: any, countries: string[]) {
 
 /** Max internal rows (after strict city filter) before broadening a UI-selected suburb to its parent metro. */
 const AMBIENT_SUBURB_INTERNAL_THRESHOLD = 2
+
+/** Event-intent queries with fewer internal hits still merge web results for recall. */
+const WEB_SUPPLEMENT_INTERNAL_MAX = 6
+
+/** Relative windows where strict time overlap is a soft signal for web rows, not hard exclusion. */
+const RELATIVE_TIME_SOFT_WEB = new Set([
+  "tonight",
+  "today",
+  "tomorrow",
+  "this_weekend",
+  "next_weekend",
+  "easter",
+  "easter_long_weekend",
+  "this_week",
+  "next_week",
+  "weekday",
+])
 
 /** Secondary fallback when no published event supplies `parentCity` for this locality (ambient UI only). */
 const AMBIENT_SUBURB_PARENT_CITY: Record<string, string> = {
@@ -121,7 +139,7 @@ export const runtime = "nodejs"
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
-  let q = (url.searchParams.get("query") || url.searchParams.get("q") || "").trim()
+  let q = sanitizeQueryParam(url.searchParams.get("query") || url.searchParams.get("q"))
   q = normalizeSearchUtterance(q)
   const take = Math.min(Number.parseInt(url.searchParams.get("take") || "20", 10) || 20, 50)
   const page = Math.max(Number.parseInt(url.searchParams.get("page") || "1", 10) || 1, 1)
@@ -695,13 +713,21 @@ export async function GET(req: NextRequest) {
     // - Finished events (ended before search window) are excluded
     // - Future events are included if they overlap the search window
     if (dateFrom && dateTo) {
-      // Specific date range: use overlap logic for the range
       const dateFromDate = new Date(dateFrom)
       const dateToDate = new Date(dateTo)
       const searchStart = dateFromDate > now ? dateFromDate : now
-      const dateOverlap = buildDateRangeOverlapWhere(searchStart, dateToDate)
-      Object.assign(where, dateOverlap)
-      console.log(`[v0] Date filter (range overlap): searchStart=${searchStart.toISOString()}, searchEnd=${dateToDate.toISOString()}`)
+      if (searchStart.getTime() > dateToDate.getTime()) {
+        console.warn(
+          "[v0] Date range empty after clamp (searchStart > searchEnd); using default forward window.",
+        )
+        Object.assign(where, buildDateOverlapWhere(now, null))
+      } else {
+        const dateOverlap = buildDateRangeOverlapWhere(searchStart, dateToDate)
+        Object.assign(where, dateOverlap)
+        console.log(
+          `[v0] Date filter (range overlap): searchStart=${searchStart.toISOString()}, searchEnd=${dateToDate.toISOString()}`,
+        )
+      }
     } else if (dateFrom) {
       // Start date only: events must end after search start
       const dateFromDate = new Date(dateFrom)
@@ -749,7 +775,13 @@ export async function GET(req: NextRequest) {
 
       if (textSearchConditions.length > 0) {
         where.AND = where.AND || []
-        where.AND.push(...textSearchConditions)
+        const useBroadTextOr =
+          hasBroadBrowsePhrase(q) && textSearchConditions.length > 1 && queryIntent.intentType !== "named_event"
+        if (useBroadTextOr) {
+          where.AND.push({ OR: textSearchConditions })
+        } else {
+          where.AND.push(...textSearchConditions)
+        }
       }
       // If there are no term groups, fall through and rely on location/date/category only.
     }
@@ -1121,10 +1153,19 @@ export async function GET(req: NextRequest) {
       topDomains: [] as string[],
     }
     
-    // Web fallback: event-intent needs geo context (city/country, region label/countries, or global scope).
+    const internalWeakForWeb =
+      isEventQuery &&
+      hasWebGeoContext &&
+      events.length > 0 &&
+      events.length < WEB_SUPPLEMENT_INTERNAL_MAX
+
+    // Web fallback: event-intent needs geo; supplement when internal is empty or a thin slice.
     const shouldSearchWeb =
       q.trim().length > 0 &&
-      (!isEventQuery || (isEventQuery && events.length === 0 && hasWebGeoContext))
+      (!isEventQuery ||
+        (isEventQuery &&
+          hasWebGeoContext &&
+          (events.length === 0 || internalWeakForWeb)))
 
     // CRITICAL: If internal is 0 and geo context exists, web search MUST be called
     if (events.length === 0 && hasWebGeoContext && q.trim().length > 0 && !shouldSearchWeb) {
@@ -1135,10 +1176,12 @@ export async function GET(req: NextRequest) {
       debugTrace.webCalled = true
     }
     
-    if (isEventQuery && events.length === 0 && shouldSearchWeb) {
-      console.log(`[v0] 🔄 Event-intent query with no internal events: automatically fetching web results (effectiveLocation: ${effectiveCity || 'none'}${effectiveCountry ? `, ${effectiveCountry}` : ''})`)
+    if (isEventQuery && shouldSearchWeb) {
+      console.log(
+        `[v0] 🔄 Event-intent web merge: internal=${events.length}, supplement=${Boolean(internalWeakForWeb)} (effectiveLocation: ${effectiveCity || "none"}${effectiveCountry ? `, ${effectiveCountry}` : ""})`,
+      )
     } else if (isEventQuery && events.length > 0) {
-      console.log(`[v0] ✅ Event-intent query: ${events.length} internal events found, skipping web search`)
+      console.log(`[v0] ✅ Event-intent: ${events.length} internal; web skipped`)
     }
     
     if (shouldSearchWeb) {
@@ -1786,6 +1829,16 @@ export async function GET(req: NextRequest) {
         ? { ...searchPlan, location: { ...searchPlan.location, city: effectiveCity } }
         : searchPlan
 
+    const relaxStrictTimeForWeb =
+      queryIntent.intentType !== "named_event" &&
+      Boolean(parsedIntent.time?.date_from && parsedIntent.time?.date_to) &&
+      (events.length === 0 ||
+        internalWeakForWeb ||
+        Boolean(parsedIntent.time?.timeWasRolledForward) ||
+        hasBroadBrowsePhrase(q) ||
+        (typeof parsedIntent.time?.relativeWindowType === "string" &&
+          RELATIVE_TIME_SOFT_WEB.has(parsedIntent.time.relativeWindowType)))
+
     const scoredInternal = events
       .map((e: any) => {
         const breakdown = scoreSearchResult({
@@ -1919,7 +1972,7 @@ export async function GET(req: NextRequest) {
       return { ...result, _eventnessBoost: boost }
     })
     
-    const scoredWebRanked = scoredWebResults
+    let scoredWebRanked = scoredWebResults
       .map((result: any) => {
         const breakdown = scoreSearchResult({
           result,
@@ -1932,23 +1985,44 @@ export async function GET(req: NextRequest) {
           searchMode: searchModeForRank,
           queryIntentConfidence: queryIntentConfidenceForRank,
           textOverlapSupplement,
+          relaxStrictTimeForWeb,
         })
         if (!breakdown) return null
         return { ...result, _score: breakdown.total, _rankBreakdown: breakdown, _resultKind: "web" as const }
       })
       .filter(Boolean) as any[]
 
-    scoredWebRanked.sort((a: any, b: any) => {
-      if ((b._score ?? 0) !== (a._score ?? 0)) return (b._score ?? 0) - (a._score ?? 0)
-      try {
-        const ta = new Date(a.startAt).getTime()
-        const tb = new Date(b.startAt).getTime()
-        if (ta !== tb) return ta - tb
-      } catch {
-        /* ignore */
-      }
-      return String(a.title ?? a.externalUrl ?? "").localeCompare(String(b.title ?? b.externalUrl ?? ""))
-    })
+    const sortWebByScore = (rows: any[]) =>
+      [...rows].sort((a: any, b: any) => {
+        if ((b._score ?? 0) !== (a._score ?? 0)) return (b._score ?? 0) - (a._score ?? 0)
+        try {
+          const ta = new Date(a.startAt).getTime()
+          const tb = new Date(b.startAt).getTime()
+          if (ta !== tb) return ta - tb
+        } catch {
+          /* ignore */
+        }
+        return String(a.title ?? a.externalUrl ?? "").localeCompare(String(b.title ?? b.externalUrl ?? ""))
+      })
+
+    scoredWebRanked = sortWebByScore(scoredWebRanked)
+
+    // When at least one specific, high-text-overlap web row exists, demote heavy hub/listing pages.
+    const specificWebAnchor = scoredWebRanked.some(
+      (r) =>
+        (r._rankBreakdown?.genericWebPenalty ?? 0) <= 8 &&
+        (r._rankBreakdown?.textOverlapScore ?? 0) >= 6,
+    )
+    if (specificWebAnchor) {
+      scoredWebRanked = sortWebByScore(
+        scoredWebRanked.map((r) => {
+          const gen = r._rankBreakdown?.genericWebPenalty ?? 0
+          if (gen >= 16) return { ...r, _score: (r._score ?? 0) - 18 }
+          if (gen >= 12) return { ...r, _score: (r._score ?? 0) - 10 }
+          return r
+        }),
+      )
+    }
 
     const stubScoredWeb =
       process.env.NODE_ENV === "production"
@@ -1979,6 +2053,7 @@ export async function GET(req: NextRequest) {
               searchMode: searchModeForRank,
               queryIntentConfidence: queryIntentConfidenceForRank,
               textOverlapSupplement,
+              relaxStrictTimeForWeb,
             })
             if (!breakdown) return null
             return { ...r, _score: breakdown.total, _rankBreakdown: breakdown, _resultKind: "web" as const }
@@ -2064,6 +2139,28 @@ export async function GET(req: NextRequest) {
     
     // Add debug trace if ?debug=1
     if (debug) {
+      debugTrace.searchDiagnostics = {
+        sanitizedQuery: q,
+        parsedIntentTime: parsedIntent.time ?? null,
+        urlParams: {
+          q,
+          city,
+          country,
+          category,
+          date_from: dateFrom,
+          date_to: dateTo,
+        },
+        relaxStrictTimeForWeb,
+        strictTimeOnPlan: searchPlanForScoring.filters.strictTimeOverlap,
+        webUsesHardStrictTime:
+          searchPlanForScoring.filters.strictTimeOverlap && !relaxStrictTimeForWeb,
+        internalCountBeforeRanking: events.length,
+        webRawCount: debugTrace.webRawCount,
+        webAfterDateCount: debugTrace.webAfterDateCount,
+        finalInternalCount: internalEvents.length,
+        finalWebCount: externalEvents.length,
+        finalTotal: eventsPublic.length,
+      }
       response.debugTrace = debugTrace
     }
 
