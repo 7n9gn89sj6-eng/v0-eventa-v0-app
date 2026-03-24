@@ -414,9 +414,8 @@ export function EventsListingContent({
 
   const filteredResults = results
     .filter((event) => {
-      if (selectedCategory !== "All" && !event.categories?.includes(selectedCategory)) {
-        return false
-      }
+      // Category scope is already applied in GET /api/search/events via `category` param;
+      // do not re-filter here — UI labels ("Arts") do not match `event.categories` tags ("theatre", etc.).
       if (selectedPriceFilter === "free" && !event.priceFree) {
         return false
       }
