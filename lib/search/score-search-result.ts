@@ -1,6 +1,7 @@
 import type { SearchIntent } from "@/app/lib/search/parseSearchIntent"
 import type { SearchPlan } from "@/app/lib/search/resolveSearchPlan"
 import type { SearchMode } from "@/lib/search/classifyQueryIntent"
+import { getSubcategoryHintDefinition } from "@/lib/categories/event-subcategories"
 import {
   computePhraseTitleBoost,
   extraWeakGenericWebPenalty,
@@ -37,6 +38,7 @@ export type SearchResultKind = "internal" | "web"
 
 const CATEGORY_KEY_TO_ENUM: Record<string, EventCategory> = {
   music: "MUSIC",
+  theatre: "THEATRE",
   markets: "MARKETS",
   arts: "ART",
   art: "ART",
@@ -45,9 +47,17 @@ const CATEGORY_KEY_TO_ENUM: Record<string, EventCategory> = {
   family: "FAMILY",
   community: "COMMUNITY",
   learning: "TALKS",
+  talks: "TALKS",
   comedy: "COMEDY",
   festival: "FESTIVALS",
   festivals: "FESTIVALS",
+  film: "FILM",
+  movies: "FILM",
+  cinema: "FILM",
+  nightlife: "NIGHTLIFE",
+  wellness: "WELLNESS",
+  workshops: "WORKSHOPS",
+  other: "OTHER",
 }
 
 function citiesCompatible(target: string, eventCity: string): boolean {
@@ -107,7 +117,66 @@ function structuredCategoryMatch(catKey: string | undefined, result: any): boole
   const eventCategoryUpper = result.category ? String(result.category).toUpperCase() : ""
   if (enumVal && eventCategoryUpper === enumVal) return true
   const cats = Array.isArray(result.categories) ? result.categories.map((c: string) => String(c).toLowerCase()) : []
+  const slugTheatre = catKey === "theatre" && cats.some((c) => c === "theatre" || c === "theater")
+  if (slugTheatre) return true
   return cats.some((c) => c.includes(catKey) || (enumVal && String(c).toUpperCase() === enumVal))
+}
+
+function rankingCatKeyToEnum(catKey: string | undefined): EventCategory | undefined {
+  if (!catKey) return undefined
+  return CATEGORY_KEY_TO_ENUM[catKey]
+}
+
+function normalizeSubcategoryToken(s: string): string {
+  return s.toLowerCase().trim().replace(/\s+/g, "_")
+}
+
+function rowMatchesSubcategoryHint(result: any, parent: EventCategory, key: string, hintId: string): boolean {
+  const eventCat = result.category ? (String(result.category).toUpperCase() as EventCategory) : null
+  if (!eventCat || eventCat !== parent) return false
+  const blob = textBlob(result)
+  if (hintId === "sports_tri_fitness" && /\b(hyrox|spartan\s+race)\b/i.test(blob)) return true
+  const subRaw = result.subcategory != null ? normalizeSubcategoryToken(String(result.subcategory)) : ""
+  if (subRaw === key || subRaw.replace(/_/g, "") === key.replace(/_/g, "")) return true
+  const cats = Array.isArray(result.categories) ? result.categories.map((c: string) => String(c).toLowerCase()) : []
+  if (cats.some((c) => c === key || c.replace(/-/g, "_") === key)) return true
+  const spaced = key.replace(/_/g, " ")
+  if (spaced.length >= 3 && blob.includes(spaced)) return true
+  return false
+}
+
+const SUBCATEGORY_MATCH_BOOST = 5
+const SUBCATEGORY_SOFT_MISS_PENALTY = 4
+
+function applySubcategoryHints(args: {
+  intent: SearchIntent
+  result: any
+  catKey: string | undefined
+  strictCat: boolean
+  broad: boolean
+}): { interestDelta: number; mismatchDelta: number } {
+  const { intent, result, catKey, strictCat, broad } = args
+  const hints = intent.subcategoryHints
+  if (!hints?.length || !catKey) return { interestDelta: 0, mismatchDelta: 0 }
+  const expectedEnum = rankingCatKeyToEnum(catKey)
+  if (!expectedEnum) return { interestDelta: 0, mismatchDelta: 0 }
+
+  const relevant = hints.filter((id) => getSubcategoryHintDefinition(id)?.parent === expectedEnum)
+  if (!relevant.length) return { interestDelta: 0, mismatchDelta: 0 }
+
+  const eventCat = result.category ? (String(result.category).toUpperCase() as EventCategory) : null
+  const parentAligns = eventCat === expectedEnum
+  if (!parentAligns) return { interestDelta: 0, mismatchDelta: 0 }
+
+  const matched = relevant.some((id) => {
+    const d = getSubcategoryHintDefinition(id)
+    return d ? rowMatchesSubcategoryHint(result, d.parent, d.key, id) : false
+  })
+  if (matched) return { interestDelta: SUBCATEGORY_MATCH_BOOST, mismatchDelta: 0 }
+  if (strictCat && !broad && structuredCategoryMatch(catKey, result)) {
+    return { interestDelta: 0, mismatchDelta: SUBCATEGORY_SOFT_MISS_PENALTY }
+  }
+  return { interestDelta: 0, mismatchDelta: 0 }
 }
 
 function textBlob(result: any): string {
@@ -356,28 +425,23 @@ export function scoreSearchResult(args: {
         const synonymMap: Record<string, string[]> = {
           music: ["gig", "concert", "dj", "live"],
           food: ["eat", "dining", "restaurant", "market"],
-          arts: [
-            "gallery",
-            "exhibition",
-            "museum",
-            "theatre",
-            "theater",
-            "musical",
-            "west end",
-          ],
+          arts: ["gallery", "exhibition", "museum"],
+          theatre: ["musical", "west end", "opera", "ballet", "broadway"],
           markets: ["market", "fair", "bazaar"],
           family: ["kids", "children"],
           sports: ["fitness", "yoga", "run", "outdoor", "trail"],
         }
         const synonymKey = catKey === "art" ? "arts" : catKey
         const syns = synonymMap[synonymKey] || []
-        const artsPerformanceTokens =
+        const artsExtraTokens =
           (catKey === "arts" || catKey === "art") &&
-          (/\b(theatre|theater|musical)s?\b/i.test(blob) ||
-            /\bwest\s+end\b/i.test(blob) ||
-            /\bplays?\b/i.test(blob))
-        if (syns.some((s) => blob.includes(s)) || artsPerformanceTokens) interestScore += broad ? 6 : 10
-        else if (strictCat && !broad) mismatchPenalty += 14
+          (/\b(sculpture|installations?|vernissage)\b/i.test(blob) || /\bopen\s+studio\b/i.test(blob))
+        const theatreExtraTokens =
+          catKey === "theatre" &&
+          (/\bplays?\b/i.test(blob) || /\bplaywright\b/i.test(blob) || /\bstage\b/i.test(blob))
+        if (syns.some((s) => blob.includes(s)) || artsExtraTokens || theatreExtraTokens) {
+          interestScore += broad ? 6 : 10
+        } else if (strictCat && !broad) mismatchPenalty += 14
         else mismatchPenalty += 5
       }
     }
@@ -393,6 +457,10 @@ export function scoreSearchResult(args: {
   } else {
     interestScore += broad ? 8 : 3
   }
+
+  const subAdj = applySubcategoryHints({ intent, result, catKey, strictCat, broad })
+  interestScore += subAdj.interestDelta
+  mismatchPenalty += subAdj.mismatchDelta
 
   let audienceScore = 0
   const wantsFamily = intent.audience?.some((a) => /family|kids/i.test(a))

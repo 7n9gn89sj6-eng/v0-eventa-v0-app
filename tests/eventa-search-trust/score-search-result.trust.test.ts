@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { parseSearchIntent } from "@/app/lib/search/parseSearchIntent"
+import { parseSearchIntent, rankingCategoryFromParsedIntent } from "@/app/lib/search/parseSearchIntent"
 import { resolveSearchPlan } from "@/app/lib/search/resolveSearchPlan"
 import { scoreSearchResult } from "@/lib/search/score-search-result"
 
@@ -217,6 +217,158 @@ describe("Eventa trust: deterministic scoreSearchResult", () => {
 
     expect(internal.sourceScore).toBeGreaterThan(web.sourceScore)
     expect(internal.total).toBeGreaterThan(web.total)
+  })
+})
+
+describe("Eventa trust: category alignment + deterministic subcategories", () => {
+  const NOW = new Date("2026-03-18T12:00:00.000Z")
+
+  it("theatre query ranks THEATRE structured row above ART-only row", () => {
+    const q = "theatre in melbourne"
+    const intent = parseSearchIntent(q)
+    expect(rankingCategoryFromParsedIntent(intent)).toBe("theatre")
+    expect(intent.subcategoryHints).toBeUndefined()
+    const plan = resolveSearchPlan(intent, { city: "Melbourne", country: "Australia" })
+    const future = new Date(NOW.getTime() + 5 * 86400 * 1000).toISOString()
+
+    const theatreRow = {
+      title: "Melbourne Playhouse Season",
+      description: "A new play at the theatre.",
+      city: "Melbourne",
+      country: "Australia",
+      startAt: future,
+      endAt: future,
+      categories: ["theatre"],
+      category: "THEATRE",
+    }
+    const artRow = {
+      title: "Gallery Night",
+      description: "Contemporary art opening.",
+      city: "Melbourne",
+      country: "Australia",
+      startAt: future,
+      endAt: future,
+      categories: ["art"],
+      category: "ART",
+    }
+
+    const a = scoreSearchResult({
+      result: theatreRow,
+      intent,
+      searchPlan: plan,
+      now: NOW,
+      kind: "internal",
+      rankingCategory: "theatre",
+    })!
+    const b = scoreSearchResult({
+      result: artRow,
+      intent,
+      searchPlan: plan,
+      now: NOW,
+      kind: "internal",
+      rankingCategory: "theatre",
+    })!
+
+    expect(a.interestScore).toBeGreaterThan(b.interestScore)
+    expect(a.total).toBeGreaterThan(b.total)
+  })
+
+  it("live music query boosts row with music_live-aligned subcategory", () => {
+    const q = "live music melbourne"
+    const intent = parseSearchIntent(q)
+    expect(intent.subcategoryHints).toContain("music_live")
+    const plan = resolveSearchPlan(intent, { city: "Melbourne", country: "Australia" })
+    const future = new Date(NOW.getTime() + 5 * 86400 * 1000).toISOString()
+
+    const liveRow = {
+      title: "Acoustic Friday",
+      description: "Live music at the pub.",
+      city: "Melbourne",
+      country: "Australia",
+      startAt: future,
+      endAt: future,
+      categories: ["music", "live"],
+      category: "MUSIC",
+      subcategory: "live",
+    }
+    const djRow = {
+      title: "Techno Room",
+      description: "DJ night — electronic only.",
+      city: "Melbourne",
+      country: "Australia",
+      startAt: future,
+      endAt: future,
+      categories: ["music", "dj_electronic"],
+      category: "MUSIC",
+      subcategory: "dj_electronic",
+    }
+
+    const sLive = scoreSearchResult({
+      result: liveRow,
+      intent,
+      searchPlan: plan,
+      now: NOW,
+      kind: "internal",
+      rankingCategory: "music",
+    })!
+    const sDj = scoreSearchResult({
+      result: djRow,
+      intent,
+      searchPlan: plan,
+      now: NOW,
+      kind: "internal",
+      rankingCategory: "music",
+    })!
+
+    expect(sLive.interestScore).toBeGreaterThan(sDj.interestScore)
+  })
+
+  it("hyrox query boosts sports row mentioning hyrox via tri_fitness hint", () => {
+    const q = "hyrox sydney"
+    const intent = parseSearchIntent(q)
+    expect(intent.subcategoryHints).toContain("sports_tri_fitness")
+    const plan = resolveSearchPlan(intent, { city: "Sydney", country: "Australia" })
+    const future = new Date(NOW.getTime() + 6 * 86400 * 1000).toISOString()
+
+    const hyrox = {
+      title: "HYROX Sydney",
+      description: "Functional fitness race.",
+      city: "Sydney",
+      country: "Australia",
+      startAt: future,
+      endAt: future,
+      categories: ["sports"],
+      category: "SPORTS",
+    }
+    const generic = {
+      title: "Sunday Social Run",
+      description: "Casual jogging club.",
+      city: "Sydney",
+      country: "Australia",
+      startAt: future,
+      endAt: future,
+      categories: ["sports"],
+      category: "SPORTS",
+    }
+
+    const a = scoreSearchResult({
+      result: hyrox,
+      intent,
+      searchPlan: plan,
+      now: NOW,
+      kind: "internal",
+      rankingCategory: "sports",
+    })!
+    const b = scoreSearchResult({
+      result: generic,
+      intent,
+      searchPlan: plan,
+      now: NOW,
+      kind: "internal",
+      rankingCategory: "sports",
+    })!
+
+    expect(a.interestScore).toBeGreaterThan(b.interestScore)
   })
 })
 

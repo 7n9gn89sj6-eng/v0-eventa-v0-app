@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { parseSearchIntent, rankingCategoryFromParsedIntent } from "@/app/lib/search/parseSearchIntent"
+import {
+  parseSearchIntent,
+  rankingCategoryFromParsedIntent,
+} from "@/app/lib/search/parseSearchIntent"
 import { parseSearchIntent as parseRankingHint } from "@/lib/search/parse-search-intent"
 import { resolveSearchPlan } from "@/app/lib/search/resolveSearchPlan"
 import { scoreSearchResult } from "@/lib/search/score-search-result"
@@ -58,6 +61,24 @@ describe("Eventa trust: search intent context facet", () => {
     const full = parseSearchIntent(q)
     expect(hint.detectedCategory).toBe(rankingCategoryFromParsedIntent(full))
     expect(hint.context).toEqual(full.context ?? [])
+  })
+
+  it("theatre maps to theatre interest and ranking, not art", () => {
+    const intent = parseSearchIntent("london theatre this weekend")
+    expect(intent.interest).toContain("theatre")
+    expect(intent.interest).not.toContain("art")
+    expect(rankingCategoryFromParsedIntent(intent)).toBe("theatre")
+  })
+
+  it("art gallery stays art without theatre interest", () => {
+    const intent = parseSearchIntent("contemporary art gallery melbourne")
+    expect(intent.interest).toContain("art")
+    expect(intent.interest).not.toContain("theatre")
+  })
+
+  it("farmers market adds markets_farmers subcategory hint", () => {
+    const intent = parseSearchIntent("farmers market Brunswick")
+    expect(intent.subcategoryHints).toContain("markets_farmers")
   })
 })
 

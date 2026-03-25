@@ -11,6 +11,7 @@ import { normalizeSearchUtterance, stripTrailingAustralianStateTokens } from "@/
 import { parseDateExpression } from "@/lib/search/query-parser"
 import type { SearchIntentContext } from "@/lib/search/search-intent-context"
 import { extractSearchIntentContext } from "@/lib/search/search-intent-context"
+import { extractSubcategoryHints } from "@/lib/search/extract-subcategory-hints"
 
 /** Whether query text clearly names a place (override selected scope) vs weak trailing inference. */
 export type PlaceEvidence = "explicit" | "implicit" | "none"
@@ -45,6 +46,9 @@ export type SearchIntent = {
   /** Activity/context facets (closed vocabulary); not categories and not place. */
   context?: SearchIntentContext[]
 
+  /** Deterministic sub-category hint IDs (`lib/categories/event-subcategories.ts`); ranking only. */
+  subcategoryHints?: string[]
+
   confidence?: number
 }
 
@@ -54,9 +58,13 @@ const INTEREST_PATTERNS: Array<{ pattern: RegExp; value: string }> = [
   { pattern: /\b(garage\s+sale|flea\s+market|market|markets|bazaar|fair)\b/i, value: "markets" },
   { pattern: /\b(kids|children|family)\b/i, value: "kids" },
   { pattern: /\b(comedy|stand[-\s]?up)\b/i, value: "comedy" },
-  { pattern: /\b(art|arts|gallery|exhibition|museum|theatre|theater)\b/i, value: "art" },
+  { pattern: /\b(theatre|theater|musical|west\s+end)\b/i, value: "theatre" },
+  { pattern: /\b(art|arts|gallery|exhibition|museum)\b/i, value: "art" },
   { pattern: /\b(festival|festivals)\b/i, value: "festival" },
-  { pattern: /\b(sport|sports|fitness|run|running|yoga)\b/i, value: "sports" },
+  {
+    pattern: /\b(sport|sports|fitness|run|running|yoga|hyrox|spartan\s+race)\b/i,
+    value: "sports",
+  },
   { pattern: /\b(community|volunteer|charity)\b/i, value: "community" },
   { pattern: /\b(learn|talk|workshop|course)\b/i, value: "learning" },
 ]
@@ -321,6 +329,7 @@ export function rankingCategoryFromParsedIntent(intent: SearchIntent): string | 
     { key: "music", category: "music" },
     { key: "food", category: "food" },
     { key: "sports", category: "sports" },
+    { key: "theatre", category: "theatre" },
     { key: "art", category: "arts" },
     { key: "kids", category: "family" },
     { key: "comedy", category: "comedy" },
@@ -338,6 +347,7 @@ export function parseSearchIntent(query: string): SearchIntent {
   const rawQuery = String(query || "").trim()
   const nq = normalizeSearchUtterance(rawQuery)
   const interests = extractInterests(nq)
+  const subcategoryHints = extractSubcategoryHints(nq, interests)
   const audience = extractAudience(nq)
   const price = extractPrice(nq)
   const time = extractTime(nq)
@@ -363,6 +373,7 @@ export function parseSearchIntent(query: string): SearchIntent {
     audience: audience.length > 0 ? audience : undefined,
     price: price.length > 0 ? price : undefined,
     context: context.length > 0 ? context : undefined,
+    subcategoryHints: subcategoryHints.length > 0 ? subcategoryHints : undefined,
     confidence: Math.max(0, Math.min(1, confidence)),
   }
 }
