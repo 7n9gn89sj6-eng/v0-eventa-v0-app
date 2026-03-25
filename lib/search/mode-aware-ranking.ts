@@ -15,7 +15,7 @@ export type ModeScoreTuning = {
   interestDelta: number
   /** Extra penalty (subtracted) for weak-relevance generic web rows in exact mode. */
   weakGenericWebExtra: number
-  /** Max boost for strong query↔title alignment (exact + internal only). */
+  /** Max boost for strong query↔row alignment in exact mode (web uses a lower cap in computePhraseTitleBoost). */
   phraseTitleBoostCap: number
 }
 
@@ -101,7 +101,29 @@ function normalizeTitleMatch(s: string): string {
 }
 
 /**
- * Strong query↔title overlap for named-event style queries (exact + internal only).
+ * Raw text for exact-mode phrase alignment on web rows (title alone often misses official SERP titles).
+ */
+export function buildWebPhraseMatchRawText(result: any): string {
+  const title = String(result.title ?? "")
+  const desc = String(result.description ?? "")
+  const snippet = String(result._originalSnippet ?? "")
+  const rawUrl = String(result.externalUrl || result._originalUrl || result.url || "")
+  let pathPart = ""
+  if (rawUrl.trim()) {
+    try {
+      const href = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl.replace(/^\/+/, "")}`
+      const u = new URL(href)
+      pathPart = u.pathname.replace(/\/+/g, " ").trim()
+    } catch {
+      pathPart = ""
+    }
+  }
+  return [title, desc, snippet, pathPart].filter((s) => s.trim().length > 0).join(" ")
+}
+
+/**
+ * Strong query↔title overlap for named-event style queries in exact mode.
+ * Internal: title only. Web: title + description + snippet + URL path (same normalization / substring / token rules).
  */
 export function computePhraseTitleBoost(
   intent: SearchIntent,
@@ -116,7 +138,9 @@ export function computePhraseTitleBoost(
     kind === "internal" ? cap : Math.min(14, Math.round(cap * 0.52))
   if (kind === "web" && capUse <= 0) return 0
   const q = normalizeTitleMatch(intent.rawQuery || "")
-  const t = normalizeTitleMatch(result.title || "")
+  const rawText =
+    kind === "web" ? buildWebPhraseMatchRawText(result) : String(result.title || "")
+  const t = normalizeTitleMatch(rawText)
   if (!q || !t) return 0
   if (t.includes(q) || q.includes(t)) return capUse
   const tokens = q.split(/\s+/).filter((x) => x.length > 2)

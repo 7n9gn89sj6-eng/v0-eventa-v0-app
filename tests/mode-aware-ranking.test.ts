@@ -3,6 +3,7 @@ import { parseSearchIntent } from "@/app/lib/search/parseSearchIntent"
 import { resolveSearchPlan } from "@/app/lib/search/resolveSearchPlan"
 import { classifyQueryIntent } from "@/lib/search/classifyQueryIntent"
 import {
+  buildWebPhraseMatchRawText,
   computePhraseTitleBoost,
   extraWeakGenericWebPenalty,
   shouldApplySearchMode,
@@ -190,5 +191,41 @@ describe("mode-aware ranking (Phase 2.2)", () => {
     expect(shouldApplySearchMode("exact", 0.88)).toBe(true)
     expect(shouldApplySearchMode("exact", 0.35)).toBe(false)
     expect(shouldApplySearchMode(undefined, 0.9)).toBe(false)
+  })
+
+  it("exact web: MICF-style weak title but festival name in description gets phrase boost", () => {
+    const intent = parseSearchIntent("Melbourne International Comedy Festival")
+    const webRow = {
+      title: "Home",
+      description: "The Melbourne International Comedy Festival returns with shows across the city.",
+      externalUrl: "https://comedyfestival.com.au/",
+    }
+    expect(computePhraseTitleBoost(intent, webRow, "exact", true, 24, "web")).toBeGreaterThan(0)
+    expect(buildWebPhraseMatchRawText(webRow).toLowerCase()).toContain("melbourne")
+  })
+
+  it("exact web: Paris HYROX match via URL slug when title is generic", () => {
+    const intent = parseSearchIntent("Paris HYROX")
+    const webRow = {
+      title: "Official site",
+      description: "",
+      externalUrl: "https://hyrox.com/paris-hyrox/",
+    }
+    expect(computePhraseTitleBoost(intent, webRow, "exact", true, 24, "web")).toBeGreaterThan(0)
+  })
+
+  it("exact internal: phrase boost still uses title only (ignores description)", () => {
+    const intent = parseSearchIntent("Unique Gala Night Alpha")
+    const internal = {
+      title: "Some other show",
+      description: "Unique Gala Night Alpha is our headline event.",
+    }
+    expect(computePhraseTitleBoost(intent, internal, "exact", true, 20, "internal")).toBe(0)
+    const webSame = {
+      title: "Some other show",
+      description: "Unique Gala Night Alpha is our headline event.",
+      externalUrl: "https://venue.example.com/events/unique-gala-night-alpha",
+    }
+    expect(computePhraseTitleBoost(intent, webSame, "exact", true, 20, "web")).toBeGreaterThan(0)
   })
 })
