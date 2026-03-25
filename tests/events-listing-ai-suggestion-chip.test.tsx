@@ -5,6 +5,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
 import React from "react"
 import { EventsListingContent } from "@/components/events/events-listing-content"
+import { discoverUrlSearchParamsStringFromProps } from "./support/discover-url-search-params-string"
+
+const mockDiscoverSearch = vi.hoisted(() => ({ s: "" }))
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -12,6 +15,7 @@ vi.mock("next/navigation", () => ({
     push: vi.fn(),
     prefetch: vi.fn(),
   }),
+  useSearchParams: () => new URLSearchParams(mockDiscoverSearch.s),
 }))
 
 vi.mock("next/link", () => ({
@@ -68,6 +72,7 @@ describe("EventsListingContent AI suggestion chip", () => {
   })
 
   it("renders optional ai_suggestion chip below interpretation strip with tooltip when confidence is low", async () => {
+    mockDiscoverSearch.s = discoverUrlSearchParamsStringFromProps({ initialQuery: "markets" })
     render(<EventsListingContent initialQuery="markets" />)
 
     await waitFor(() => {

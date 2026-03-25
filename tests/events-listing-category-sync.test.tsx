@@ -5,8 +5,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, waitFor, within } from "@testing-library/react"
 import React from "react"
 import { EventsListingContent } from "@/components/events/events-listing-content"
+import { discoverUrlSearchParamsStringFromProps } from "./support/discover-url-search-params-string"
 
 const routerReplace = vi.fn()
+const mockDiscoverSearch = vi.hoisted(() => ({ s: "" }))
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -14,6 +16,7 @@ vi.mock("next/navigation", () => ({
     push: vi.fn(),
     prefetch: vi.fn(),
   }),
+  useSearchParams: () => new URLSearchParams(mockDiscoverSearch.s),
 }))
 
 vi.mock("next/link", () => ({
@@ -54,6 +57,10 @@ describe("EventsListingContent category sync from URL", () => {
   })
 
   it("updates category chip when initialCategory transitions markets → music", async () => {
+    mockDiscoverSearch.s = discoverUrlSearchParamsStringFromProps({
+      initialQuery: "markets",
+      initialCategory: "markets",
+    })
     const { rerender } = render(
       <EventsListingContent initialQuery="markets" initialCategory="markets" />,
     )
@@ -64,6 +71,10 @@ describe("EventsListingContent category sync from URL", () => {
       ).toBeTruthy()
     })
 
+    mockDiscoverSearch.s = discoverUrlSearchParamsStringFromProps({
+      initialQuery: "music",
+      initialCategory: "music",
+    })
     rerender(<EventsListingContent initialQuery="music" initialCategory="music" />)
 
     await waitFor(() => {
@@ -73,6 +84,10 @@ describe("EventsListingContent category sync from URL", () => {
   })
 
   it("does not write stale category=markets to URL when q and category come from new intent", async () => {
+    mockDiscoverSearch.s = discoverUrlSearchParamsStringFromProps({
+      initialQuery: "markets",
+      initialCategory: "markets",
+    })
     const { rerender } = render(
       <EventsListingContent initialQuery="markets" initialCategory="markets" />,
     )
@@ -81,6 +96,10 @@ describe("EventsListingContent category sync from URL", () => {
 
     routerReplace.mockClear()
 
+    mockDiscoverSearch.s = discoverUrlSearchParamsStringFromProps({
+      initialQuery: "music",
+      initialCategory: "music",
+    })
     rerender(<EventsListingContent initialQuery="music" initialCategory="music" />)
 
     await waitFor(() => {

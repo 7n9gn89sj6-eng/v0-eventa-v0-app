@@ -5,8 +5,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { cleanup, render, screen, waitFor, fireEvent } from "@testing-library/react"
 import React from "react"
 import { EventsListingContent } from "@/components/events/events-listing-content"
+import { discoverUrlSearchParamsStringFromProps } from "./support/discover-url-search-params-string"
 
 const routerReplace = vi.fn()
+const mockDiscoverSearch = vi.hoisted(() => ({ s: "" }))
 const future = new Date("2026-04-01T12:00:00.000Z").toISOString()
 
 function baseInternal(overrides: Record<string, unknown>) {
@@ -30,6 +32,7 @@ vi.mock("next/navigation", () => ({
     push: vi.fn(),
     prefetch: vi.fn(),
   }),
+  useSearchParams: () => new URLSearchParams(mockDiscoverSearch.s),
 }))
 
 vi.mock("next/link", () => ({
@@ -127,6 +130,10 @@ describe("EventsListingContent selectedPriceFilter reset", () => {
       }),
     )
 
+    mockDiscoverSearch.s = discoverUrlSearchParamsStringFromProps({
+      initialQuery: "gigs",
+      initialCategory: "Music",
+    })
     render(
       <EventsListingContent initialQuery="gigs" initialCategory="Music" />,
     )
@@ -226,6 +233,10 @@ describe("EventsListingContent selectedPriceFilter reset", () => {
       }),
     )
 
+    mockDiscoverSearch.s = discoverUrlSearchParamsStringFromProps({
+      initialQuery: "alphaq",
+      initialCategory: "Music",
+    })
     const { rerender } = render(
       <EventsListingContent initialQuery="alphaq" initialCategory="Music" />,
     )
@@ -248,6 +259,10 @@ describe("EventsListingContent selectedPriceFilter reset", () => {
       expect(screen.queryByText("Alpha Paid")).toBeNull()
     })
 
+    mockDiscoverSearch.s = discoverUrlSearchParamsStringFromProps({
+      initialQuery: "betaq",
+      initialCategory: "Music",
+    })
     rerender(<EventsListingContent initialQuery="betaq" initialCategory="Music" />)
 
     await waitFor(() => {
@@ -279,13 +294,14 @@ describe("EventsListingContent selectedPriceFilter reset", () => {
       }),
     )
 
+    mockDiscoverSearch.s = discoverUrlSearchParamsStringFromProps({
+      initialQuery: "events",
+      initialCategory: "Music",
+      initialDateFrom: dateFrom,
+      initialDateTo: dateTo,
+    })
     const { rerender } = render(
-      <EventsListingContent
-        initialQuery="events"
-        initialCategory="Music"
-        initialDateFrom={dateFrom}
-        initialDateTo={dateTo}
-      />,
+      <EventsListingContent initialQuery="events" initialCategory="Music" />,
     )
 
     await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled())
@@ -295,19 +311,19 @@ describe("EventsListingContent selectedPriceFilter reset", () => {
 
     vi.mocked(fetch).mockClear()
 
-    rerender(
-      <EventsListingContent
-        initialQuery="events"
-        initialCategory="Sports"
-        initialDateFrom={dateFrom}
-        initialDateTo={dateTo}
-      />,
-    )
+    mockDiscoverSearch.s = discoverUrlSearchParamsStringFromProps({
+      initialQuery: "events",
+      initialCategory: "Sports",
+      initialDateFrom: dateFrom,
+      initialDateTo: dateTo,
+    })
+    rerender(<EventsListingContent initialQuery="events" initialCategory="Sports" />)
 
-    await waitFor(() => expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThan(0))
-    const secondUrl = String(vi.mocked(fetch).mock.calls[0][0])
-    expect(secondUrl).toContain("date_from")
-    expect(secondUrl).toContain(encodeURIComponent(dateFrom))
-    expect(secondUrl).toContain("category=sports")
+    await waitFor(() => {
+      const last = String(vi.mocked(fetch).mock.calls.at(-1)?.[0] ?? "")
+      expect(last).toContain("date_from")
+      expect(last).toContain(encodeURIComponent(dateFrom))
+      expect(last).toContain("category=sports")
+    })
   })
 })

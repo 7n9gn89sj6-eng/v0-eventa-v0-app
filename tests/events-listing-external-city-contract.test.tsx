@@ -5,8 +5,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
 import React from "react"
 import { EventsListingContent } from "@/components/events/events-listing-content"
+import { discoverUrlSearchParamsStringFromProps } from "./support/discover-url-search-params-string"
 
 const routerReplace = vi.fn()
+const mockDiscoverSearch = vi.hoisted(() => ({ s: "" }))
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -14,6 +16,7 @@ vi.mock("next/navigation", () => ({
     push: vi.fn(),
     prefetch: vi.fn(),
   }),
+  useSearchParams: () => new URLSearchParams(mockDiscoverSearch.s),
 }))
 
 vi.mock("next/link", () => ({
@@ -81,6 +84,12 @@ describe("EventsListingContent external city vs API effectiveLocation", () => {
       }),
     )
 
+    mockDiscoverSearch.s = discoverUrlSearchParamsStringFromProps({
+      initialQuery: "Music near me",
+      initialCity: "Brunswick",
+      initialCountry: "Australia",
+      initialCategory: "All",
+    })
     render(
       <EventsListingContent
         initialQuery="Music near me"
@@ -135,6 +144,12 @@ describe("EventsListingContent external city vs API effectiveLocation", () => {
       }),
     )
 
+    mockDiscoverSearch.s = discoverUrlSearchParamsStringFromProps({
+      initialQuery: "music in Berlin",
+      initialCity: "Melbourne",
+      initialCountry: "Australia",
+      initialCategory: "All",
+    })
     render(
       <EventsListingContent
         initialQuery="music in Berlin"

@@ -5,8 +5,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { cleanup, render, screen, waitFor, fireEvent } from "@testing-library/react"
 import React from "react"
 import { EventsListingContent } from "@/components/events/events-listing-content"
+import { discoverUrlSearchParamsStringFromProps } from "./support/discover-url-search-params-string"
 
 const routerReplace = vi.fn()
+const mockDiscoverSearch = vi.hoisted(() => ({ s: "" }))
 const future = new Date("2026-05-01T12:00:00.000Z").toISOString()
 
 function baseInternal(overrides: Record<string, unknown>) {
@@ -39,6 +41,7 @@ vi.mock("next/navigation", () => ({
     push: vi.fn(),
     prefetch: vi.fn(),
   }),
+  useSearchParams: () => new URLSearchParams(mockDiscoverSearch.s),
 }))
 
 vi.mock("next/link", () => ({
@@ -119,6 +122,10 @@ describe("EventsListingContent stale search response", () => {
       }),
     )
 
+    mockDiscoverSearch.s = discoverUrlSearchParamsStringFromProps({
+      initialQuery: "live shows",
+      initialCategory: "Music",
+    })
     render(<EventsListingContent initialQuery="live shows" initialCategory="Music" />)
 
     await waitFor(() => {

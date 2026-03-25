@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Calendar, MapPin, SlidersHorizontal, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { Badge } from "@/components/ui/badge"
 import ClientOnly from "@/components/ClientOnly"
@@ -21,6 +21,7 @@ import {
   type NormalizeDiscoverQueryArgs,
 } from "@/lib/discover-effective-query"
 import { sanitizeQueryParam } from "@/lib/search/sanitize-query-param"
+import { buildDiscoverEventsFetchUrlSearchParams } from "@/lib/discover-events-fetch-params"
 
 const CATEGORIES = [
   "All",
@@ -68,8 +69,6 @@ interface EventsListingContentProps {
   initialCity?: string
   initialCountry?: string
   initialCategory?: string
-  initialDateFrom?: string
-  initialDateTo?: string
 }
 
 type InterpretationSnapshot = {
@@ -119,10 +118,10 @@ export function EventsListingContent({
   initialCity,
   initialCountry,
   initialCategory,
-  initialDateFrom,
-  initialDateTo,
 }: EventsListingContentProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const searchParamsKey = searchParams.toString()
   const { t } = useI18n()
   const didInitUrlSync = useRef(false)
   const searchBarWrapRef = useRef<HTMLDivElement>(null)
@@ -148,6 +147,10 @@ export function EventsListingContent({
   // Discover location SSOT: URL only (synced via cityFilter / countryFilter).
   const [cityFilter, setCityFilter] = useState(() => initialCity ?? "")
   const [countryFilter, setCountryFilter] = useState(() => initialCountry ?? "")
+
+  const urlDateFrom = (searchParams.get("date_from") ?? "").trim()
+  const urlDateTo = (searchParams.get("date_to") ?? "").trim()
+  const intentQKey = sanitizeQueryParam(searchParams.get("q") ?? "").trim()
 
   const getDiscoverArgs = useCallback((): NormalizeDiscoverQueryArgs => {
     return {
@@ -197,15 +200,11 @@ export function EventsListingContent({
     setError(null)
     setAiSuggestionChip(null)
     try {
-      const { apiQuery, city: apiCity, country: apiCountry } = resolveDiscoverApiSearchParams(getDiscoverArgs())
-      const params = new URLSearchParams()
-      if (apiQuery) params.set("query", apiQuery)
-      if (apiCity.trim()) params.set("city", apiCity.trim())
-      if (apiCountry.trim()) params.set("country", apiCountry.trim())
-
-      if (selectedCategory && selectedCategory !== "All") params.set("category", selectedCategory.toLowerCase())
-      if (initialDateFrom) params.set("date_from", initialDateFrom)
-      if (initialDateTo) params.set("date_to", initialDateTo)
+      const params = buildDiscoverEventsFetchUrlSearchParams({
+        searchParams,
+        discoverArgs: getDiscoverArgs(),
+        selectedCategory,
+      })
 
       // Locality Contract A: Always send full context (q/city/country/date_from/date_to/category)
       if (process.env.NODE_ENV !== "production") {
@@ -333,30 +332,23 @@ export function EventsListingContent({
     }
   }
 
-  // Sync state with props when they change (URL params updated)
-  useEffect(() => {
-    if (initialQuery !== undefined && initialQuery !== q) {
-      categoryStructuredTouchedRef.current = false
-      locationStructuredTouchedRef.current = false
-      setQ(initialQuery)
+  // URL is SSOT: align filter state before effects (e.g. runSearch) so fetches never mix new `q` with stale city.
+  useLayoutEffect(() => {
+    setCityFilter(searchParams.get("city") ?? "")
+    setCountryFilter(searchParams.get("country") ?? "")
+    setQ(sanitizeQueryParam(searchParams.get("q") ?? ""))
+    const cat = searchParams.get("category")?.trim()
+    if (cat) {
+      const label = CATEGORIES.find((c) => c.toLowerCase() === cat.toLowerCase())
+      setSelectedCategory(label ?? "All")
+    } else {
+      setSelectedCategory("All")
     }
-  }, [initialQuery])
-
-  useEffect(() => {
-    setSelectedCategory(initialCategory || "All")
-  }, [initialCategory])
-
-  useEffect(() => {
-    setCityFilter(initialCity ?? "")
-  }, [initialCity])
-
-  useEffect(() => {
-    setCountryFilter(initialCountry ?? "")
-  }, [initialCountry])
+  }, [searchParamsKey])
 
   useEffect(() => {
     setSelectedPriceFilter("all")
-  }, [initialQuery])
+  }, [intentQKey])
 
   useEffect(() => {
     setSelectedPriceFilter("all")
@@ -368,7 +360,7 @@ export function EventsListingContent({
       searchSeqRef.current += 1
       searchAbortRef.current?.abort()
     }
-  }, [q, cityFilter, countryFilter, selectedCategory, initialDateFrom, initialDateTo])
+  }, [searchParamsKey, q, cityFilter, countryFilter, selectedCategory])
 
   // Mobile + desktop consistency: keep `q`, `city`, and `category` synchronized with the URL.
   useEffect(() => {
@@ -391,24 +383,17 @@ export function EventsListingContent({
       params.set("category", selectedCategory.toLowerCase())
     }
 
-    if (initialDateFrom) params.set("date_from", initialDateFrom)
-    if (initialDateTo) params.set("date_to", initialDateTo)
+    const df = (searchParams.get("date_from") ?? "").trim()
+    const dt = (searchParams.get("date_to") ?? "").trim()
+    if (df) params.set("date_from", df)
+    if (dt) params.set("date_to", dt)
 
     const nextSearch = params.toString()
     const currentSearch = window.location.search.replace(/^\?/, "")
     if (currentSearch !== nextSearch) {
       router.replace(`/discover?${nextSearch}`, { scroll: false })
     }
-  }, [
-    q,
-    cityFilter,
-    countryFilter,
-    selectedCategory,
-    initialDateFrom,
-    initialDateTo,
-    router,
-    getDiscoverArgs,
-  ])
+  }, [searchParamsKey, q, cityFilter, countryFilter, selectedCategory, router, getDiscoverArgs])
 
   const handleSmartSearch = (query: string) => {
     setError(null)
@@ -521,12 +506,12 @@ export function EventsListingContent({
       parts.push([cityFilter.trim(), countryFilter.trim()].filter(Boolean).join(", "))
     }
     if (selectedCategory && selectedCategory !== "All") parts.push(selectedCategory)
-    if (initialDateFrom?.trim()) {
-      const d1 = new Date(initialDateFrom)
+    if (urlDateFrom) {
+      const d1 = new Date(urlDateFrom)
       if (!Number.isNaN(d1.getTime())) {
         const s1 = d1.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-        if (initialDateTo?.trim()) {
-          const d2 = new Date(initialDateTo)
+        if (urlDateTo) {
+          const d2 = new Date(urlDateTo)
           parts.push(
             !Number.isNaN(d2.getTime())
               ? `${s1}–${d2.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
@@ -632,7 +617,7 @@ export function EventsListingContent({
         ) : null}
       </div>
 
-      {(cityFilter || (selectedCategory && selectedCategory !== "All") || initialDateFrom) && (
+      {(cityFilter || (selectedCategory && selectedCategory !== "All") || urlDateFrom) && (
         <div className="flex flex-wrap gap-2">
           {(cityFilter || countryFilter) && (
             <Badge variant="secondary" className="gap-1.5 pl-2 pr-1.5">
@@ -667,11 +652,11 @@ export function EventsListingContent({
             </Badge>
           )}
 
-          {initialDateFrom && (
+          {urlDateFrom && (
             <Badge variant="secondary" className="gap-1.5 pl-2 pr-1.5">
               <Calendar className="h-3 w-3" />
               <span>
-                {new Date(initialDateFrom).toLocaleDateString("en-US", {
+                {new Date(urlDateFrom).toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
                 })}
@@ -703,7 +688,7 @@ export function EventsListingContent({
                   label="City / place"
                   description="Pick a place to set city and country on the URL (Discover source of truth)."
                   initialQuery={
-                    [initialCity, initialCountry]
+                    [cityFilter, countryFilter]
                       .map((s) => s?.trim())
                       .filter((s): s is string => Boolean(s))
                       .join(", ") || ""

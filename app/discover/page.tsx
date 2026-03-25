@@ -71,8 +71,6 @@ export default async function DiscoverPage({
           initialCity={params.city}
           initialCountry={params.country}
           initialCategory={params.category}
-          initialDateFrom={params.date_from}
-          initialDateTo={params.date_to}
         />
       </Suspense>
     </div>

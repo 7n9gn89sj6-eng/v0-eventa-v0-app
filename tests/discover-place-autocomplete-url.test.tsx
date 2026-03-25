@@ -5,8 +5,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { cleanup, render, screen, waitFor, fireEvent } from "@testing-library/react"
 import React from "react"
 import { EventsListingContent } from "@/components/events/events-listing-content"
+import { discoverUrlSearchParamsStringFromProps } from "./support/discover-url-search-params-string"
 
 const routerReplace = vi.fn()
+const mockDiscoverSearch = vi.hoisted(() => ({ s: "" }))
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -14,6 +16,7 @@ vi.mock("next/navigation", () => ({
     push: vi.fn(),
     prefetch: vi.fn(),
   }),
+  useSearchParams: () => new URLSearchParams(mockDiscoverSearch.s),
 }))
 
 vi.mock("next/link", () => ({
@@ -92,6 +95,10 @@ describe("Discover PlaceAutocomplete → URL", () => {
   })
 
   it("writes city and country into router.replace after selecting a place", async () => {
+    mockDiscoverSearch.s = discoverUrlSearchParamsStringFromProps({
+      initialQuery: "",
+      initialCategory: "All",
+    })
     render(<EventsListingContent initialQuery="" initialCategory="All" />)
 
     fireEvent.click(screen.getByText("filters.show"))
@@ -123,6 +130,12 @@ describe("Discover PlaceAutocomplete → URL", () => {
   })
 
   it("seeds location combobox from URL initial city and country", async () => {
+    mockDiscoverSearch.s = discoverUrlSearchParamsStringFromProps({
+      initialQuery: "",
+      initialCategory: "All",
+      initialCity: "Melbourne",
+      initialCountry: "Australia",
+    })
     render(
       <EventsListingContent
         initialQuery=""
