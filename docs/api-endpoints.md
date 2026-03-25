@@ -105,7 +105,7 @@ Get details of a specific event.
   "organizerName": "Music Events Inc",
   "organizerEmail": "contact@musicevents.com",
   "externalUrl": "https://summerfest.example.com",
-  "imageUrl": "https://blob.vercel-storage.com/...",
+  "imageUrl": "https://your-cdn.example.com/path/to/poster.jpg",
   "moderationStatus": "APPROVED",
   "status": "PUBLISHED",
   "createdAt": "2025-01-15T10:00:00Z",

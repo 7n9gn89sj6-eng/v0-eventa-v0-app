@@ -1,4 +1,4 @@
-# Eventa v0
+# Eventa
 
 <!-- Deployment verification: 2025-11-13 13:57 UTC -->
 
@@ -30,7 +30,7 @@ A multilingual community events platform with AI-powered hybrid search.
 - **Maps**: Mapbox
 - **Web Search**: Google Programmable Search Engine
 - **i18n**: next-intl
-- **AI**: Vercel AI SDK with OpenAI
+- **AI**: OpenAI via the **AI SDK** (`@ai-sdk/*` npm packages; works on any Node host)
 - **Rate Limiting**: Upstash Redis
 
 ## Getting Started
@@ -51,6 +51,9 @@ cp .env.example .env
 
 **Required Environment Variables:**
 
+#### App URL (recommended in production)
+- `NEXT_PUBLIC_APP_URL`: Canonical public site URL (e.g. `https://your-service.onrender.com`). Used for absolute links, emails, and server-side URL building. On **Render**, set this explicitly; do not rely on Vercel-only env vars.
+
 #### Database (Required)
 - `NEON_DATABASE_URL`: PostgreSQL connection string from Neon
   - Get from: https://neon.tech
@@ -62,7 +65,7 @@ cp .env.example .env
   - **Note**: The app works in browse-only mode when disabled
 
 #### NextAuth (Required only when NEXT_PUBLIC_AUTH_ENABLED="true")
-- `NEXTAUTH_URL`: Your app URL (e.g., `https://yourdomain.com` or `http://localhost:3000` for dev)
+- `NEXTAUTH_URL`: Your app URL (should match `NEXT_PUBLIC_APP_URL` in production, e.g. `https://yourdomain.com` or `http://localhost:3000` for dev)
 - `NEXTAUTH_SECRET`: Secret key for NextAuth (generate with: `openssl rand -base64 32`)
 - `EMAIL_SERVER_HOST`: SMTP host - Set to `smtp.resend.com` for Resend
 - `EMAIL_SERVER_PORT`: SMTP port - Set to `465` for Resend (secure)

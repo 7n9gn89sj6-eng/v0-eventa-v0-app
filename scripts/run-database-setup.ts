@@ -1,5 +1,5 @@
 if (process.env.VERCEL === "1" || process.env.NODE_ENV === "production") {
-  console.log("[v0] Skipping run-database-setup in production / Vercel environment")
+  console.log("[v0] Skipping run-database-setup in production / hosted environment")
   process.exit(0)
 }
 

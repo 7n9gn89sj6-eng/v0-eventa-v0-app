@@ -10,7 +10,7 @@ import db from "@/lib/db"
  *
  * Security: Requires CRON_SECRET in Authorization header
  *
- * Usage: Set up a cron job (e.g., Vercel Cron) to hit this endpoint daily
+ * Usage: Set up a scheduled job (e.g., Render Cron Job) to hit this endpoint on a schedule
  * Authorization: Bearer YOUR_CRON_SECRET
  */
 export async function GET(request: NextRequest) {

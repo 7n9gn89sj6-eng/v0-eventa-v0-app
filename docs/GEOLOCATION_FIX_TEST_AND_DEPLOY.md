@@ -4,7 +4,7 @@
 
 1. **Install and run**
    ```bash
-   cd /Users/peterandrews/Desktop/eventa-v0-app-4
+   cd path/to/this/repo
    npm install
    npm run dev
    ```
@@ -43,7 +43,7 @@
 
 1. **Commit and push**
    ```bash
-   cd /Users/peterandrews/Desktop/eventa-v0-app-4
+   cd path/to/this/repo
    git add lib/location-context.tsx components/layout/site-header.tsx components/search/smart-input-bar.tsx
    git commit -m "fix(geolocation): shared handler, retries, structured logging, both buttons"
    git push origin main

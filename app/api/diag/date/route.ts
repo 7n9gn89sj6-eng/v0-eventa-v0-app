@@ -7,12 +7,11 @@ import { parseNaturalDate } from "../../../../lib/i18n/date-parser-inline"
  *
  * SECURITY: Gated behind DIAG_ENDPOINT=1 environment variable
  *
- * To enable in Vercel:
- * 1. Go to Project Settings → Environment Variables
- * 2. Add: DIAG_ENDPOINT=1
- * 3. Redeploy or wait for next deployment
- * 4. Test the endpoint
- * 5. REMOVE the env var when done testing
+ * To enable in production (e.g. Render):
+ * 1. In the service dashboard → Environment, add DIAG_ENDPOINT=1
+ * 2. Redeploy (or wait for the next deploy)
+ * 3. Test the endpoint
+ * 4. REMOVE the env var when done testing
  *
  * Example response:
  * {

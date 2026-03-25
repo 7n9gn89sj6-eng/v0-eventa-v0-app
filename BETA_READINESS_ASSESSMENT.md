@@ -41,7 +41,7 @@ The application is in excellent shape for a beta test. Core functionality is com
 - ✅ **Validation**: Zod schema validation for inputs
 - ✅ **Security**: SQL injection protection, token hashing, rate limiting
 - ✅ **Database**: Prisma ORM with proper migrations
-- ✅ **Deployment**: Configured for Render/Vercel
+- ✅ **Deployment**: Configured for Render (Node / Next.js)
 - ✅ **Environment Variables**: Proper validation and documentation
 
 ---
@@ -74,7 +74,7 @@ The application is in excellent shape for a beta test. Core functionality is com
 
 ### Important (Should Complete):
 - [ ] **Monitoring**: Set up basic monitoring
-  - [ ] Check Render/Vercel logs regularly
+  - [ ] Check Render logs regularly
   - [ ] Monitor error rates
   - [ ] Set up uptime monitoring (optional: UptimeRobot, Pingdom)
 
@@ -166,7 +166,7 @@ The application is in excellent shape for a beta test. Core functionality is com
 
 ## 🚀 Deployment Readiness
 
-### Render/Vercel Deployment:
+### Render deployment:
 - ✅ **Build Process**: Configured and tested
 - ✅ **Environment Variables**: Documented
 - ✅ **Database Migrations**: Automated via postinstall
@@ -204,7 +204,7 @@ The application is ready for beta testing. The core functionality is solid, code
 
 ### Immediate Next Steps:
 1. ✅ Complete pre-beta checklist (environment variables, database, admin setup)
-2. ✅ Deploy to production (Render/Vercel)
+2. ✅ Deploy to production (Render)
 3. ✅ Run smoke tests
 4. ✅ Invite 10-20 beta testers
 5. ✅ Monitor closely for first week
