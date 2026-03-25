@@ -1,60 +1,53 @@
 import { NextResponse } from "next/server"
+import {
+  parseCreatorEmailForCreateSimple,
+  resolveCreateSimpleCategoryAndLabel,
+} from "@/lib/events/create-simple-transform"
 
 export const runtime = "nodejs"
 
 // ALIAS endpoint that transforms AI extraction data and internally calls the canonical /api/events/submit handler
 export async function POST(req: Request) {
   try {
-    const body = await req.json()
+    const body = (await req.json()) as Record<string, unknown>
 
     console.log("[v0] Create-simple ALIAS: Received payload, transforming to canonical schema")
 
-    const categoryRaw =
-      body.category !== "auto" && body.category != null
-        ? body.category
-        : body.extraction?.category
+    const creatorParsed = parseCreatorEmailForCreateSimple(body.creatorEmail)
+    if (!creatorParsed.ok) {
+      return NextResponse.json(
+        { error: "Valid creator email is required (sign in, or enter your email for the edit link)." },
+        { status: 400 },
+      )
+    }
 
-    const trimmedCategory =
-      categoryRaw != null && String(categoryRaw).trim() !== "" ? String(categoryRaw).trim() : ""
+    const { category: resolvedCategory, customCategoryLabel: resolvedCustomLabel } =
+      resolveCreateSimpleCategoryAndLabel(body)
 
     /**
-     * AI/import alias: if neither body nor extraction supplied a category, submit as OTHER with an
-     * explicit label (never a fake arts_culture / ART default).
+     * When category is explicit (not forced OTHER), preserve prior behavior: only attach import-style
+     * custom label when the client sent nothing and we fell through to empty category — already handled
+     * inside resolveCreateSimpleCategoryAndLabel. For explicit OTHER from unresolved, resolvedCustomLabel is set.
      */
-    const IMPORT_CATEGORY_UNSPECIFIED = "Imported (category not specified)"
-    const extraction = body.extraction as Record<string, unknown> | undefined
-    const extractionLabel =
-      typeof extraction?.customCategoryLabel === "string"
-        ? extraction.customCategoryLabel.trim().slice(0, 40)
-        : ""
-    const bodyLabel =
-      body.customCategoryLabel != null ? String(body.customCategoryLabel).trim().slice(0, 40) : ""
-    const resolvedImportLabel = (bodyLabel || extractionLabel || IMPORT_CATEGORY_UNSPECIFIED).slice(
-      0,
-      40,
-    )
-
     const canonicalPayload = {
-      title: body.title || body.extraction?.title,
-      description: body.description || body.extraction?.description || "",
-      start: body.start || body.extraction?.start,
-      end: body.end || body.extraction?.end,
-      timezone: body.timezone || body.extraction?.timezone,
-      location: body.location || body.extraction?.location,
-      category: trimmedCategory || "OTHER",
-      tags: body.tags ?? body.extraction?.tags,
-      customCategoryLabel: trimmedCategory
-        ? body.customCategoryLabel ?? null
-        : resolvedImportLabel || IMPORT_CATEGORY_UNSPECIFIED,
+      title: body.title || (body.extraction as Record<string, unknown> | undefined)?.title,
+      description: body.description || String((body.extraction as Record<string, unknown> | undefined)?.description ?? "") || "",
+      start: body.start || (body.extraction as Record<string, unknown> | undefined)?.start,
+      end: body.end || (body.extraction as Record<string, unknown> | undefined)?.end,
+      timezone: body.timezone || (body.extraction as Record<string, unknown> | undefined)?.timezone,
+      location: body.location || (body.extraction as Record<string, unknown> | undefined)?.location,
+      category: resolvedCategory,
+      tags: body.tags ?? (body.extraction as Record<string, unknown> | undefined)?.tags,
+      customCategoryLabel: resolvedCustomLabel,
       originalLanguage: body.originalLanguage ?? null,
-      price: body.price || body.extraction?.price,
-      organizer_name: body.organizer_name || body.extraction?.organizer_name,
+      price: body.price || (body.extraction as Record<string, unknown> | undefined)?.price,
+      organizer_name: body.organizer_name || (body.extraction as Record<string, unknown> | undefined)?.organizer_name,
       organizer_contact: body.organizer_contact || body.contactInfo,
       source_text: body.source_text || body.sourceText,
       imageUrl: body.imageUrl,
       externalUrl: body.externalUrl,
-      extractionConfidence: body.extractionConfidence || body.extraction?.confidence,
-      creatorEmail: body.creatorEmail,
+      extractionConfidence: body.extractionConfidence || (body.extraction as Record<string, unknown> | undefined)?.confidence,
+      creatorEmail: creatorParsed.email,
     }
 
     console.log("[v0] Create-simple ALIAS: Calling canonical /api/events/submit")

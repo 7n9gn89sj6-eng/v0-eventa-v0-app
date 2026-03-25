@@ -10,16 +10,31 @@ import { Textarea } from "@/components/ui/textarea"
 import { Loader2, ArrowLeft, Mail, Phone, Globe, User } from "lucide-react"
 import type { EventExtractionOutput, BroadEventCategory } from "@/lib/types"
 import { CATEGORY_LABELS } from "@/lib/ai-extraction-constants"
+import {
+  CATEGORY_UI_METADATA,
+  coerceToCanonicalEventCategory,
+} from "@/lib/categories/canonical-event-category"
 import ClientOnly from "@/components/ClientOnly"
 
 interface DraftData {
   sourceText: string
   extraction: EventExtractionOutput
-  category: BroadEventCategory | "auto"
+  /** "auto" | legacy broad slug | canonical enum string (e.g. MUSIC) */
+  category: string
   followUpAnswer?: string
   imageUrl?: string
   externalUrl?: string
   contactInfo?: string
+}
+
+function labelForDraftCategory(category: string): string {
+  if (category === "auto") return "Auto-detect"
+  const canonical = coerceToCanonicalEventCategory(category)
+  if (canonical) return CATEGORY_UI_METADATA[canonical].defaultLabel
+  if (Object.prototype.hasOwnProperty.call(CATEGORY_LABELS, category)) {
+    return CATEGORY_LABELS[category as BroadEventCategory]
+  }
+  return category
 }
 
 export default function ReviewDraftPage() {
@@ -27,6 +42,9 @@ export default function ReviewDraftPage() {
   const [draftData, setDraftData] = useState<DraftData | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** Next-Auth session email (via /api/auth/session — works without client SessionProvider). */
+  const [sessionEmail, setSessionEmail] = useState<string | null>(null)
+  const [sessionLoading, setSessionLoading] = useState(true)
 
   // Editable fields
   const [title, setTitle] = useState("")
@@ -35,6 +53,8 @@ export default function ReviewDraftPage() {
   const [contactPhone, setContactPhone] = useState("")
   const [externalUrl, setExternalUrl] = useState("")
   const [organizerName, setOrganizerName] = useState("")
+  /** Required when not signed in: becomes `creatorEmail` for /api/events/submit */
+  const [creatorEmailInput, setCreatorEmailInput] = useState("")
 
   useEffect(() => {
     // Load draft from session storage
@@ -60,6 +80,33 @@ export default function ReviewDraftPage() {
     }
   }, [router])
 
+  useEffect(() => {
+    let cancelled = false
+    setSessionLoading(true)
+    void fetch("/api/auth/session", { credentials: "same-origin" })
+      .then((r) => r.json())
+      .then((data: { user?: { email?: string | null } }) => {
+        if (cancelled) return
+        const e = data?.user?.email?.trim()
+        setSessionEmail(e && e.length > 0 ? e : null)
+        if (e) setCreatorEmailInput(e)
+      })
+      .catch(() => {
+        if (!cancelled) setSessionEmail(null)
+      })
+      .finally(() => {
+        if (!cancelled) setSessionLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const sessionCreatorEmail = sessionEmail ?? ""
+  const effectiveCreatorEmail = sessionCreatorEmail || creatorEmailInput.trim()
+
+  const creatorEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(effectiveCreatorEmail)
+
   const handleSubmit = async () => {
     if (!draftData) return
 
@@ -67,6 +114,9 @@ export default function ReviewDraftPage() {
     setError(null)
 
     try {
+      const resolvedCategory =
+        draftData.category !== "auto" ? draftData.category : draftData.extraction.category
+
       const submitPayload = {
         title,
         description,
@@ -74,7 +124,7 @@ export default function ReviewDraftPage() {
         end: draftData.extraction.end,
         timezone: draftData.extraction.timezone,
         location: draftData.extraction.location,
-        category: draftData.category !== "auto" ? draftData.category : draftData.extraction.category,
+        category: resolvedCategory,
         price: draftData.extraction.price,
         organizer_name: organizerName,
         organizer_contact: contactEmail || contactPhone || undefined,
@@ -83,7 +133,7 @@ export default function ReviewDraftPage() {
         externalUrl: externalUrl || undefined,
         tags: draftData.extraction.tags,
         extractionConfidence: draftData.extraction.confidence,
-        // Get creatorEmail from session - will be added by middleware
+        creatorEmail: effectiveCreatorEmail,
       }
 
       const response = await fetch("/api/events/create-simple", {
@@ -196,15 +246,49 @@ export default function ReviewDraftPage() {
               </div>
             </div>
 
-            {/* Category (Read-only from AI) */}
+            {/* Category (user + AI resolution, read-only here) */}
             <div>
               <Label>Category</Label>
               <div className="mt-1 rounded-lg border bg-muted/50 p-3 text-sm font-medium">
-                {draftData.category === "auto"
-                  ? "Auto-detect"
-                  : CATEGORY_LABELS[draftData.category as BroadEventCategory]}
+                {labelForDraftCategory(
+                  draftData.category !== "auto" ? draftData.category : draftData.extraction.category,
+                )}
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Your account</CardTitle>
+            <CardDescription>
+              {sessionCreatorEmail
+                ? "Signed in — we use your account email for the edit link."
+                : "Enter the email you want to use for your Eventa account and the edit link."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {sessionCreatorEmail ? (
+              <div>
+                <Label>Creator email</Label>
+                <p className="mt-1 rounded-lg border bg-muted/50 p-3 text-sm">{sessionCreatorEmail}</p>
+              </div>
+            ) : (
+              <div>
+                <Label htmlFor="creator-email">
+                  Your email <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="creator-email"
+                  type="email"
+                  value={creatorEmailInput}
+                  onChange={(e) => setCreatorEmailInput(e.target.value)}
+                  placeholder="you@example.com"
+                  className="mt-1"
+                  autoComplete="email"
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -285,7 +369,13 @@ export default function ReviewDraftPage() {
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={isSubmitting || !title.trim() || !description.trim()}
+            disabled={
+              isSubmitting ||
+              !title.trim() ||
+              !description.trim() ||
+              sessionLoading ||
+              !creatorEmailValid
+            }
             className="flex-1"
           >
             {isSubmitting ? (

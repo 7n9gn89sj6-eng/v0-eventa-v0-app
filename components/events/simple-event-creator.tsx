@@ -7,8 +7,13 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { ChevronDown, ChevronUp, Loader2, Sparkles } from "lucide-react"
-import type { EventExtractionOutput, BroadEventCategory } from "@/lib/types"
-import { CATEGORY_LABELS } from "@/lib/ai-extraction-constants"
+import type { EventExtractionOutput } from "@/lib/types"
+import {
+  CANONICAL_EVENT_CATEGORY_VALUES,
+  CATEGORY_UI_METADATA,
+  coerceToCanonicalEventCategory,
+  type CanonicalEventCategory,
+} from "@/lib/categories/canonical-event-category"
 import { useRouter } from "next/navigation"
 import ClientOnly from "@/components/ClientOnly"
 
@@ -29,17 +34,12 @@ export function SimpleEventCreator() {
   const [followUpQuestion, setFollowUpQuestion] = useState<string | null>(null)
   const [followUpAnswer, setFollowUpAnswer] = useState("")
 
-  const categories: Array<{ value: BroadEventCategory | "auto"; label: string }> = [
-    { value: "auto", label: "Auto" },
-    { value: "arts_culture", label: "Arts & Culture" },
-    { value: "music_nightlife", label: "Music & Nightlife" },
-    { value: "food_drink", label: "Food & Drink" },
-    { value: "family_kids", label: "Family & Kids" },
-    { value: "sports_outdoors", label: "Sports & Outdoors" },
-    { value: "community_causes", label: "Community" },
-    { value: "learning_talks", label: "Learning & Talks" },
-    { value: "markets_fairs", label: "Markets & Fairs" },
-    { value: "online_virtual", label: "Online" },
+  const categories: Array<{ value: CanonicalEventCategory | "auto"; label: string }> = [
+    { value: "auto", label: "Auto (use AI)" },
+    ...CANONICAL_EVENT_CATEGORY_VALUES.map((key) => ({
+      value: key,
+      label: CATEGORY_UI_METADATA[key].defaultLabel,
+    })),
   ]
 
   const handleExtract = async () => {
@@ -78,9 +78,10 @@ export function SimpleEventCreator() {
         setFollowUpQuestion("Where is this event taking place?")
       }
 
-      // Set category if AI assigned one
+      // Map AI broad slug → canonical chip when possible
       if (data.category !== "auto") {
-        setSelectedCategory(data.category as BroadEventCategory)
+        const mapped = coerceToCanonicalEventCategory(String(data.category))
+        setSelectedCategory(mapped ?? "auto")
       }
     } catch (err) {
       setError("Couldn't extract event details. Please try rephrasing your description.")
@@ -316,7 +317,7 @@ export function SimpleEventCreator() {
                   <p>
                     {selectedCategory === "auto"
                       ? "Auto-detect"
-                      : CATEGORY_LABELS[selectedCategory as BroadEventCategory]}
+                      : CATEGORY_UI_METADATA[selectedCategory].defaultLabel}
                   </p>
                 </div>
               </div>
