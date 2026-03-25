@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Loader2, ArrowLeft, Mail, Phone, Globe, User } from "lucide-react"
+import { Loader2, ArrowLeft, Mail, Phone, Globe, User, ImageIcon } from "lucide-react"
 import type { EventExtractionOutput, BroadEventCategory } from "@/lib/types"
 import { CATEGORY_LABELS } from "@/lib/ai-extraction-constants"
 import {
@@ -15,6 +15,7 @@ import {
   coerceToCanonicalEventCategory,
 } from "@/lib/categories/canonical-event-category"
 import ClientOnly from "@/components/ClientOnly"
+import { isPublicHttpUrl } from "@/lib/events/public-http-url"
 
 interface DraftData {
   sourceText: string
@@ -52,6 +53,9 @@ export default function ReviewDraftPage() {
   const [contactEmail, setContactEmail] = useState("")
   const [contactPhone, setContactPhone] = useState("")
   const [externalUrl, setExternalUrl] = useState("")
+  /** Editable on review; seeded from simple-flow draft `imageUrl`. */
+  const [imageUrl, setImageUrl] = useState("")
+  const [imagePreviewFailed, setImagePreviewFailed] = useState(false)
   const [organizerName, setOrganizerName] = useState("")
   /** Required when not signed in: becomes `creatorEmail` for /api/events/submit */
   const [creatorEmailInput, setCreatorEmailInput] = useState("")
@@ -72,6 +76,7 @@ export default function ReviewDraftPage() {
       setTitle(data.extraction.title)
       setDescription(data.extraction.description)
       setExternalUrl(data.externalUrl || "")
+      setImageUrl(data.imageUrl?.trim() || "")
       setContactEmail(data.contactInfo || "")
       setOrganizerName(data.extraction.organizer_name || "")
     } catch (err) {
@@ -129,8 +134,8 @@ export default function ReviewDraftPage() {
         organizer_name: organizerName,
         organizer_contact: contactEmail || contactPhone || undefined,
         source_text: draftData.sourceText,
-        imageUrl: draftData.imageUrl,
-        externalUrl: externalUrl || undefined,
+        imageUrl: imageUrl.trim() || undefined,
+        externalUrl: externalUrl.trim() || undefined,
         tags: draftData.extraction.tags,
         extractionConfidence: draftData.extraction.confidence,
         creatorEmail: effectiveCreatorEmail,
@@ -220,6 +225,49 @@ export default function ReviewDraftPage() {
                 rows={4}
                 className="mt-1"
               />
+            </div>
+
+            {/* Poster / banner image URL (from simple flow optional field; editable here) */}
+            <div>
+              <Label htmlFor="image-url-review">Poster or banner image (URL)</Label>
+              <div className="flex gap-2">
+                <ImageIcon className="mt-2.5 h-5 w-5 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Input
+                    id="image-url-review"
+                    type="url"
+                    value={imageUrl}
+                    onChange={(e) => {
+                      setImageUrl(e.target.value)
+                      setImagePreviewFailed(false)
+                    }}
+                    placeholder="https://example.com/poster.jpg"
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Optional. Paste a link to an image — same as on the previous step. You can fix typos here before
+                    publishing.
+                  </p>
+                  {imageUrl.trim() && isPublicHttpUrl(imageUrl) && !imagePreviewFailed ? (
+                    <ClientOnly>
+                      <div className="overflow-hidden rounded-md border bg-muted/30 p-2">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={imageUrl.trim()}
+                          alt=""
+                          className="mx-auto max-h-48 w-auto max-w-full object-contain"
+                          onError={() => setImagePreviewFailed(true)}
+                        />
+                      </div>
+                    </ClientOnly>
+                  ) : null}
+                  {imageUrl.trim() && imagePreviewFailed ? (
+                    <p className="text-xs text-amber-700 dark:text-amber-500">
+                      Preview unavailable (blocked URL or not an image). The link will still be saved if it is valid.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
             </div>
 
             {/* Date & Time (Read-only from AI) */}
@@ -347,7 +395,7 @@ export default function ReviewDraftPage() {
 
             {/* External URL */}
             <div>
-              <Label htmlFor="url">Event Website or Tickets</Label>
+              <Label htmlFor="url">Website or tickets link</Label>
               <div className="flex gap-2">
                 <Globe className="mt-2.5 h-5 w-5 text-muted-foreground" />
                 <Input

@@ -25,7 +25,7 @@ export function SimpleEventCreator() {
   const [extractedData, setExtractedData] = useState<EventExtractionOutput | null>(null)
   const [isExtracting, setIsExtracting] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [selectedCategory, setSelectedCategory] = useState<BroadEventCategory | "auto">("auto")
+  const [selectedCategory, setSelectedCategory] = useState<CanonicalEventCategory | "auto">("auto")
   const [showOptional, setShowOptional] = useState(false)
   const [imageUrl, setImageUrl] = useState("")
   const [externalLink, setExternalLink] = useState("")
@@ -174,17 +174,19 @@ export function SimpleEventCreator() {
           {showOptional && (
             <div className="mt-4 space-y-4">
               <div>
-                <Label htmlFor="image-url">Image URL</Label>
+                <Label htmlFor="image-url">Poster or banner image (URL)</Label>
                 <Input
                   id="image-url"
-                  placeholder="https://..."
+                  type="url"
+                  placeholder="https://example.com/your-flyer.jpg"
                   value={imageUrl}
                   onChange={(e) => setImageUrl(e.target.value)}
                   disabled={isExtracting || isSubmitting}
                 />
+                <p className="mt-1 text-xs text-muted-foreground">Link to an image file — not file upload yet.</p>
               </div>
               <div>
-                <Label htmlFor="external-link">External link (tickets/info)</Label>
+                <Label htmlFor="external-link">Website or tickets link</Label>
                 <Input
                   id="external-link"
                   placeholder="https://..."
@@ -340,7 +342,7 @@ export function SimpleEventCreator() {
 
               <Button
                 onClick={handleSubmit}
-                disabled={isSubmitting || (followUpQuestion && !followUpAnswer.trim())}
+                disabled={isSubmitting || Boolean(followUpQuestion && !followUpAnswer.trim())}
                 className="w-full"
                 size="lg"
               >

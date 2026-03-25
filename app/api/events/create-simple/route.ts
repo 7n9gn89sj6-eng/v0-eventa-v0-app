@@ -29,6 +29,11 @@ export async function POST(req: Request) {
      * custom label when the client sent nothing and we fell through to empty category — already handled
      * inside resolveCreateSimpleCategoryAndLabel. For explicit OTHER from unresolved, resolvedCustomLabel is set.
      */
+    const imageUrlTrimmed =
+      typeof body.imageUrl === "string" && body.imageUrl.trim() ? body.imageUrl.trim() : undefined
+    const externalUrlTrimmed =
+      typeof body.externalUrl === "string" && body.externalUrl.trim() ? body.externalUrl.trim() : undefined
+
     const canonicalPayload = {
       title: body.title || (body.extraction as Record<string, unknown> | undefined)?.title,
       description: body.description || String((body.extraction as Record<string, unknown> | undefined)?.description ?? "") || "",
@@ -44,8 +49,8 @@ export async function POST(req: Request) {
       organizer_name: body.organizer_name || (body.extraction as Record<string, unknown> | undefined)?.organizer_name,
       organizer_contact: body.organizer_contact || body.contactInfo,
       source_text: body.source_text || body.sourceText,
-      imageUrl: body.imageUrl,
-      externalUrl: body.externalUrl,
+      imageUrl: imageUrlTrimmed,
+      externalUrl: externalUrlTrimmed,
       extractionConfidence: body.extractionConfidence || (body.extraction as Record<string, unknown> | undefined)?.confidence,
       creatorEmail: creatorParsed.email,
     }
