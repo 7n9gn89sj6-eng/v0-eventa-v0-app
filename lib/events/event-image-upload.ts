@@ -37,3 +37,10 @@ export function extensionForImageMime(mime: string): "jpg" | "png" | "webp" {
   if (t === "image/webp") return "webp"
   return "jpg"
 }
+
+export type EventPosterImageExt = "jpg" | "png" | "webp"
+
+/** R2 object key prefix `events/{id}.{ext}` — `id` should be a UUID from `randomUUID()`. */
+export function formatEventPosterObjectKey(id: string, ext: EventPosterImageExt): string {
+  return `events/${id}.${ext}`
+}

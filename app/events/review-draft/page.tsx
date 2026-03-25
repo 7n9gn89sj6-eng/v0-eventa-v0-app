@@ -229,7 +229,7 @@ export default function ReviewDraftPage() {
 
             {/* Poster / banner image URL (from simple flow optional field; editable here) */}
             <div>
-              <Label htmlFor="image-url-review">Poster or banner image (URL)</Label>
+              <Label htmlFor="image-url-review">Poster or banner (from upload or link)</Label>
               <div className="flex gap-2">
                 <ImageIcon className="mt-2.5 h-5 w-5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1 space-y-2">
@@ -245,8 +245,8 @@ export default function ReviewDraftPage() {
                     className="mt-1"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Optional. Paste a link to an image — same as on the previous step. You can fix typos here before
-                    publishing.
+                    Optional. Matches what you uploaded or pasted on the previous step; edit the link here if needed
+                    before publishing.
                   </p>
                   {imageUrl.trim() && isPublicHttpUrl(imageUrl) && !imagePreviewFailed ? (
                     <ClientOnly>

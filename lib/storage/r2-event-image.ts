@@ -2,7 +2,7 @@ import "server-only"
 
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3"
 import { randomUUID } from "node:crypto"
-import { extensionForImageMime } from "@/lib/events/event-image-upload"
+import { extensionForImageMime, formatEventPosterObjectKey } from "@/lib/events/event-image-upload"
 
 export type R2EnvConfig = {
   accountId: string
@@ -54,7 +54,7 @@ export async function uploadEventPosterToR2(
   }
 
   const ext = extensionForImageMime(contentType)
-  const key = `events/${randomUUID()}.${ext}`
+  const key = formatEventPosterObjectKey(randomUUID(), ext)
   const client = createR2S3Client(cfg)
 
   await client.send(

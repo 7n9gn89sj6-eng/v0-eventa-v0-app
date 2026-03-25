@@ -3,6 +3,7 @@ import {
   EVENT_IMAGE_MAX_BYTES,
   validateEventImageFile,
   extensionForImageMime,
+  formatEventPosterObjectKey,
 } from "@/lib/events/event-image-upload"
 
 describe("validateEventImageFile", () => {
@@ -31,5 +32,14 @@ describe("extensionForImageMime", () => {
     expect(extensionForImageMime("image/jpeg")).toBe("jpg")
     expect(extensionForImageMime("image/png")).toBe("png")
     expect(extensionForImageMime("image/webp")).toBe("webp")
+  })
+})
+
+describe("formatEventPosterObjectKey", () => {
+  it("builds events/{id}.{ext}", () => {
+    expect(formatEventPosterObjectKey("550e8400-e29b-41d4-a716-446655440000", "jpg")).toBe(
+      "events/550e8400-e29b-41d4-a716-446655440000.jpg",
+    )
+    expect(formatEventPosterObjectKey("abc", "webp")).toBe("events/abc.webp")
   })
 })

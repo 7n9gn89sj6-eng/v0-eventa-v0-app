@@ -38,6 +38,23 @@ Get a list of published, approved events.
 }
 \`\`\`
 
+### POST /api/events/event-image
+
+Upload one poster/banner image for the simple create flow. Server uploads to **Cloudflare R2** (S3-compatible). If R2 env vars are not set, returns **503** (users can still paste an image URL).
+
+**Request:** `multipart/form-data` with field **`file`**
+
+**Validation:** `image/jpeg`, `image/png`, or `image/webp`; max **5 MB**
+
+**Response:**
+\`\`\`json
+{ "url": "https://your-public-base/events/{uuid}.jpg" }
+\`\`\`
+
+Use `url` as `imageUrl` when extracting/reviewing/posting.
+
+**Error responses:** `400` (missing/invalid file), `429` (rate limit), `500` (upload error), `503` (R2 not configured)
+
 ### POST /api/events/submit
 
 Submit a new event for moderation.

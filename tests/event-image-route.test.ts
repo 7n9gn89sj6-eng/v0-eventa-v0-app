@@ -62,4 +62,27 @@ describe("POST /api/events/event-image", () => {
     expect(json.url).toMatch(/^https:\/\/pub\.example\.test\/events\/[a-f0-9-]+\.jpg$/)
     expect(sendMock).toHaveBeenCalledTimes(1)
   })
+
+  it("returns 400 when file field is missing", async () => {
+    const { POST } = await import("@/app/api/events/event-image/route")
+    const fd = new FormData()
+    const res = await POST(
+      new Request("http://localhost/api/events/event-image", { method: "POST", body: fd }),
+    )
+    expect(res.status).toBe(400)
+  })
+
+  it("returns 400 for disallowed mime type", async () => {
+    const { POST } = await import("@/app/api/events/event-image/route")
+    const file = new File([new Uint8Array(10)], "x.gif", { type: "image/gif" })
+    const fd = new FormData()
+    fd.append("file", file)
+    const res = await POST(
+      new Request("http://localhost/api/events/event-image", { method: "POST", body: fd }),
+    )
+    expect(res.status).toBe(400)
+    const json = await res.json()
+    expect(json.error).toBeTruthy()
+    expect(sendMock).not.toHaveBeenCalled()
+  })
 })

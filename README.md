@@ -19,6 +19,7 @@ A multilingual community events platform with AI-powered hybrid search.
 - **Audit Logging**: Complete transparency with detailed action history
 - **Rate Limiting**: Spam prevention with 5 events per hour limit
 - **Calendar Export**: Download events as .ics files for Google/Apple/Outlook calendars
+- **Poster uploads (optional)**: On `/create-simple`, drag-and-drop or click to upload a poster to **Cloudflare R2**; users can always paste an image URL instead if R2 is not configured
 
 ## Tech Stack
 

@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { ChevronDown, ChevronUp, ImageIcon, Loader2, Sparkles, Upload } from "lucide-react"
+import { ChevronDown, ChevronUp, Loader2, Sparkles, Upload } from "lucide-react"
 import type { EventExtractionOutput } from "@/lib/types"
 import {
   CANONICAL_EVENT_CATEGORY_VALUES,
@@ -37,6 +37,7 @@ export function SimpleEventCreator() {
   const [followUpAnswer, setFollowUpAnswer] = useState("")
 
   const posterFileInputRef = useRef<HTMLInputElement>(null)
+  const posterUploadInFlightRef = useRef(false)
   const posterObjectUrlRef = useRef<string | null>(null)
   const [posterLocalPreviewUrl, setPosterLocalPreviewUrl] = useState<string | null>(null)
   const [isUploadingPoster, setIsUploadingPoster] = useState(false)
@@ -61,6 +62,7 @@ export function SimpleEventCreator() {
 
   const handlePosterFile = useCallback(
     async (file: File) => {
+      if (posterUploadInFlightRef.current) return
       setPosterUploadError(null)
       const validation = validateEventImageFile(file)
       if (!validation.ok) {
@@ -73,6 +75,7 @@ export function SimpleEventCreator() {
       posterObjectUrlRef.current = objectUrl
       setPosterLocalPreviewUrl(objectUrl)
 
+      posterUploadInFlightRef.current = true
       setIsUploadingPoster(true)
       try {
         const fd = new FormData()
@@ -91,6 +94,7 @@ export function SimpleEventCreator() {
       } catch (err) {
         setPosterUploadError(err instanceof Error ? err.message : "Upload failed")
       } finally {
+        posterUploadInFlightRef.current = false
         setIsUploadingPoster(false)
       }
     },
@@ -228,6 +232,151 @@ export function SimpleEventCreator() {
           </div>
         </div>
 
+        <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+          <Label className="text-base font-medium">Add a poster or banner</Label>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Drag and drop an image, or click below to choose a file. JPEG, PNG, or WebP · max 5 MB.
+          </p>
+
+          <input
+            ref={posterFileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="sr-only"
+            data-testid="event-poster-input"
+            disabled={isExtracting || isSubmitting || isUploadingPoster}
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              e.target.value = ""
+              if (f) void handlePosterFile(f)
+            }}
+          />
+
+          <div
+            role="button"
+            tabIndex={0}
+            aria-label="Upload poster or banner image"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                if (!isExtracting && !isSubmitting && !isUploadingPoster) {
+                  posterFileInputRef.current?.click()
+                }
+              }
+            }}
+            onClick={() => {
+              if (!isExtracting && !isSubmitting && !isUploadingPoster) {
+                posterFileInputRef.current?.click()
+              }
+            }}
+            onDragEnter={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              if (!isExtracting && !isSubmitting && !isUploadingPoster) setPosterDropActive(true)
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              setPosterDropActive(false)
+            }}
+            onDragOver={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+            }}
+            onDrop={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              setPosterDropActive(false)
+              const f = e.dataTransfer.files?.[0]
+              if (f && !isExtracting && !isSubmitting && !isUploadingPoster) void handlePosterFile(f)
+            }}
+            className={`mt-3 flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              posterDropActive ? "border-primary bg-primary/5" : "border-muted-foreground/30 bg-muted/30"
+            } ${isExtracting || isSubmitting || isUploadingPoster ? "pointer-events-none opacity-70" : ""}`}
+          >
+            {isUploadingPoster && posterLocalPreviewUrl ? (
+              <div className="relative p-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={posterLocalPreviewUrl}
+                  alt=""
+                  className="max-h-40 max-w-full rounded-md object-contain opacity-80"
+                />
+                <div className="absolute inset-0 flex items-center justify-center rounded-md bg-background/50">
+                  <Loader2 className="h-10 w-10 animate-spin text-primary" aria-hidden />
+                </div>
+              </div>
+            ) : imageUrl.trim() && isPublicHttpUrl(imageUrl) && !posterLocalPreviewUrl ? (
+              <div className="p-3 text-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={imageUrl.trim()}
+                  alt=""
+                  className="mx-auto max-h-40 max-w-full rounded-md object-contain"
+                />
+                <p className="mt-2 text-xs text-muted-foreground">Poster ready</p>
+              </div>
+            ) : posterLocalPreviewUrl ? (
+              <div className="p-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={posterLocalPreviewUrl}
+                  alt=""
+                  className="mx-auto max-h-40 max-w-full rounded-md object-contain"
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-2 px-4 py-8 text-center text-sm text-muted-foreground">
+                <Upload className="h-10 w-10 opacity-40" aria-hidden />
+                <span>Drop an image here, or click to upload</span>
+              </div>
+            )}
+          </div>
+
+          {posterUploadError ? (
+            <p className="mt-2 text-sm text-destructive" role="alert">
+              {posterUploadError}
+            </p>
+          ) : null}
+
+          {(imageUrl.trim() || posterLocalPreviewUrl) && !isUploadingPoster ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="mt-2 h-auto px-0 text-muted-foreground underline-offset-4 hover:underline"
+              onClick={(e) => {
+                e.stopPropagation()
+                revokePosterObjectUrl()
+                setImageUrl("")
+                setPosterUploadError(null)
+              }}
+            >
+              Remove image
+            </Button>
+          ) : null}
+
+          <div className="mt-4 border-t border-border/70 pt-4">
+            <Label htmlFor="image-url-fallback" className="text-sm font-medium text-muted-foreground">
+              Or use an image link instead
+            </Label>
+            <Input
+              id="image-url-fallback"
+              type="url"
+              data-testid="event-image-url-fallback"
+              placeholder="https://example.com/your-flyer.jpg"
+              value={imageUrl}
+              onChange={(e) => {
+                setImageUrl(e.target.value)
+                revokePosterObjectUrl()
+                setPosterUploadError(null)
+              }}
+              disabled={isExtracting || isSubmitting || isUploadingPoster}
+              className="mt-1.5"
+            />
+          </div>
+        </div>
+
         <div>
           <Button variant="ghost" size="sm" onClick={() => setShowOptional(!showOptional)} className="gap-2">
             {showOptional ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -236,18 +385,6 @@ export function SimpleEventCreator() {
 
           {showOptional && (
             <div className="mt-4 space-y-4">
-              <div>
-                <Label htmlFor="image-url">Poster or banner image (URL)</Label>
-                <Input
-                  id="image-url"
-                  type="url"
-                  placeholder="https://example.com/your-flyer.jpg"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  disabled={isExtracting || isSubmitting}
-                />
-                <p className="mt-1 text-xs text-muted-foreground">Link to an image file — not file upload yet.</p>
-              </div>
               <div>
                 <Label htmlFor="external-link">Website or tickets link</Label>
                 <Input
