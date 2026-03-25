@@ -163,7 +163,7 @@ Production is deployed from GitHub via [Render](https://render.com) (or any Node
 
 1. **Connect the repository**: In the Render dashboard, create a **Web Service** linked to this GitHub repo.
 2. **Build & start**: Use defaults for Next.js or set **Build Command** to `npm run build` and **Start Command** to `npm start` (Render sets `PORT`; the repo uses `next start -p $PORT`).
-3. **Environment variables**: In the Render service **Environment** tab, add the same variables described in [Getting Started](#getting-started) (database, auth, optional Google/OpenAI/Upstash, etc.). Set `NEXT_PUBLIC_APP_URL` to your public site URL if you use server-side absolute links.
+3. **Environment variables**: In the Render service **Environment** tab, add the same variables described in [Getting Started](#getting-started) (database, auth, optional Google/OpenAI/Upstash, etc.). Set `NEXT_PUBLIC_APP_URL` to your public site URL if you use server-side absolute links. For **drag-and-drop event poster uploads** on `/create-simple`, set Cloudflare **R2** vars: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, and `R2_PUBLIC_BASE_URL` (public URL base for the bucket, no trailing slash). See `.env.example`. If R2 is omitted, users can still paste an image URL.
 4. **Database migrations**: Run `prisma migrate deploy` as part of your release process (e.g. Render **Shell** after deploy, or a one-off job). The `postinstall` script runs `prisma generate` only.
 5. **Smoke test after deploy**: See [docs/ops/post-publish-checklist.md](docs/ops/post-publish-checklist.md).
 
@@ -227,7 +227,7 @@ Users can switch languages using the globe icon in the header. The language pref
 ## Project Structure
 
 \`\`\`
-eventa-v0/
+eventa/
 ├── app/                    # Next.js app directory
 │   ├── api/               # API routes
 │   ├── auth/              # Authentication pages

@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { ChevronDown, ChevronUp, Loader2, Sparkles } from "lucide-react"
+import { ChevronDown, ChevronUp, ImageIcon, Loader2, Sparkles, Upload } from "lucide-react"
 import type { EventExtractionOutput } from "@/lib/types"
 import {
   CANONICAL_EVENT_CATEGORY_VALUES,
@@ -16,6 +16,8 @@ import {
 } from "@/lib/categories/canonical-event-category"
 import { useRouter } from "next/navigation"
 import ClientOnly from "@/components/ClientOnly"
+import { validateEventImageFile } from "@/lib/events/event-image-upload"
+import { isPublicHttpUrl } from "@/lib/events/public-http-url"
 
 const EXAMPLE_PLACEHOLDER = `Sat 12 April, 2–5pm at St Kilda Library. Poetry open mic, gold coin donation, family-friendly. Host: Irene. Register via email.`
 
@@ -33,6 +35,67 @@ export function SimpleEventCreator() {
   const [error, setError] = useState<string | null>(null)
   const [followUpQuestion, setFollowUpQuestion] = useState<string | null>(null)
   const [followUpAnswer, setFollowUpAnswer] = useState("")
+
+  const posterFileInputRef = useRef<HTMLInputElement>(null)
+  const posterObjectUrlRef = useRef<string | null>(null)
+  const [posterLocalPreviewUrl, setPosterLocalPreviewUrl] = useState<string | null>(null)
+  const [isUploadingPoster, setIsUploadingPoster] = useState(false)
+  const [posterUploadError, setPosterUploadError] = useState<string | null>(null)
+  const [posterDropActive, setPosterDropActive] = useState(false)
+
+  const revokePosterObjectUrl = useCallback(() => {
+    if (posterObjectUrlRef.current) {
+      URL.revokeObjectURL(posterObjectUrlRef.current)
+      posterObjectUrlRef.current = null
+    }
+    setPosterLocalPreviewUrl(null)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (posterObjectUrlRef.current) {
+        URL.revokeObjectURL(posterObjectUrlRef.current)
+      }
+    }
+  }, [])
+
+  const handlePosterFile = useCallback(
+    async (file: File) => {
+      setPosterUploadError(null)
+      const validation = validateEventImageFile(file)
+      if (!validation.ok) {
+        setPosterUploadError(validation.error)
+        return
+      }
+
+      revokePosterObjectUrl()
+      const objectUrl = URL.createObjectURL(file)
+      posterObjectUrlRef.current = objectUrl
+      setPosterLocalPreviewUrl(objectUrl)
+
+      setIsUploadingPoster(true)
+      try {
+        const fd = new FormData()
+        fd.append("file", file)
+        const res = await fetch("/api/events/event-image", { method: "POST", body: fd })
+        const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string }
+        if (!res.ok) {
+          throw new Error(data.error || "Upload failed")
+        }
+        if (!data.url) {
+          throw new Error("Upload did not return a URL")
+        }
+        revokePosterObjectUrl()
+        setImageUrl(data.url)
+        setPosterUploadError(null)
+      } catch (err) {
+        setPosterUploadError(err instanceof Error ? err.message : "Upload failed")
+      } finally {
+        setIsUploadingPoster(false)
+      }
+    },
+    [revokePosterObjectUrl],
+  )
 
   const categories: Array<{ value: CanonicalEventCategory | "auto"; label: string }> = [
     { value: "auto", label: "Auto (use AI)" },

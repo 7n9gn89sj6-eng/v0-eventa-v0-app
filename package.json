@@ -1,5 +1,5 @@
 {
-  "name": "eventa-v0",
+  "name": "eventa",
   "version": "0.8.0",
   "private": true,
   "scripts": {
@@ -35,6 +35,7 @@
     "@ai-sdk/openai": "latest",
     "@auth/core": "0.41.0",
     "@auth/prisma-adapter": "latest",
+    "@aws-sdk/client-s3": "^3.1016.0",
     "@edge-runtime/vm": "latest",
     "@hookform/resolvers": "latest",
     "@neondatabase/serverless": "^1.0.2",
