@@ -411,22 +411,19 @@ export async function GET(req: NextRequest) {
     searchPlan.scope !== "region"
   ) {
     try {
-      const intentResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/search/intent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q }),
-      })
-      if (intentResponse.ok) {
-        const intentData = await intentResponse.json()
-        const extracted = intentData.extracted || {}
-        if (extracted.city && !city) {
-          city = extracted.city.trim()
-          console.log(`[v0] 🔍 Extracted city from query (fallback): "${city}"`)
-        }
-        if (extracted.country && !country) {
-          country = extracted.country.trim()
-          console.log(`[v0] 🔍 Extracted country from query (fallback): "${country}"`)
-        }
+      // Same fields as POST /api/search/intent `extracted` (parseSearchIntent only — no HTTP hop).
+      const intentParsed = parseSearchIntent(q)
+      const extracted = {
+        city: intentParsed.place?.city,
+        country: intentParsed.place?.country,
+      }
+      if (extracted.city && !city) {
+        city = extracted.city.trim()
+        console.log(`[v0] 🔍 Extracted city from query (fallback): "${city}"`)
+      }
+      if (extracted.country && !country) {
+        country = extracted.country.trim()
+        console.log(`[v0] 🔍 Extracted country from query (fallback): "${country}"`)
       }
     } catch (error) {
       console.warn(`[v0] Failed to extract entities from query:`, error)
