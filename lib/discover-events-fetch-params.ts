@@ -39,8 +39,12 @@ export function buildDiscoverEventsFetchUrlSearchParams(args: {
   const urlCat = (searchParams.get("category") ?? "").trim()
   const uiCat =
     selectedCategory && selectedCategory !== "All" ? selectedCategory.toLowerCase() : ""
-  // Prefer UI category so the request matches the dropdown immediately; URL sync catches up on the next navigation tick.
-  const catForApi = uiCat || urlCat
+  const qState = sanitizeQueryParam(discoverArgs.rawQuery).trim()
+  const alignedWithUrl =
+    (!urlQ && !qState) || (Boolean(urlQ) && Boolean(qState) && urlQ === qState)
+  // When q matches the URL, prefer UI category (dropdown) over stale URL until router.replace runs.
+  // When q is out of sync (router.push vs state), ignore UI category so a new search does not keep Sports, etc.
+  const catForApi = alignedWithUrl ? uiCat || urlCat : urlCat
   if (catForApi) params.set("category", catForApi)
 
   const df = (searchParams.get("date_from") ?? "").trim()

@@ -49,7 +49,7 @@ describe("buildDiscoverEventsFetchUrlSearchParams", () => {
     expect(params.has("date_to")).toBe(false)
   })
 
-  it("prefers UI category over stale URL category until router sync", () => {
+  it("when q matches URL, UI category wins over stale URL category until router sync", () => {
     const sp = new URLSearchParams("q=gigs&category=music")
     const params = buildDiscoverEventsFetchUrlSearchParams({
       searchParams: sp,
@@ -57,6 +57,22 @@ describe("buildDiscoverEventsFetchUrlSearchParams", () => {
       selectedCategory: "Sports",
     })
     expect(params.get("category")).toBe("sports")
+  })
+
+  it("when q is out of sync with URL, does not send stale UI category (new search navigation)", () => {
+    const sp = new URLSearchParams(
+      "q=Melbourne+International+Comedy+Festival&city=Melbourne&country=Australia",
+    )
+    const params = buildDiscoverEventsFetchUrlSearchParams({
+      searchParams: sp,
+      discoverArgs: baseArgs({
+        rawQuery: "Paris HYROX",
+        cityFilter: "Melbourne",
+        countryFilter: "Australia",
+      }),
+      selectedCategory: "Sports",
+    })
+    expect(params.has("category")).toBe(false)
   })
 
   it("forwards date_from and date_to only when present on URL", () => {

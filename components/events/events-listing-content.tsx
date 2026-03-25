@@ -375,6 +375,12 @@ export function EventsListingContent({
     const params = new URLSearchParams()
     const { apiQuery, city: urlCity, country: urlCountry } = resolveDiscoverApiSearchParams(getDiscoverArgs())
     const safeQ = sanitizeQueryParam(apiQuery).trim()
+    const urlBarQ = sanitizeQueryParam(searchParams.get("q") ?? "").trim()
+    // After router.push, listing state can lag one frame behind useSearchParams(). Do not
+    // router.replace a hybrid URL (new q + old city/category from state).
+    if (safeQ && urlBarQ && safeQ !== urlBarQ) {
+      return
+    }
     if (safeQ) params.set("q", safeQ)
     if (urlCity.trim()) params.set("city", urlCity.trim())
     if (urlCountry.trim()) params.set("country", urlCountry.trim())
@@ -395,9 +401,10 @@ export function EventsListingContent({
     }
   }, [searchParamsKey, q, cityFilter, countryFilter, selectedCategory, router, getDiscoverArgs])
 
-  const handleSmartSearch = (query: string) => {
+  const handleSmartSearch = (_query: string) => {
     setError(null)
-    setQ(query)
+    // Do not setQ here: router.push runs before onSearch; setting q ahead of useSearchParams()
+    // makes URL sync merge new text with stale city/category. Layout + URL own `q`.
   }
 
   const filteredResults = results
