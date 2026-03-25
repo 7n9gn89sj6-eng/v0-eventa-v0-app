@@ -112,11 +112,16 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
       }
     }
 
-    const handleSubmit = async (overrideQuery?: string) => {
-      const effectiveQuery = String(overrideQuery ?? query).trim()
+    const handleSubmit = async (overrideQuery?: unknown) => {
+      const fromOverride =
+        typeof overrideQuery === "string" ? overrideQuery.trim() : undefined
+      const effectiveQuery =
+        fromOverride !== undefined && fromOverride.length > 0
+          ? fromOverride
+          : String(query ?? "").trim()
       if (!effectiveQuery) return
 
-      if (overrideQuery !== undefined) {
+      if (typeof overrideQuery === "string") {
         setQuery(effectiveQuery)
       }
 
@@ -346,7 +351,8 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
 
           <Button
             type="button"
-            onClick={handleSubmit}
+            data-testid="smart-input-go"
+            onClick={() => void handleSubmit()}
             disabled={!query.trim() || isProcessing}
             size="lg"
             className="gap-2"
@@ -393,6 +399,8 @@ export const SmartInputBar = forwardRef<SmartInputBarRef, SmartInputBarProps>(
                 <button
                   key={example}
                   type="button"
+                  data-testid="smart-input-try-these-option"
+                  data-suggestion={example}
                   onClick={() => {
                     void handleSubmit(example)
                   }}
