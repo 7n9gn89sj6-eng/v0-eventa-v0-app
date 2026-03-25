@@ -11,6 +11,7 @@ import { withLanguageColumnGuard, getEventSelectWithoutLanguage, isLanguageFilte
 import { buildDateOverlapWhere, buildDateRangeOverlapWhere } from "@/lib/search/date-overlap"
 import { isEventIntentQuery } from "@/lib/search/event-ranking"
 import { applyBroadWebHostDiversity } from "@/lib/search/broad-web-host-diversity"
+import { applyNamedEventSameHostWebDedupe } from "@/lib/search/named-event-same-host-dedupe"
 import { genericWebListingPenalty, scoreSearchResult } from "@/lib/search/score-search-result"
 import { getExpandedTermGroups } from "@/lib/search/search-taxonomy"
 import { normalizeSearchUtterance, sanitizeQueryParam, stripTextSearchStopwords } from "@/lib/search/core/normalize"
@@ -2051,6 +2052,24 @@ export async function GET(req: NextRequest) {
 
     if (applyBroadHostDiversity && unifiedRanked.length > 1) {
       unifiedRanked = applyBroadWebHostDiversity(unifiedRanked) as any[]
+    }
+
+    if (queryIntent.intentType === "named_event") {
+      unifiedRanked = applyNamedEventSameHostWebDedupe(unifiedRanked) as any[]
+    }
+
+    if (debug) {
+      debugTrace.rankingUnifiedTop15 = unifiedRanked.slice(0, 15).map((r: any) => ({
+        title: (r.title ?? "").slice(0, 200),
+        url:
+          r.externalUrl ??
+          r._originalUrl ??
+          r.url ??
+          (r._resultKind === "internal" ? `(internal:${String(r.id ?? "")})` : null),
+        _resultKind: r._resultKind,
+        _score: r._score,
+        _rankBreakdown: r._rankBreakdown,
+      }))
     }
 
     const eventsPublic = unifiedRanked.map((row: any) =>

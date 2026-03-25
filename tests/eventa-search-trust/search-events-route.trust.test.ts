@@ -1683,5 +1683,111 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     expect(data2.internal?.length).toBeGreaterThan(0)
     expect(data2.internal?.[0]?.city).toBe("Brunswick")
   })
+
+  it("named-event query: suppresses web cards that duplicate internal official host (MICF + comedyfestival.com.au)", async () => {
+    const future = new Date(FIXED_NOW.getTime() + 14 * 86400 * 1000).toISOString()
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "micf-internal",
+        title: "Melbourne International Comedy Festival 2026",
+        description: "Official comedy festival season in Melbourne.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: future,
+        endAt: addHours(future, 6),
+        categories: ["comedy"],
+        category: "COMEDY",
+        externalUrl: "https://www.comedyfestival.com.au/",
+      }),
+    ]
+
+    fixtureWebResults = [
+      {
+        source: "web",
+        title: "Melbourne International Comedy Festival — browse shows",
+        snippet: "Official festival program and tickets.",
+        url: "https://comedyfestival.com.au/browse-shows",
+        startAt: future,
+      },
+      {
+        source: "web",
+        title: "MICF — home",
+        snippet: "Melbourne comedy festival official site.",
+        url: "https://www.comedyfestival.com.au/",
+        startAt: future,
+      },
+      {
+        source: "web",
+        title: "MICF preview article",
+        snippet: "What to see at the festival this year.",
+        url: "https://news.example.com/melbourne-comedy-festival-preview",
+        startAt: future,
+      },
+    ]
+
+    const data = await callSearchEvents({
+      query: "Melbourne International Comedy Festival",
+      city: "Melbourne",
+      country: "Australia",
+    })
+
+    const comedyHostWeb = (data.external || []).filter((e: any) =>
+      String(e.externalUrl || "").includes("comedyfestival.com.au"),
+    )
+    expect(comedyHostWeb.length).toBe(0)
+    expect((data.internal || []).length).toBeGreaterThan(0)
+    expect((data.events || []).some((e: any) => e.source === "internal")).toBe(true)
+    expect((data.external || []).some((e: any) => String(e.externalUrl || "").includes("news.example.com"))).toBe(
+      true,
+    )
+  })
+
+  it("broad discovery query: does not apply same-host web suppression", async () => {
+    const future = new Date(FIXED_NOW.getTime() + 14 * 86400 * 1000).toISOString()
+
+    fixtureInternalEvents = [
+      makeEvent({
+        id: "micf-internal",
+        title: "Melbourne International Comedy Festival 2026",
+        description: "Official comedy festival season in Melbourne.",
+        city: "Melbourne",
+        country: "Australia",
+        startAt: future,
+        endAt: addHours(future, 6),
+        categories: ["comedy"],
+        category: "COMEDY",
+        externalUrl: "https://www.comedyfestival.com.au/",
+      }),
+    ]
+
+    fixtureWebResults = [
+      {
+        source: "web",
+        title: "Festival browse",
+        snippet: "Shows and tickets in Melbourne.",
+        url: "https://comedyfestival.com.au/browse-shows",
+        startAt: future,
+      },
+      {
+        source: "web",
+        title: "Festival what's on",
+        snippet: "Official Melbourne comedy festival calendar.",
+        url: "https://www.comedyfestival.com.au/whats-on",
+        startAt: future,
+      },
+    ]
+
+    const data = await callSearchEvents({
+      query: "events in Melbourne",
+      city: "Melbourne",
+      country: "Australia",
+    })
+
+    const comedyHostWeb = (data.external || []).filter((e: any) =>
+      String(e.externalUrl || "").includes("comedyfestival.com.au"),
+    )
+    expect(comedyHostWeb.length).toBe(2)
+  })
 })
 

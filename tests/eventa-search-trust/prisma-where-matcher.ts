@@ -7,6 +7,7 @@ export type FixtureInternalEvent = {
   parentCity?: string | null
   region?: string | null
   venueName?: string | null
+  externalUrl?: string | null
   startAt: string | Date
   endAt: string | Date
   categories?: string[] | null
@@ -44,6 +45,8 @@ function getEventField(event: FixtureInternalEvent, key: string): unknown {
       return event.parentCity ?? null
     case "region":
       return event.region ?? null
+    case "externalUrl":
+      return event.externalUrl ?? null
     default:
       return undefined
   }
@@ -113,6 +116,7 @@ function matchesCondition(event: FixtureInternalEvent, cond: any): boolean {
     "country",
     "parentCity",
     "region",
+    "externalUrl",
     "category",
     "categories",
   ]
