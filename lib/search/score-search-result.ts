@@ -185,10 +185,12 @@ export function genericWebListingPenalty(result: any): number {
   let p = 0
   if (/\bwhat['']?s\s+on\b/i.test(title) || /\bwhat['']?s\s+on\b/i.test(desc)) p += 16
   if (/\bbrowse\s+all\s+events?\b/i.test(blob) || /\ball\s+upcoming\s+events?\b/i.test(blob)) p += 14
-  if (/\/whats-?on\b|\/whatson\b|\/things-to-do\b/i.test(url)) p += 18
-  if (/\/events?\/?$/i.test(url) && url.split("/").filter(Boolean).length <= 4) p += 10
-  if (/\bevent\s+(calendar|guide|directory|listing)s?\b/i.test(blob)) p += 12
-  return Math.min(45, p)
+  if (/\/whats-?on\b|\/whatson\b|\/things-to-do\b|\/things-to-do\//i.test(url)) p += 26
+  if (/\/events?\/?$/i.test(url) && url.split("/").filter(Boolean).length <= 4) p += 12
+  if (/\bevent\s+(calendar|guide|directory|listing)s?\b/i.test(blob)) p += 14
+  if (/\/events?\/(calendar|guide)\b/i.test(url)) p += 10
+  if (/\/upcoming\b/i.test(url)) p += 8
+  return Math.min(55, p)
 }
 
 function aggregatorPenalty(result: any): number {
@@ -325,7 +327,8 @@ export function scoreSearchResult(args: {
         else if (days <= 30) timeScore += 12
         else timeScore += 6
       } else {
-        timeScore -= 4
+        // Clearly ended (endAt < now): strong sink vs ongoing/future rows.
+        mismatchPenalty += 32
       }
     }
   } else {
@@ -353,13 +356,27 @@ export function scoreSearchResult(args: {
         const synonymMap: Record<string, string[]> = {
           music: ["gig", "concert", "dj", "live"],
           food: ["eat", "dining", "restaurant", "market"],
-          arts: ["gallery", "exhibition", "museum"],
+          arts: [
+            "gallery",
+            "exhibition",
+            "museum",
+            "theatre",
+            "theater",
+            "musical",
+            "west end",
+          ],
           markets: ["market", "fair", "bazaar"],
           family: ["kids", "children"],
           sports: ["fitness", "yoga", "run", "outdoor", "trail"],
         }
-        const syns = synonymMap[catKey] || []
-        if (syns.some((s) => blob.includes(s))) interestScore += broad ? 6 : 10
+        const synonymKey = catKey === "art" ? "arts" : catKey
+        const syns = synonymMap[synonymKey] || []
+        const artsPerformanceTokens =
+          (catKey === "arts" || catKey === "art") &&
+          (/\b(theatre|theater|musical)s?\b/i.test(blob) ||
+            /\bwest\s+end\b/i.test(blob) ||
+            /\bplays?\b/i.test(blob))
+        if (syns.some((s) => blob.includes(s)) || artsPerformanceTokens) interestScore += broad ? 6 : 10
         else if (strictCat && !broad) mismatchPenalty += 14
         else mismatchPenalty += 5
       }

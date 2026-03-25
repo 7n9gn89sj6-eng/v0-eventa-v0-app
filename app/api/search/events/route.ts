@@ -11,7 +11,7 @@ import { withLanguageColumnGuard, getEventSelectWithoutLanguage, isLanguageFilte
 import { buildDateOverlapWhere, buildDateRangeOverlapWhere } from "@/lib/search/date-overlap"
 import { isEventIntentQuery } from "@/lib/search/event-ranking"
 import { applyBroadWebHostDiversity } from "@/lib/search/broad-web-host-diversity"
-import { scoreSearchResult } from "@/lib/search/score-search-result"
+import { genericWebListingPenalty, scoreSearchResult } from "@/lib/search/score-search-result"
 import { getExpandedTermGroups } from "@/lib/search/search-taxonomy"
 import { normalizeSearchUtterance, sanitizeQueryParam, stripTextSearchStopwords } from "@/lib/search/core/normalize"
 import {
@@ -58,20 +58,6 @@ const AMBIENT_SUBURB_INTERNAL_THRESHOLD = 2
 
 /** Event-intent queries with fewer internal hits still merge web results for recall. */
 const WEB_SUPPLEMENT_INTERNAL_MAX = 6
-
-/** Relative windows where strict time overlap is a soft signal for web rows, not hard exclusion. */
-const RELATIVE_TIME_SOFT_WEB = new Set([
-  "tonight",
-  "today",
-  "tomorrow",
-  "this_weekend",
-  "next_weekend",
-  "easter",
-  "easter_long_weekend",
-  "this_week",
-  "next_week",
-  "weekday",
-])
 
 /** Secondary fallback when no published event supplies `parentCity` for this locality (ambient UI only). */
 const AMBIENT_SUBURB_PARENT_CITY: Record<string, string> = {
@@ -1821,12 +1807,7 @@ export async function GET(req: NextRequest) {
     const relaxStrictTimeForWeb =
       queryIntent.intentType !== "named_event" &&
       Boolean(parsedIntent.time?.date_from && parsedIntent.time?.date_to) &&
-      (events.length === 0 ||
-        internalWeakForWeb ||
-        Boolean(parsedIntent.time?.timeWasRolledForward) ||
-        hasBroadBrowsePhrase(q) ||
-        (typeof parsedIntent.time?.relativeWindowType === "string" &&
-          RELATIVE_TIME_SOFT_WEB.has(parsedIntent.time.relativeWindowType)))
+      events.length === 0
 
     const scoredInternal = events
       .map((e: any) => {
@@ -1937,11 +1918,13 @@ export async function GET(req: NextRequest) {
       const snippet = (result._originalSnippet || result.description || "").toLowerCase()
       const fullText = `${url} ${snippet}`.toLowerCase()
       const isGov = url.includes(".gov.au") || url.includes(".gov/")
+      const listingPenalty = genericWebListingPenalty(result)
+      const highGenericHub = listingPenalty >= 12
 
       if (isGov && /\/events?\b/i.test(url)) {
-        boost += 4
+        boost += highGenericHub ? 0 : 4
       } else if (isGov) {
-        boost += 2
+        boost += highGenericHub ? 0 : 2
       }
 
       if (!isGov && /(whats-on|whatson|what-s-on|\/events\/|event-calendar|gig-guide)/i.test(fullText)) {
