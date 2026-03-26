@@ -5,6 +5,7 @@
  * Mirrors interest patterns from `app/lib/search/parseSearchIntent.ts` (keep in sync).
  */
 import { parseSearchIntent, type SearchIntent } from "@/app/lib/search/parseSearchIntent"
+import { repairDiscoveryPhrases } from "@/lib/search/discovery-phrase-repair"
 import { normalizeSearchUtterance } from "@/lib/search/normalize-search-utterance"
 import { countryForKnownCity } from "@/lib/search/effective-location"
 
@@ -158,7 +159,7 @@ export function resolveDiscoverApiSearchParams(args: NormalizeDiscoverQueryArgs)
     structuredLocationAuthoritative,
   } = args
 
-  let out = normalizeSearchUtterance(String(rawQuery || "").trim())
+  let out = normalizeSearchUtterance(repairDiscoveryPhrases(String(rawQuery || "").trim()))
 
   if (structuredCategoryAuthoritative && selectedCategory !== "All") {
     out = stripConflictingInterestTerms(out, selectedCategory)

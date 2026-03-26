@@ -14,7 +14,12 @@ import { applyBroadWebHostDiversity } from "@/lib/search/broad-web-host-diversit
 import { applyNamedEventSameHostWebDedupe } from "@/lib/search/named-event-same-host-dedupe"
 import { genericWebListingPenalty, scoreSearchResult } from "@/lib/search/score-search-result"
 import { getExpandedTermGroups } from "@/lib/search/search-taxonomy"
-import { normalizeSearchUtterance, sanitizeQueryParam, stripTextSearchStopwords } from "@/lib/search/core/normalize"
+import {
+  normalizeSearchUtterance,
+  repairDiscoveryPhrases,
+  sanitizeQueryParam,
+  stripTextSearchStopwords,
+} from "@/lib/search/core/normalize"
 import {
   buildPlaceResolveInput,
   isResolvedPlaceCompatibleWithParsed,
@@ -119,6 +124,8 @@ export const runtime = "nodejs"
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   let q = sanitizeQueryParam(url.searchParams.get("query") || url.searchParams.get("q"))
+  // Allowlisted discovery typos (e.g. "whats os" → "whats on") before normalization / intent / text terms.
+  q = repairDiscoveryPhrases(q)
   q = normalizeSearchUtterance(q)
   const take = Math.min(Number.parseInt(url.searchParams.get("take") || "20", 10) || 20, 50)
   const page = Math.max(Number.parseInt(url.searchParams.get("page") || "1", 10) || 1, 1)
