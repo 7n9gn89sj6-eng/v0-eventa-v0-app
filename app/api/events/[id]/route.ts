@@ -162,19 +162,23 @@ async function handleUpdate(
       }
     }
 
-    // Update location fields if provided
+    // Update location fields if provided (Prisma uses `region`, not `state`)
     if (locationAddress !== undefined) updateData.address = locationAddress;
     if (city !== undefined) updateData.city = city;
-    if (state !== undefined) updateData.state = state;
+    if (state !== undefined) updateData.region = state;
     if (country !== undefined) updateData.country = country;
     if (postcode !== undefined) updateData.postcode = postcode;
-    
+
     // Update dates if provided - parse as Date objects (Prisma expects Date, not ISO string)
     if (startAt) updateData.startAt = new Date(startAt);
     if (endAt) updateData.endAt = new Date(endAt);
-    
-    // Update URLs if provided
-    if (imageUrl !== undefined) updateData.imageUrls = imageUrl ? [imageUrl] : [];
+
+    // Update URLs if provided — keep `imageUrl` and `imageUrls` aligned for listings
+    if (imageUrl !== undefined) {
+      const trimmed = typeof imageUrl === "string" ? imageUrl.trim() : "";
+      updateData.imageUrl = trimmed || null;
+      updateData.imageUrls = trimmed ? [trimmed] : [];
+    }
     if (externalUrl !== undefined) updateData.externalUrl = externalUrl || null;
 
     const event = await db.event.update({
