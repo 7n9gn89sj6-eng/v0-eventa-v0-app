@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { EventPosterUpload } from "@/components/events/event-poster-upload"
 
 const API_URL = "/api/events/submit"
 
@@ -786,13 +787,23 @@ export function AddEventForm({ initialData }: AddEventFormProps) {
                 name="imageUrl"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{tForm("fields.imageUrl")}</FormLabel>
                     <FormControl>
-                      <Input
-                        type="url"
-                        placeholder={tForm("fields.imageUrlPlaceholder")}
-                        {...field}
+                      <EventPosterUpload
+                        imageUrl={field.value ?? ""}
+                        onImageUrlChange={(url) => {
+                          field.onChange(url)
+                          form.clearErrors("imageUrl")
+                        }}
                         disabled={isSubmitting}
+                        urlPlaceholder={tForm("fields.imageUrlPlaceholder")}
+                        labels={{
+                          title: tForm("fields.posterTitle"),
+                          hint: tForm("fields.posterHint"),
+                          dropHint: tForm("fields.posterDropHint"),
+                          ready: tForm("fields.posterReady"),
+                          remove: tForm("fields.posterRemove"),
+                          linkFallback: tForm("fields.posterLinkFallback"),
+                        }}
                       />
                     </FormControl>
                     <FormDescription>{tForm("fields.imageUrlHint")}</FormDescription>
