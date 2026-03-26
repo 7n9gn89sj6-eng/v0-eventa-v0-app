@@ -28,11 +28,13 @@ import {
 } from "@/components/ui/select"
 import { PlacesAutocomplete } from "@/components/forms/places-autocomplete"
 import { EventPosterUpload } from "@/components/events/event-poster-upload"
+import { EventListingPreview } from "@/components/events/event-listing-preview"
 import {
   CANONICAL_EVENT_CATEGORY_VALUES,
   CATEGORY_UI_METADATA,
   parseEventCategoryPayload,
   coerceToCanonicalEventCategory,
+  isCanonicalEventCategory,
 } from "@/lib/categories/canonical-event-category"
 
 export type EditPageEventPayload = {
@@ -162,7 +164,28 @@ export default function EditEventForm({ event, token }: Props) {
   })
 
   const categoryWatch = form.watch("category")
+  const watched = form.watch()
   const saving = form.formState.isSubmitting
+
+  const previewLocationLine = (() => {
+    const chunks: string[] = []
+    const a = watched.address?.trim()
+    if (a) chunks.push(a)
+    const mid = [watched.city?.trim(), watched.state?.trim(), watched.postcode?.trim()]
+      .filter(Boolean)
+      .join(" ")
+    if (mid) chunks.push(mid)
+    const c = watched.country?.trim()
+    if (c) chunks.push(c)
+    return chunks.join(" · ")
+  })()
+
+  const previewCategoryLabel =
+    watched.category === "OTHER" && watched.customCategoryLabel?.trim()
+      ? watched.customCategoryLabel.trim()
+      : isCanonicalEventCategory(watched.category)
+        ? CATEGORY_UI_METADATA[watched.category].defaultLabel
+        : undefined
 
   async function onSubmit(data: EditMagicLinkFormValues) {
     setSaveError(null)
@@ -222,6 +245,8 @@ export default function EditEventForm({ event, token }: Props) {
           </Alert>
         ) : null}
 
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-10">
+          <div className="order-2 min-w-0 flex-1 space-y-6 lg:order-1">
         <Card>
           <CardContent className="space-y-6 pt-6">
             <div className="space-y-4">
@@ -513,16 +538,35 @@ export default function EditEventForm({ event, token }: Props) {
           </CardContent>
         </Card>
 
-        <Button type="submit" disabled={saving} className="w-full sm:w-auto" size="lg">
-          {saving ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Saving…
-            </>
-          ) : (
-            "Save changes"
-          )}
-        </Button>
+            <Button type="submit" disabled={saving} className="w-full sm:w-auto" size="lg">
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving…
+                </>
+              ) : (
+                "Save changes"
+              )}
+            </Button>
+          </div>
+
+          <div className="order-1 w-full lg:order-2 lg:sticky lg:top-24 lg:max-w-sm xl:max-w-md lg:shrink-0">
+            <p className="mb-2 text-sm font-medium text-muted-foreground">Listing preview</p>
+            <p className="mb-3 text-xs text-muted-foreground">
+              This updates as you type so you can see roughly how your event will read on Eventa.
+            </p>
+            <EventListingPreview
+              title={watched.title}
+              description={watched.description}
+              imageUrl={watched.imageUrl}
+              startAt={watched.startAt}
+              endAt={watched.endAt}
+              locationLine={previewLocationLine}
+              categoryLabel={previewCategoryLabel}
+              externalUrl={watched.externalUrl}
+            />
+          </div>
+        </div>
       </form>
     </Form>
   );
