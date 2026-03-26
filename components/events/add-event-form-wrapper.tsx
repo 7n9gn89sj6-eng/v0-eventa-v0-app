@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { AddEventForm } from "@/components/events/add-event-form"
 import { useI18n } from "@/lib/i18n/context"
 
@@ -57,6 +58,15 @@ export function AddEventFormWrapper({ initialData, draftId }: AddEventFormWrappe
         <h1 className="text-3xl font-bold tracking-tight text-balance">{tForm("page.title")}</h1>
         <p className="mt-2 text-muted-foreground text-pretty">
           {tForm("page.subtitle")}
+        </p>
+        <p className="mt-3 text-sm text-muted-foreground text-pretty">
+          {tForm("page.aiAssistPrefix")}
+          <Link
+            href="/create-simple"
+            className="text-foreground/80 underline underline-offset-4 hover:text-foreground"
+          >
+            {tForm("page.aiAssistLink")}
+          </Link>
         </p>
       </div>
       <AddEventForm initialData={draftData || initialData} />

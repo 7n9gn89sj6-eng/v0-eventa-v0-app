@@ -161,6 +161,11 @@ export const translations = {
         title: "Post a New Event",
         subtitle:
           "Share your event with the community. Fill in the details below and we'll send you a verification email to finish publishing.",
+        aiAssistPrefix: "Prefer to start from a short description? ",
+        aiAssistLink: "Try AI-assisted drafting.",
+        createSimpleTitle: "Draft your event with AI",
+        createSimpleSubtitle:
+          "Describe it in your own words—we'll turn it into a draft you can edit and publish. To use the full form instead, choose Post Event from the header.",
       },
       sections: {
         yourInfo: "Your Information",
@@ -420,6 +425,11 @@ export const translations = {
         title: "Pubblica un Nuovo Evento",
         subtitle:
           "Condividi il tuo evento con la comunità. Compila i dettagli qui sotto e ti invieremo un'email di verifica per completare la pubblicazione.",
+        aiAssistPrefix: "Preferisci partire da una breve descrizione? ",
+        aiAssistLink: "Prova la bozza assistita dall'IA.",
+        createSimpleTitle: "Crea una bozza del tuo evento con l'IA",
+        createSimpleSubtitle:
+          "Descrivilo con le tue parole: lo trasformeremo in una bozza che potrai modificare e pubblicare. Per il modulo completo, scegli Pubblica evento nell'intestazione.",
       },
       sections: {
         yourInfo: "Le Tue Informazioni",
@@ -682,6 +692,11 @@ export const translations = {
         title: "Δημοσιεύστε μια Νέα Εκδήλωση",
         subtitle:
           "Μοιραστείτε την εκδήλωσή σας με την κοινότητα. Συμπληρώστε τα στοιχεία παρακάτω και θα σας στείλουμε ένα email επαλήθευσης για να ολοκληρώσετε τη δημοσίευση.",
+        aiAssistPrefix: "Θέλετε να ξεκινήσετε από μια σύντομη περιγραφή; ",
+        aiAssistLink: "Δοκιμάστε προσχέδιο με βοήθεια ΤΝ.",
+        createSimpleTitle: "Προσχέδιο εκδήλωσης με ΤΝ",
+        createSimpleSubtitle:
+          "Περιγράψτε την με τα δικά σας λόγια—θα τη μετατρέψουμε σε προσχέδιο που μπορείτε να επεξεργαστείτε και να δημοσιεύσετε. Για την πλήρη φόρμα, επιλέξτε Δημοσίευση Εκδήλωσης από την κεφαλίδα.",
       },
       sections: {
         yourInfo: "Οι Πληροφορίες σας",
@@ -944,6 +959,11 @@ export const translations = {
         title: "Publicar un Nuevo Evento",
         subtitle:
           "Comparte tu evento con la comunidad. Completa los detalles a continuación y te enviaremos un correo de verificación para finalizar la publicación.",
+        aiAssistPrefix: "¿Prefieres empezar con una descripción breve? ",
+        aiAssistLink: "Prueba el borrador asistido por IA.",
+        createSimpleTitle: "Borrador de tu evento con IA",
+        createSimpleSubtitle:
+          "Descríbelo con tus palabras: lo convertiremos en un borrador que podrás editar y publicar. Para el formulario completo, elige Publicar evento en la cabecera.",
       },
       sections: {
         yourInfo: "Tu Información",
@@ -1206,6 +1226,11 @@ export const translations = {
         title: "Publier un Nouvel Événement",
         subtitle:
           "Partagez votre événement avec la communauté. Remplissez les détails ci-dessous et nous vous enverrons un email de vérification pour finaliser la publication.",
+        aiAssistPrefix: "Vous préférez partir d’une courte description ? ",
+        aiAssistLink: "Essayez le brouillon assisté par IA.",
+        createSimpleTitle: "Rédigez votre événement avec l’IA",
+        createSimpleSubtitle:
+          "Décrivez-le avec vos mots : nous en ferons un brouillon à modifier et à publier. Pour le formulaire complet, choisissez Publier un événement dans l’en-tête.",
       },
       sections: {
         yourInfo: "Vos Informations",
