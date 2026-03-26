@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Calendar, ExternalLink, MapPin } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -58,7 +59,14 @@ export function EventListingPreview({
   className,
 }: EventListingPreviewProps) {
   const trimmedUrl = imageUrl.trim()
-  const showImage = trimmedUrl && isPublicHttpUrl(trimmedUrl)
+  const hasUrl = Boolean(trimmedUrl)
+  const [posterLoadFailed, setPosterLoadFailed] = useState(false)
+
+  useEffect(() => {
+    setPosterLoadFailed(false)
+  }, [trimmedUrl])
+
+  const showPoster = hasUrl && !posterLoadFailed
   const excerpt = description.trim() || "—"
   const place = locationLine.trim() || "—"
 
@@ -68,16 +76,19 @@ export function EventListingPreview({
       aria-label="How your event may appear in listings"
     >
       <div className="aspect-video w-full overflow-hidden bg-muted">
-        {showImage ? (
+        {showPoster ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
             src={trimmedUrl}
             alt=""
             className="h-full w-full object-cover"
+            onError={() => setPosterLoadFailed(true)}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center px-4 text-center text-sm text-muted-foreground">
-            No poster yet — add an image to see it here
+            {hasUrl
+              ? "Image could not be loaded — check the link or try uploading again"
+              : "No poster yet — add an image to see it here"}
           </div>
         )}
       </div>
