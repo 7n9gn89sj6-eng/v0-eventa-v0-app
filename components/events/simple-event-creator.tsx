@@ -61,9 +61,14 @@ export function SimpleEventCreator() {
     })),
   ]
 
+  const emptyDescriptionMessage =
+    "Please add a short description of your event, then try Preview again."
+  const previewUnavailableMessage =
+    "We couldn't generate a preview right now. You can try again, or use Post Event instead."
+
   const handleExtract = async () => {
     if (!sourceText.trim()) {
-      setError("Please describe your event first")
+      setError(emptyDescriptionMessage)
       return
     }
 
@@ -83,8 +88,14 @@ export function SimpleEventCreator() {
         }),
       })
 
+      if (response.status === 400) {
+        setError(emptyDescriptionMessage)
+        return
+      }
+
       if (!response.ok) {
-        throw new Error("Failed to extract event data")
+        setError(previewUnavailableMessage)
+        return
       }
 
       const data: EventExtractionOutput = await response.json()
@@ -103,7 +114,7 @@ export function SimpleEventCreator() {
         setSelectedCategory(mapped ?? "auto")
       }
     } catch (err) {
-      setError("Couldn't extract event details. Please try rephrasing your description.")
+      setError(previewUnavailableMessage)
       console.error("[v0] Extraction error:", err)
     } finally {
       setIsExtracting(false)
