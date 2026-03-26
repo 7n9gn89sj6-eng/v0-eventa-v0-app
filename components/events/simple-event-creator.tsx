@@ -60,6 +60,24 @@ export function SimpleEventCreator() {
     }
   }, [])
 
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("ai-event-draft")
+      if (!raw) return
+      const draft = JSON.parse(raw) as { category?: string }
+      const c = draft.category
+      if (typeof c !== "string" || !c.trim()) return
+      if (c.trim().toLowerCase() === "auto") {
+        setSelectedCategory("auto")
+        return
+      }
+      const coerced = coerceToCanonicalEventCategory(c)
+      if (coerced) setSelectedCategory(coerced)
+    } catch {
+      /* ignore bad or missing draft */
+    }
+  }, [])
+
   const handlePosterFile = useCallback(
     async (file: File) => {
       if (posterUploadInFlightRef.current) return

@@ -24,6 +24,8 @@ interface DraftData {
   extraction: EventExtractionOutput
   /** "auto" | legacy broad slug | canonical enum string (e.g. MUSIC) */
   category: string
+  /** Present only when category is OTHER; synced from review step. */
+  customCategoryLabel?: string
   followUpAnswer?: string
   imageUrl?: string
   externalUrl?: string
@@ -77,16 +79,40 @@ export default function ReviewDraftPage() {
       setOrganizerName(data.extraction.organizer_name || "")
 
       const rawCategory = data.category !== "auto" ? data.category : data.extraction.category
-      setReviewCategory(coerceToCanonicalEventCategory(rawCategory) ?? "OTHER")
+      const coerced = coerceToCanonicalEventCategory(rawCategory) ?? "OTHER"
+      setReviewCategory(coerced)
+
+      const topLabel =
+        typeof data.customCategoryLabel === "string" ? data.customCategoryLabel.trim().slice(0, 40) : ""
       const ex = data.extraction as unknown as Record<string, unknown>
-      const seed =
-        typeof ex.customCategoryLabel === "string" ? ex.customCategoryLabel.trim().slice(0, 40) : ""
-      setCustomOtherLabel(seed)
+      const exLabel =
+        typeof ex.customCategoryLabel === "string" ? String(ex.customCategoryLabel).trim().slice(0, 40) : ""
+      setCustomOtherLabel(coerced === "OTHER" ? topLabel || exLabel : "")
     } catch (err) {
       console.error("[v0] Failed to load draft:", err)
       router.push("/create-simple")
     }
   }, [router])
+
+  useEffect(() => {
+    if (!draftData || reviewCategory === null) return
+    try {
+      const stored = sessionStorage.getItem("ai-event-draft")
+      if (!stored) return
+      const draft = JSON.parse(stored) as DraftData
+      draft.category = reviewCategory
+      if (reviewCategory === "OTHER") {
+        const t = customOtherLabel.trim().slice(0, 40)
+        if (t) draft.customCategoryLabel = t
+        else delete draft.customCategoryLabel
+      } else {
+        delete draft.customCategoryLabel
+      }
+      sessionStorage.setItem("ai-event-draft", JSON.stringify(draft))
+    } catch (e) {
+      console.error("[v0] Failed to persist draft category to sessionStorage:", e)
+    }
+  }, [draftData, reviewCategory, customOtherLabel])
 
   useEffect(() => {
     let cancelled = false
