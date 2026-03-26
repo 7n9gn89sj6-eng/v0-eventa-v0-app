@@ -50,6 +50,15 @@ import { microLocationForWebSearch } from "@/lib/search/micro-location-for-web"
 import { topicQueryForCityLevelWeb } from "@/lib/search/topic-query-for-city-level-web"
 import { hasAustraliaIndicators, hasUSIndicatorsInText } from "@/lib/search/core/geo"
 
+/** User wants past/archive-style results; skip aggressive visible-year stale rules for web rows. */
+function wantsHistoryQuery(rawQuery: string): boolean {
+  const s = rawQuery.trim()
+  if (!s) return false
+  return /\b(past\s+events?|archive|archives|historical|history\s+of|retro|old\s+events?|previous\s+years?)\b/i.test(
+    s,
+  )
+}
+
 /** Structured OR filter: event.country matches any resolved region member. */
 function applyRegionCountriesWhere(where: any, countries: string[]) {
   if (!countries.length) return
@@ -1672,6 +1681,7 @@ export async function GET(req: NextRequest) {
     // CRITICAL: Don't drop web results solely because date is missing
     // Gig guides/listing pages often don't have parseable dates but are still valid event sources
     const currentYear = now.getFullYear()
+    const wantsHistory = wantsHistoryQuery(q)
     let filteredWebResults = webResults.filter((result) => {
       // Only filter by date if date is present and parseable
       if (result.startAt) {
@@ -1686,19 +1696,25 @@ export async function GET(req: NextRequest) {
           // Invalid date format - keep the result (don't drop for missing date)
         }
       }
-      // Additional staleness heuristic for undated pages:
-      // If title/description only mention years that are clearly in the past, drop them.
-      const text = `${result.title || ""} ${result.description || ""}`.toLowerCase()
-      const yearMatches = Array.from(text.matchAll(/\b(20\d{2})\b/g)).map(m => parseInt(m[1], 10))
+      if (wantsHistory) {
+        return true
+      }
+      // Visible text stale-year heuristic (title + description + original snippet, same surfaces as the card)
+      const orig = (result as { _originalSnippet?: string })._originalSnippet || ""
+      const text = `${result.title || ""} ${result.description || ""} ${orig}`.toLowerCase()
+      const yearMatches = Array.from(text.matchAll(/\b(20\d{2})\b/g)).map((m) => parseInt(m[1], 10))
       if (yearMatches.length > 0) {
         const maxYear = Math.max(...yearMatches)
-        // Consider pages stale if their latest referenced year is more than 1 year in the past
+        // Unambiguous: newest visible year is at least two calendar years behind → drop
         if (maxYear <= currentYear - 2) {
           return false
         }
+        // Weaker: last calendar year only as newest year → keep, penalise in ranking
+        if (maxYear === currentYear - 1) {
+          ;(result as { _weakStaleYearVisibleText?: boolean })._weakStaleYearVisibleText = true
+        }
       }
 
-      // No clear staleness signal - keep the result (web fallback should be lenient)
       return true
     })
     
@@ -1875,6 +1891,7 @@ export async function GET(req: NextRequest) {
     const toPublicWebRow = (row: any) => {
       const {
         _eventnessBoost,
+        _weakStaleYearVisibleText,
         _score,
         _rankBreakdown,
         _resultKind,

@@ -500,6 +500,9 @@ export function scoreSearchResult(args: {
 
   if (kind === "web") {
     mismatchPenalty += aggregatorPenalty(result)
+    if (result._weakStaleYearVisibleText === true) {
+      mismatchPenalty += 24
+    }
     if (!bounds && genericWebPenaltyRaw >= 10) {
       mismatchPenalty += 10
     } else if (bounds && genericWebPenaltyRaw <= 8) {

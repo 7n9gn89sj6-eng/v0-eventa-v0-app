@@ -1789,5 +1789,74 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     )
     expect(comedyHostWeb.length).toBe(2)
   })
+
+  it("web trust: drops unambiguous stale visible year (snippet 2024, no startAt) in default discovery", async () => {
+    fixtureInternalEvents = []
+    fixtureWebResults = [
+      {
+        source: "web",
+        title: "Old season wrap-up",
+        snippet: "Festival highlights and photos from 2024.",
+        url: "https://example.com/old-season-2024",
+      },
+    ]
+
+    const data = await callSearchEvents({
+      query: "music festivals",
+      city: "Melbourne",
+      country: "Australia",
+    })
+
+    expect((data.external || []).some((e: any) => e.externalUrl === "https://example.com/old-season-2024")).toBe(
+      false,
+    )
+  })
+
+  it("web trust: weak visible last-year signal is kept but strongly penalised in ranking (debug)", async () => {
+    fixtureInternalEvents = []
+    fixtureWebResults = [
+      {
+        source: "web",
+        title: "Courtyard night market Melbourne",
+        snippet: "Join us Saturday 15 March 2025 in the square.",
+        url: "https://example.com/night-market-2025",
+      },
+    ]
+
+    const data = await callSearchEvents({
+      query: "music festivals",
+      city: "Melbourne",
+      country: "Australia",
+      debug: true,
+    })
+
+    expect((data.external || []).some((e: any) => e.externalUrl === "https://example.com/night-market-2025")).toBe(
+      true,
+    )
+    const ranked = (data.debugTrace?.rankingUnifiedTop15 || []).find(
+      (r: any) => r.url === "https://example.com/night-market-2025",
+    )
+    expect(ranked?._rankBreakdown?.mismatchPenalty ?? 0).toBeGreaterThanOrEqual(24)
+  })
+
+  it("web trust: history/archive query skips aggressive visible-year drop", async () => {
+    fixtureInternalEvents = []
+    fixtureWebResults = [
+      {
+        source: "web",
+        title: "Archive programme",
+        snippet: "Season recap from 2024 and past performers.",
+        url: "https://example.com/archive-2024",
+      },
+    ]
+
+    const data = await callSearchEvents({
+      query: "historical archive comedy shows",
+      city: "Melbourne",
+      country: "Australia",
+    })
+
+    expect((data.external || []).some((e: any) => e.externalUrl === "https://example.com/archive-2024")).toBe(true)
+  })
 })
 
