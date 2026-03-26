@@ -8,11 +8,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2, ArrowLeft, Mail, Phone, Globe, User, ImageIcon } from "lucide-react"
-import type { EventExtractionOutput, BroadEventCategory } from "@/lib/types"
-import { CATEGORY_LABELS } from "@/lib/ai-extraction-constants"
+import type { EventExtractionOutput } from "@/lib/types"
 import {
+  CANONICAL_EVENT_CATEGORY_VALUES,
   CATEGORY_UI_METADATA,
   coerceToCanonicalEventCategory,
+  eventCategoryPayloadSchema,
+  type CanonicalEventCategory,
 } from "@/lib/categories/canonical-event-category"
 import ClientOnly from "@/components/ClientOnly"
 import { isPublicHttpUrl } from "@/lib/events/public-http-url"
@@ -26,16 +28,6 @@ interface DraftData {
   imageUrl?: string
   externalUrl?: string
   contactInfo?: string
-}
-
-function labelForDraftCategory(category: string): string {
-  if (category === "auto") return "Auto-detect"
-  const canonical = coerceToCanonicalEventCategory(category)
-  if (canonical) return CATEGORY_UI_METADATA[canonical].defaultLabel
-  if (Object.prototype.hasOwnProperty.call(CATEGORY_LABELS, category)) {
-    return CATEGORY_LABELS[category as BroadEventCategory]
-  }
-  return category
 }
 
 export default function ReviewDraftPage() {
@@ -59,6 +51,10 @@ export default function ReviewDraftPage() {
   const [organizerName, setOrganizerName] = useState("")
   /** Required when not signed in: becomes `creatorEmail` for /api/events/submit */
   const [creatorEmailInput, setCreatorEmailInput] = useState("")
+  /** Editable canonical category for create-simple (seeded from draft + extraction). */
+  const [reviewCategory, setReviewCategory] = useState<CanonicalEventCategory | null>(null)
+  /** Required when category is OTHER; max 40 chars aligned with submit schema. */
+  const [customOtherLabel, setCustomOtherLabel] = useState("")
 
   useEffect(() => {
     // Load draft from session storage
@@ -79,6 +75,13 @@ export default function ReviewDraftPage() {
       setImageUrl(data.imageUrl?.trim() || "")
       setContactEmail(data.contactInfo || "")
       setOrganizerName(data.extraction.organizer_name || "")
+
+      const rawCategory = data.category !== "auto" ? data.category : data.extraction.category
+      setReviewCategory(coerceToCanonicalEventCategory(rawCategory) ?? "OTHER")
+      const ex = data.extraction as unknown as Record<string, unknown>
+      const seed =
+        typeof ex.customCategoryLabel === "string" ? ex.customCategoryLabel.trim().slice(0, 40) : ""
+      setCustomOtherLabel(seed)
     } catch (err) {
       console.error("[v0] Failed to load draft:", err)
       router.push("/create-simple")
@@ -113,23 +116,36 @@ export default function ReviewDraftPage() {
   const creatorEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(effectiveCreatorEmail)
 
   const handleSubmit = async () => {
-    if (!draftData) return
+    if (!draftData || !reviewCategory) return
 
     setIsSubmitting(true)
     setError(null)
 
     try {
-      const resolvedCategory =
-        draftData.category !== "auto" ? draftData.category : draftData.extraction.category
+      const categoryPayload = {
+        category: reviewCategory,
+        subcategory: null as string | null,
+        tags: draftData.extraction.tags ?? [],
+        customCategoryLabel: reviewCategory === "OTHER" ? customOtherLabel : null,
+        originalLanguage: null as string | null,
+      }
+      const categoryCheck = eventCategoryPayloadSchema.safeParse(categoryPayload)
+      if (!categoryCheck.success) {
+        const msg =
+          categoryCheck.error.issues[0]?.message ?? "Please check your event category and try again."
+        setError(msg)
+        setIsSubmitting(false)
+        return
+      }
 
-      const submitPayload = {
+      const submitPayload: Record<string, unknown> = {
         title,
         description,
         start: draftData.extraction.start,
         end: draftData.extraction.end,
         timezone: draftData.extraction.timezone,
         location: draftData.extraction.location,
-        category: resolvedCategory,
+        category: reviewCategory,
         price: draftData.extraction.price,
         organizer_name: organizerName,
         organizer_contact: contactEmail || contactPhone || undefined,
@@ -139,6 +155,9 @@ export default function ReviewDraftPage() {
         tags: draftData.extraction.tags,
         extractionConfidence: draftData.extraction.confidence,
         creatorEmail: effectiveCreatorEmail,
+      }
+      if (reviewCategory === "OTHER") {
+        submitPayload.customCategoryLabel = customOtherLabel.trim().slice(0, 40)
       }
 
       const response = await fetch("/api/events/create-simple", {
@@ -167,7 +186,7 @@ export default function ReviewDraftPage() {
     }
   }
 
-  if (!draftData) {
+  if (!draftData || reviewCategory === null) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -294,14 +313,48 @@ export default function ReviewDraftPage() {
               </div>
             </div>
 
-            {/* Category (user + AI resolution, read-only here) */}
+            {/* Category — editable; OTHER requires short label (same rules as event-form / submit schema). */}
             <div>
-              <Label>Category</Label>
-              <div className="mt-1 rounded-lg border bg-muted/50 p-3 text-sm font-medium">
-                {labelForDraftCategory(
-                  draftData.category !== "auto" ? draftData.category : draftData.extraction.category,
-                )}
+              <Label className="text-base font-medium">Event category</Label>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Pick the type that best fits your event. You can change what you chose on the previous step.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {CANONICAL_EVENT_CATEGORY_VALUES.map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => {
+                      setReviewCategory(key)
+                      if (key !== "OTHER") setCustomOtherLabel("")
+                    }}
+                    disabled={isSubmitting}
+                    className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
+                      reviewCategory === key
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background hover:bg-accent"
+                    }`}
+                  >
+                    {CATEGORY_UI_METADATA[key].defaultLabel}
+                  </button>
+                ))}
               </div>
+              {reviewCategory === "OTHER" ? (
+                <div className="mt-4 space-y-2">
+                  <Label htmlFor="review-custom-category-label">
+                    Describe the event type <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="review-custom-category-label"
+                    maxLength={40}
+                    disabled={isSubmitting}
+                    placeholder="Short label (max 40 characters)"
+                    value={customOtherLabel}
+                    onChange={(e) => setCustomOtherLabel(e.target.value.slice(0, 40))}
+                    className="mt-1"
+                  />
+                </div>
+              ) : null}
             </div>
           </CardContent>
         </Card>
@@ -422,7 +475,8 @@ export default function ReviewDraftPage() {
               !title.trim() ||
               !description.trim() ||
               sessionLoading ||
-              !creatorEmailValid
+              !creatorEmailValid ||
+              (reviewCategory === "OTHER" && !customOtherLabel.trim())
             }
             className="flex-1"
           >
