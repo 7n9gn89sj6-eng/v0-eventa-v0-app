@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Loader2, ArrowLeft, Mail, Phone, Globe, User, ImageIcon } from "lucide-react"
+import { Loader2, ArrowLeft, Mail, Phone, Globe, User } from "lucide-react"
 import type { EventExtractionOutput } from "@/lib/types"
 import {
   CANONICAL_EVENT_CATEGORY_VALUES,
@@ -16,8 +16,9 @@ import {
   eventCategoryPayloadSchema,
   type CanonicalEventCategory,
 } from "@/lib/categories/canonical-event-category"
-import ClientOnly from "@/components/ClientOnly"
-import { isPublicHttpUrl } from "@/lib/events/public-http-url"
+import { PlaceAutocomplete } from "@/components/places/place-autocomplete"
+import { EventPosterUpload } from "@/components/events/event-poster-upload"
+import type { SelectedPlaceWire } from "@/lib/places/selected-place"
 
 /** `datetime-local` value in the browser's local timezone (same pattern as event forms). */
 function toDatetimeLocalValue(isoOrDate: string | Date): string {
@@ -57,7 +58,6 @@ export default function ReviewDraftPage() {
   const [externalUrl, setExternalUrl] = useState("")
   /** Editable on review; seeded from simple-flow draft `imageUrl`. */
   const [imageUrl, setImageUrl] = useState("")
-  const [imagePreviewFailed, setImagePreviewFailed] = useState(false)
   const [organizerName, setOrganizerName] = useState("")
   /** Required when not signed in: becomes `creatorEmail` for /api/events/submit */
   const [creatorEmailInput, setCreatorEmailInput] = useState("")
@@ -78,6 +78,10 @@ export default function ReviewDraftPage() {
   const [country, setCountry] = useState("")
   const [coordsLat, setCoordsLat] = useState<number | null>(null)
   const [coordsLng, setCoordsLng] = useState<number | null>(null)
+  /** Mapbox-backed selection; optional — manual address still supported. */
+  const [selectedPlace, setSelectedPlace] = useState<SelectedPlaceWire | null>(null)
+  /** Seed the autocomplete query once from AI venue + address. */
+  const [placeInitialQuery, setPlaceInitialQuery] = useState("")
 
   useEffect(() => {
     // Load draft from session storage
@@ -122,6 +126,8 @@ export default function ReviewDraftPage() {
       setCountry("")
       setCoordsLat(typeof exLoc.lat === "number" && Number.isFinite(exLoc.lat) ? exLoc.lat : null)
       setCoordsLng(typeof exLoc.lng === "number" && Number.isFinite(exLoc.lng) ? exLoc.lng : null)
+      setSelectedPlace(null)
+      setPlaceInitialQuery([exLoc.name, exLoc.address].filter(Boolean).join(", ").trim())
     } catch (err) {
       console.error("[v0] Failed to load draft:", err)
       router.push("/create-simple")
@@ -239,6 +245,17 @@ export default function ReviewDraftPage() {
         locationPayload.lng = coordsLng
       }
 
+      const placeId = selectedPlace?.placeId?.trim()
+      if (placeId) {
+        locationPayload.mapboxPlaceId = placeId
+        const formatted =
+          addressLine.trim() || selectedPlace?.formattedAddress?.trim() || ""
+        if (formatted) locationPayload.formattedAddress = formatted
+        if (selectedPlace?.parentCity !== undefined && selectedPlace?.parentCity !== null) {
+          locationPayload.parentCity = selectedPlace.parentCity
+        }
+      }
+
       const submitPayload: Record<string, unknown> = {
         title,
         description,
@@ -348,47 +365,14 @@ export default function ReviewDraftPage() {
               />
             </div>
 
-            {/* Poster / banner image URL (from simple flow optional field; editable here) */}
+            {/* Poster / banner — same drag/drop + URL fallback as Post Event / create-simple */}
             <div>
-              <Label htmlFor="image-url-review">Poster or banner (from upload or link)</Label>
-              <div className="flex gap-2">
-                <ImageIcon className="mt-2.5 h-5 w-5 shrink-0 text-muted-foreground" />
-                <div className="min-w-0 flex-1 space-y-2">
-                  <Input
-                    id="image-url-review"
-                    type="url"
-                    value={imageUrl}
-                    onChange={(e) => {
-                      setImageUrl(e.target.value)
-                      setImagePreviewFailed(false)
-                    }}
-                    placeholder="https://example.com/poster.jpg"
-                    className="mt-1"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Optional. Matches what you uploaded or pasted on the previous step; edit the link here if needed
-                    before publishing.
-                  </p>
-                  {imageUrl.trim() && isPublicHttpUrl(imageUrl) && !imagePreviewFailed ? (
-                    <ClientOnly>
-                      <div className="overflow-hidden rounded-md border bg-muted/30 p-2">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={imageUrl.trim()}
-                          alt=""
-                          className="mx-auto max-h-48 w-auto max-w-full object-contain"
-                          onError={() => setImagePreviewFailed(true)}
-                        />
-                      </div>
-                    </ClientOnly>
-                  ) : null}
-                  {imageUrl.trim() && imagePreviewFailed ? (
-                    <p className="text-xs text-amber-700 dark:text-amber-500">
-                      Preview unavailable (blocked URL or not an image). The link will still be saved if it is valid.
-                    </p>
-                  ) : null}
-                </div>
-              </div>
+              <EventPosterUpload
+                imageUrl={imageUrl}
+                onImageUrlChange={setImageUrl}
+                disabled={isSubmitting}
+                urlInputId="image-url-review"
+              />
             </div>
 
             {/* Date & Time — editable */}
@@ -431,8 +415,35 @@ export default function ReviewDraftPage() {
               </div>
             </div>
 
-            {/* Location — editable */}
+            {/* Location — autocomplete + editable fields (Post Event pattern) */}
             <div className="space-y-4">
+              <PlaceAutocomplete
+                disabled={isSubmitting}
+                id="review-draft-location-search"
+                testId="review-draft-place-autocomplete"
+                allowEditQueryWhileSelected
+                initialQuery={placeInitialQuery}
+                label="Find address on map"
+                description="Start typing an address or place name, then choose the correct option from the list. You can still edit each field below."
+                onResolved={(place) => {
+                  setSelectedPlace(place)
+                  setVenueName(place.venueName?.trim() || "")
+                  setAddressLine(place.formattedAddress ?? "")
+                  setCity(place.city ?? "")
+                  setStateRegion(place.region?.trim() ?? "")
+                  setCountry(place.country ?? "")
+                  setCoordsLat(typeof place.lat === "number" && Number.isFinite(place.lat) ? place.lat : null)
+                  setCoordsLng(typeof place.lng === "number" && Number.isFinite(place.lng) ? place.lng : null)
+                }}
+                onClear={() => {
+                  setSelectedPlace(null)
+                  setVenueName("")
+                  setAddressLine("")
+                  setCoordsLat(null)
+                  setCoordsLng(null)
+                }}
+              />
+
               <div>
                 <Label htmlFor="review-venue">Venue or place name</Label>
                 <Input
