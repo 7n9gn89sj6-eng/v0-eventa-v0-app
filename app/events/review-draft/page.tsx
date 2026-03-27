@@ -19,6 +19,14 @@ import {
 import ClientOnly from "@/components/ClientOnly"
 import { isPublicHttpUrl } from "@/lib/events/public-http-url"
 
+/** `datetime-local` value in the browser's local timezone (same pattern as event forms). */
+function toDatetimeLocalValue(isoOrDate: string | Date): string {
+  const d = typeof isoOrDate === "string" ? new Date(isoOrDate) : isoOrDate
+  if (Number.isNaN(d.getTime())) return ""
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 interface DraftData {
   sourceText: string
   extraction: EventExtractionOutput
@@ -58,6 +66,19 @@ export default function ReviewDraftPage() {
   /** Required when category is OTHER; max 40 chars aligned with submit schema. */
   const [customOtherLabel, setCustomOtherLabel] = useState("")
 
+  /** When / where — editable before publish (replaces read-only AI extraction). */
+  const [startLocal, setStartLocal] = useState("")
+  const [endLocal, setEndLocal] = useState("")
+  const [timezoneReview, setTimezoneReview] = useState("")
+  const [venueName, setVenueName] = useState("")
+  const [addressLine, setAddressLine] = useState("")
+  const [city, setCity] = useState("")
+  const [stateRegion, setStateRegion] = useState("")
+  const [postcode, setPostcode] = useState("")
+  const [country, setCountry] = useState("")
+  const [coordsLat, setCoordsLat] = useState<number | null>(null)
+  const [coordsLng, setCoordsLng] = useState<number | null>(null)
+
   useEffect(() => {
     // Load draft from session storage
     const stored = sessionStorage.getItem("ai-event-draft")
@@ -88,6 +109,19 @@ export default function ReviewDraftPage() {
       const exLabel =
         typeof ex.customCategoryLabel === "string" ? String(ex.customCategoryLabel).trim().slice(0, 40) : ""
       setCustomOtherLabel(coerced === "OTHER" ? topLabel || exLabel : "")
+
+      const exLoc = data.extraction.location
+      setStartLocal(toDatetimeLocalValue(data.extraction.start))
+      setEndLocal(data.extraction.end ? toDatetimeLocalValue(data.extraction.end) : "")
+      setTimezoneReview(data.extraction.timezone ?? "")
+      setVenueName(exLoc.name ?? "")
+      setAddressLine(exLoc.address ?? "")
+      setCity("")
+      setStateRegion("")
+      setPostcode("")
+      setCountry("")
+      setCoordsLat(typeof exLoc.lat === "number" && Number.isFinite(exLoc.lat) ? exLoc.lat : null)
+      setCoordsLng(typeof exLoc.lng === "number" && Number.isFinite(exLoc.lng) ? exLoc.lng : null)
     } catch (err) {
       console.error("[v0] Failed to load draft:", err)
       router.push("/create-simple")
@@ -164,13 +198,55 @@ export default function ReviewDraftPage() {
         return
       }
 
+      if (!startLocal.trim()) {
+        setError("Please set a start date and time.")
+        setIsSubmitting(false)
+        return
+      }
+      const startDate = new Date(startLocal)
+      if (Number.isNaN(startDate.getTime())) {
+        setError("Start date and time is not valid.")
+        setIsSubmitting(false)
+        return
+      }
+
+      let endForPayload: string | null = null
+      if (endLocal.trim()) {
+        const endDate = new Date(endLocal)
+        if (Number.isNaN(endDate.getTime())) {
+          setError("End date and time is not valid.")
+          setIsSubmitting(false)
+          return
+        }
+        if (endDate.getTime() <= startDate.getTime()) {
+          setError("End must be after start.")
+          setIsSubmitting(false)
+          return
+        }
+        endForPayload = endDate.toISOString()
+      }
+
+      const locationPayload: Record<string, unknown> = {
+        name: venueName.trim() || undefined,
+        address: addressLine.trim() || undefined,
+        city: city.trim() || undefined,
+        state: stateRegion.trim() || undefined,
+        postcode: postcode.trim() || undefined,
+        country: country.trim() || undefined,
+      }
+      if (coordsLat != null && coordsLng != null && Number.isFinite(coordsLat) && Number.isFinite(coordsLng)) {
+        locationPayload.lat = coordsLat
+        locationPayload.lng = coordsLng
+      }
+
       const submitPayload: Record<string, unknown> = {
         title,
         description,
-        start: draftData.extraction.start,
-        end: draftData.extraction.end,
-        timezone: draftData.extraction.timezone,
-        location: draftData.extraction.location,
+        start: startDate.toISOString(),
+        /** `null` = no separate end (create-simple must not fall back to extraction). */
+        end: endForPayload,
+        timezone: timezoneReview.trim() || draftData.extraction.timezone || undefined,
+        location: locationPayload,
         category: reviewCategory,
         price: draftData.extraction.price,
         organizer_name: organizerName,
@@ -315,28 +391,122 @@ export default function ReviewDraftPage() {
               </div>
             </div>
 
-            {/* Date & Time (Read-only from AI) */}
-            <div>
-              <Label>Date & Time</Label>
-              <div className="mt-1 rounded-lg border bg-muted/50 p-3 text-sm">
-                <ClientOnly>
-                  <p className="font-medium">{new Date(draftData.extraction.start).toLocaleString()}</p>
-                  {draftData.extraction.end && (
-                    <p className="text-muted-foreground">to {new Date(draftData.extraction.end).toLocaleString()}</p>
-                  )}
-                </ClientOnly>
+            {/* Date & Time — editable */}
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="review-start">Start date & time *</Label>
+                <Input
+                  id="review-start"
+                  type="datetime-local"
+                  value={startLocal}
+                  onChange={(e) => setStartLocal(e.target.value)}
+                  disabled={isSubmitting}
+                  className="mt-1 max-w-md"
+                />
+              </div>
+              <div>
+                <Label htmlFor="review-end">End date & time</Label>
+                <Input
+                  id="review-end"
+                  type="datetime-local"
+                  value={endLocal}
+                  onChange={(e) => setEndLocal(e.target.value)}
+                  disabled={isSubmitting}
+                  className="mt-1 max-w-md"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Optional. Leave blank to use only the start time (single moment or all-day style).
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="review-timezone">Timezone (optional)</Label>
+                <Input
+                  id="review-timezone"
+                  value={timezoneReview}
+                  onChange={(e) => setTimezoneReview(e.target.value)}
+                  disabled={isSubmitting}
+                  placeholder="e.g. Australia/Melbourne"
+                  className="mt-1 max-w-md"
+                />
               </div>
             </div>
 
-            {/* Location (Read-only from AI) */}
-            <div>
-              <Label>Location</Label>
-              <div className="mt-1 rounded-lg border bg-muted/50 p-3 text-sm">
-                <p className="font-medium">{draftData.extraction.location.name || "Venue"}</p>
-                {draftData.extraction.location.address && (
-                  <p className="text-muted-foreground">{draftData.extraction.location.address}</p>
-                )}
+            {/* Location — editable */}
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="review-venue">Venue or place name</Label>
+                <Input
+                  id="review-venue"
+                  value={venueName}
+                  onChange={(e) => setVenueName(e.target.value)}
+                  disabled={isSubmitting}
+                  placeholder="e.g. Railway Hotel"
+                  className="mt-1"
+                />
               </div>
+              <div>
+                <Label htmlFor="review-address">Street address</Label>
+                <Input
+                  id="review-address"
+                  value={addressLine}
+                  onChange={(e) => setAddressLine(e.target.value)}
+                  disabled={isSubmitting}
+                  placeholder="Street, suburb, or full address"
+                  className="mt-1"
+                />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="review-city">City / suburb</Label>
+                  <Input
+                    id="review-city"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    disabled={isSubmitting}
+                    placeholder="City"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="review-state">State / province</Label>
+                  <Input
+                    id="review-state"
+                    value={stateRegion}
+                    onChange={(e) => setStateRegion(e.target.value)}
+                    disabled={isSubmitting}
+                    placeholder="State"
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="review-postcode">Postcode</Label>
+                  <Input
+                    id="review-postcode"
+                    value={postcode}
+                    onChange={(e) => setPostcode(e.target.value)}
+                    disabled={isSubmitting}
+                    placeholder="Postcode"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="review-country">Country</Label>
+                  <Input
+                    id="review-country"
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                    disabled={isSubmitting}
+                    placeholder="Country"
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Add city and country when you know them — it helps attendees and maps. We’ll match your text when
+                possible.
+              </p>
             </div>
 
             {/* Category — editable; OTHER requires short label (same rules as event-form / submit schema). */}
@@ -500,6 +670,7 @@ export default function ReviewDraftPage() {
               isSubmitting ||
               !title.trim() ||
               !description.trim() ||
+              !startLocal.trim() ||
               sessionLoading ||
               !creatorEmailValid ||
               (reviewCategory === "OTHER" && !customOtherLabel.trim())

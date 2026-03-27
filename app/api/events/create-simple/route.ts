@@ -34,24 +34,31 @@ export async function POST(req: Request) {
     const externalUrlTrimmed =
       typeof body.externalUrl === "string" && body.externalUrl.trim() ? body.externalUrl.trim() : undefined
 
+    const extraction = body.extraction as Record<string, unknown> | undefined
+    const endForSubmit = Object.hasOwn(body, "end")
+      ? body.end === null || body.end === ""
+        ? undefined
+        : body.end
+      : extraction?.end
+
     const canonicalPayload = {
-      title: body.title || (body.extraction as Record<string, unknown> | undefined)?.title,
-      description: body.description || String((body.extraction as Record<string, unknown> | undefined)?.description ?? "") || "",
-      start: body.start || (body.extraction as Record<string, unknown> | undefined)?.start,
-      end: body.end || (body.extraction as Record<string, unknown> | undefined)?.end,
-      timezone: body.timezone || (body.extraction as Record<string, unknown> | undefined)?.timezone,
-      location: body.location || (body.extraction as Record<string, unknown> | undefined)?.location,
+      title: body.title || extraction?.title,
+      description: body.description || String(extraction?.description ?? "") || "",
+      start: body.start || extraction?.start,
+      end: endForSubmit,
+      timezone: body.timezone || extraction?.timezone,
+      location: body.location || extraction?.location,
       category: resolvedCategory,
-      tags: body.tags ?? (body.extraction as Record<string, unknown> | undefined)?.tags,
+      tags: body.tags ?? extraction?.tags,
       customCategoryLabel: resolvedCustomLabel,
       originalLanguage: body.originalLanguage ?? null,
-      price: body.price || (body.extraction as Record<string, unknown> | undefined)?.price,
-      organizer_name: body.organizer_name || (body.extraction as Record<string, unknown> | undefined)?.organizer_name,
+      price: body.price || extraction?.price,
+      organizer_name: body.organizer_name || extraction?.organizer_name,
       organizer_contact: body.organizer_contact || body.contactInfo,
       source_text: body.source_text || body.sourceText,
       imageUrl: imageUrlTrimmed,
       externalUrl: externalUrlTrimmed,
-      extractionConfidence: body.extractionConfidence || (body.extraction as Record<string, unknown> | undefined)?.confidence,
+      extractionConfidence: body.extractionConfidence || extraction?.confidence,
       creatorEmail: creatorParsed.email,
     }
 
