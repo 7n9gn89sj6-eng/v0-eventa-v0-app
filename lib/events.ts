@@ -61,6 +61,46 @@ export const PUBLIC_EVENT_WHERE = {
 } as const
 
 /**
+ * Public “live” listings: published, approved, and not past `endAt` (per row).
+ * Use for catalog/list APIs and anonymous detail parity with discover date rules.
+ */
+export function publicLiveListingWhere(now: Date = new Date()) {
+  return {
+    ...PUBLIC_EVENT_WHERE,
+    endAt: { gte: now },
+  }
+}
+
+/**
+ * True when an event row should be treated as a normal live public listing at `at`.
+ */
+export function isPublicLiveListing(
+  event: { status: EventStatus; moderationStatus: string; endAt: Date },
+  at: Date = new Date(),
+): boolean {
+  return (
+    event.status === "PUBLISHED" &&
+    event.moderationStatus === "APPROVED" &&
+    event.endAt.getTime() >= at.getTime()
+  )
+}
+
+/**
+ * Published + approved + `endAt` in the past: no longer a live public listing (e.g. public detail 404).
+ * Does not apply to draft / moderation-flagged rows (those keep their existing visibility rules).
+ */
+export function isPastPublicLiveListing(
+  event: { status: EventStatus; moderationStatus: string; endAt: Date },
+  at: Date = new Date(),
+): boolean {
+  return (
+    event.status === "PUBLISHED" &&
+    event.moderationStatus === "APPROVED" &&
+    event.endAt.getTime() < at.getTime()
+  )
+}
+
+/**
  * Get admin-friendly display status for an event.
  * Combines status and aiStatus into a single, clear representation.
  *

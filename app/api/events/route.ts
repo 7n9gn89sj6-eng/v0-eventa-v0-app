@@ -6,7 +6,7 @@ import { geocodeAddress, GeocodingConfigError } from "@/lib/geocoding"
 import { createSearchTextFolded } from "@/lib/search/accent-fold"
 import { createEventEditToken } from "@/lib/eventEditToken"
 import { ok, fail, validationError } from "@/lib/http"
-import { PUBLIC_EVENT_WHERE } from "@/lib/events"
+import { publicLiveListingWhere } from "@/lib/events"
 import { detectEventLanguage } from "@/lib/search/language-detection-enhanced"
 import { generateEventEmbedding, shouldSkipEmbedding } from "@/lib/embeddings/generate"
 import { storeEventEmbedding } from "@/lib/embeddings/store"
@@ -62,14 +62,14 @@ export async function GET(request: NextRequest) {
     const limit = Number.parseInt(searchParams.get("limit") || "50")
 
     const where: any = {}
+    const now = new Date()
 
     if (status) {
       where.status = status
+      where.moderationStatus = "APPROVED"
     } else {
-      Object.assign(where, PUBLIC_EVENT_WHERE)
+      Object.assign(where, publicLiveListingWhere(now))
     }
-
-    where.moderationStatus = "APPROVED"
 
     if (category) {
       where.categories = { has: category }

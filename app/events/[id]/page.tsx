@@ -3,13 +3,14 @@ import { db } from "@/lib/db"
 import { EventDetail } from "@/components/events/event-detail"
 import type { Metadata } from "next"
 import { getSession } from "@/lib/jwt"
+import { isPastPublicLiveListing } from "@/lib/events"
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params
 
   const event = await db.event.findUnique({
     where: { id },
-    select: { title: true, description: true, status: true },
+    select: { title: true, description: true, status: true, endAt: true, moderationStatus: true },
   })
 
   if (!event) {
@@ -19,6 +20,13 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   }
 
   if (event.status === "ARCHIVED") {
+    return {
+      title: "Listing unavailable - Eventa",
+      description: "This listing is no longer on Eventa.",
+    }
+  }
+
+  if (isPastPublicLiveListing(event, new Date())) {
     return {
       title: "Listing unavailable - Eventa",
       description: "This listing is no longer on Eventa.",
@@ -60,6 +68,10 @@ export default async function EventPage({
   }
 
   if (event.status === "ARCHIVED") {
+    notFound()
+  }
+
+  if (isPastPublicLiveListing(event, new Date())) {
     notFound()
   }
 
