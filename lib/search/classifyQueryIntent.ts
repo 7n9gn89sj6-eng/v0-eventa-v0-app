@@ -149,6 +149,33 @@ export function containsRareOrBrandedToken(query: string): boolean {
 }
 
 /**
+ * Multi-word title case + performance vocabulary ("gig", "show", "playing", …).
+ * Covers questions like "when are These New South Whales next gig" without relying on parsed music interest.
+ */
+export function hasNamedArtistPerformanceFraming(raw: string): boolean {
+  const trimmed = normalizeQueryForClassification(raw)
+  if (!trimmed) return false
+  const lower = trimmed.toLowerCase()
+  if (hasBroadBrowsePhrase(lower)) return false
+  if (
+    !/\b(?:gigs?|shows?|playing|tours?|on\s+tour|concerts?)\b/.test(lower)
+  ) {
+    return false
+  }
+  const caps = trimmed.match(/\b[A-Z][a-z]{2,}\b/g) || []
+  if (caps.length < 2) return false
+  const toks = tokenizeQuery(trimmed)
+  if (toks.length < 4 || toks.length > 12) return false
+
+  const whenFramed = /\bwhen\s+(?:is|are|was|do|does|did|will)\b/i.test(lower)
+  const whereFramed = /\bwhere\s+(?:is|are)\b/i.test(lower)
+  if (whenFramed || whereFramed) return true
+  // "Foo Bar Baz tour" — likely an act name, not "live music gig" (usually <3 caps).
+  if (caps.length >= 3) return true
+  return false
+}
+
+/**
  * Title-like: bounded length, not dominated by browse phrasing, no leading "events in".
  */
 export function hasStrongNamedEventSignal(query: string, parsedIntent?: SearchIntent): boolean {
@@ -165,6 +192,11 @@ export function hasStrongNamedEventSignal(query: string, parsedIntent?: SearchIn
     return false
   }
 
+  // Artist / band + gig or show framing → exact-style ranking even with parsed music interest or time words.
+  if (hasNamedArtistPerformanceFraming(raw)) {
+    return true
+  }
+
   // Category + time + place (e.g. "comedy this Friday in London") is not a named title.
   if (
     hasTimePhrase(raw) &&
@@ -176,7 +208,7 @@ export function hasStrongNamedEventSignal(query: string, parsedIntent?: SearchIn
   }
 
   const toks = tokenizeQuery(raw)
-  if (toks.length < 2 || toks.length > 10) return false
+  if (toks.length < 2 || toks.length > 12) return false
 
   if (hasBroadBrowsePhrase(raw) || hasConversationalPhrase(raw)) {
     if (containsBrandedAcronym(raw) || containsInternationalFestivalTitle(raw) || GREEK_OR_RARE_TAG.test(raw)) {
@@ -211,7 +243,7 @@ export function hasStrongNamedEventSignal(query: string, parsedIntent?: SearchIn
   if (
     capitalizedWords.length >= 2 &&
     toks.length >= 3 &&
-    toks.length <= 7 &&
+    toks.length <= 12 &&
     !hasBroadBrowsePhrase(lower)
   ) {
     return true
@@ -219,7 +251,7 @@ export function hasStrongNamedEventSignal(query: string, parsedIntent?: SearchIn
 
   if (
     toks.length >= 3 &&
-    toks.length <= 8 &&
+    toks.length <= 12 &&
     !hasBroadBrowsePhrase(lower) &&
     !hasConversationalPhrase(lower) &&
     (parsedIntent?.interest?.length ?? 0) === 0

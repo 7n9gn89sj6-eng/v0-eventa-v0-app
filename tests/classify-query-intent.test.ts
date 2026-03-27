@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { parseSearchIntent } from "@/app/lib/search/parseSearchIntent"
 import {
   classifyQueryIntent,
+  hasNamedArtistPerformanceFraming,
   mapSearchIntentTypeToMode,
   type SearchIntentType,
 } from "@/lib/search/classifyQueryIntent"
@@ -27,8 +28,31 @@ describe("classifyQueryIntent (Phase 2.1)", () => {
       ["Paris HYROX"],
       ["Melbourne International Comedy Festival"],
       ["Lantern Festival Alpha"],
+      ["when are These New South Whales next gig"],
+      ["when is Florence and the Machine playing"],
     ])("%s -> named_event / exact", (q) => {
       expectShape(q, "named_event", "exact")
+    })
+
+    it("artist + gig keeps named_event when parser also inferred music interest", () => {
+      const q = "when are These New South Whales next gig"
+      const parsed = parseSearchIntent(q)
+      const withMusic = { ...parsed, interest: ["music"] as string[] }
+      const c = classifyQueryIntent(q, withMusic)
+      expect(c.intentType).toBe("named_event")
+      expect(c.mode).toBe("exact")
+    })
+  })
+
+  describe("hasNamedArtistPerformanceFraming", () => {
+    it("detects when-framed band + gig queries", () => {
+      expect(hasNamedArtistPerformanceFraming("when are These New South Whales next gig")).toBe(true)
+      expect(hasNamedArtistPerformanceFraming("where are The Wiggles playing")).toBe(true)
+    })
+    it("rejects category-browse and generic listings", () => {
+      expect(hasNamedArtistPerformanceFraming("live music Sydney")).toBe(false)
+      expect(hasNamedArtistPerformanceFraming("events in Melbourne")).toBe(false)
+      expect(hasNamedArtistPerformanceFraming("fun things to do")).toBe(false)
     })
   })
 
