@@ -49,6 +49,12 @@ export type SearchIntent = {
   /** Deterministic sub-category hint IDs (`lib/categories/event-subcategories.ts`); ranking only. */
   subcategoryHints?: string[]
 
+  /**
+   * User asked for past/archive-style content; default-forward stale suppression (e.g. web visible-year) should relax.
+   * Set from normalized query only; same semantics everywhere this flag is read.
+   */
+  wantsPastOrHistory?: boolean
+
   confidence?: number
 }
 
@@ -96,6 +102,15 @@ const COUNTRY_PATTERNS: Array<{ pattern: RegExp; value: string }> = [
 
 function dedupe(values: string[]): string[] {
   return [...new Set(values)]
+}
+
+/** True when normalized query clearly asks for past or archival results (not general "history" topics). */
+export function extractWantsPastOrHistory(normalizedQuery: string): boolean {
+  const s = normalizedQuery.trim()
+  if (!s) return false
+  return /\b(past\s+events?|archive|archives|historical|history\s+of|retro|old\s+events?|previous\s+years?)\b/i.test(
+    s,
+  )
 }
 
 function extractInterests(query: string): string[] {
@@ -354,6 +369,7 @@ export function parseSearchIntent(query: string): SearchIntent {
   const { place, placeEvidence } = extractPlaceWithEvidence(nq)
   const scope = detectScope(nq, place)
   const context = extractSearchIntentContext(nq)
+  const wantsPastOrHistory = extractWantsPastOrHistory(nq)
 
   let confidence = 0.3
   if (interests.length > 0) confidence += 0.15
@@ -374,6 +390,7 @@ export function parseSearchIntent(query: string): SearchIntent {
     price: price.length > 0 ? price : undefined,
     context: context.length > 0 ? context : undefined,
     subcategoryHints: subcategoryHints.length > 0 ? subcategoryHints : undefined,
+    wantsPastOrHistory: wantsPastOrHistory ? true : undefined,
     confidence: Math.max(0, Math.min(1, confidence)),
   }
 }

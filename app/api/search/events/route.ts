@@ -50,15 +50,6 @@ import { microLocationForWebSearch } from "@/lib/search/micro-location-for-web"
 import { topicQueryForCityLevelWeb } from "@/lib/search/topic-query-for-city-level-web"
 import { hasAustraliaIndicators, hasUSIndicatorsInText } from "@/lib/search/core/geo"
 
-/** User wants past/archive-style results; skip aggressive visible-year stale rules for web rows. */
-function wantsHistoryQuery(rawQuery: string): boolean {
-  const s = rawQuery.trim()
-  if (!s) return false
-  return /\b(past\s+events?|archive|archives|historical|history\s+of|retro|old\s+events?|previous\s+years?)\b/i.test(
-    s,
-  )
-}
-
 /** Structured OR filter: event.country matches any resolved region member. */
 function applyRegionCountriesWhere(where: any, countries: string[]) {
   if (!countries.length) return
@@ -1681,7 +1672,7 @@ export async function GET(req: NextRequest) {
     // CRITICAL: Don't drop web results solely because date is missing
     // Gig guides/listing pages often don't have parseable dates but are still valid event sources
     const currentYear = now.getFullYear()
-    const wantsHistory = wantsHistoryQuery(q)
+    const wantsHistory = Boolean(parsedIntent.wantsPastOrHistory)
     let filteredWebResults = webResults.filter((result) => {
       // Only filter by date if date is present and parseable
       if (result.startAt) {
