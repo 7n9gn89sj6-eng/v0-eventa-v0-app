@@ -8,7 +8,11 @@ import type { EventCategory } from "@prisma/client"
 import { resolveUrlCategoryToPrismaEnum } from "@/lib/categories/canonical-event-category"
 import { searchWeb } from "@/lib/search/web-search"
 import { withLanguageColumnGuard, getEventSelectWithoutLanguage, isLanguageFilteringAvailable } from "@/lib/db-runtime-guard"
-import { buildDateOverlapWhere, buildDateRangeOverlapWhere } from "@/lib/search/date-overlap"
+import {
+  buildDateOverlapWhere,
+  buildDateRangeOverlapWhere,
+  dateRangeOverlapSearchStart,
+} from "@/lib/search/date-overlap"
 import { isEventIntentQuery } from "@/lib/search/event-ranking"
 import { applyBroadWebHostDiversity } from "@/lib/search/broad-web-host-diversity"
 import { applyNamedEventSameHostWebDedupe } from "@/lib/search/named-event-same-host-dedupe"
@@ -500,7 +504,11 @@ export async function GET(req: NextRequest) {
       if (dateFrom && dateTo) {
         const dateFromDate = new Date(dateFrom)
         const dateToDate = new Date(dateTo)
-        const searchStart = dateFromDate > now ? dateFromDate : now
+        const searchStart = dateRangeOverlapSearchStart(
+          dateFromDate,
+          now,
+          parsedIntent.time?.relativeWindowType,
+        )
         const dateOverlap = buildDateRangeOverlapWhere(searchStart, dateToDate)
         Object.assign(where, dateOverlap)
         console.log(`[v0] Date filter (range overlap): searchStart=${searchStart.toISOString()}, searchEnd=${dateToDate.toISOString()}`)
@@ -703,7 +711,11 @@ export async function GET(req: NextRequest) {
     if (dateFrom && dateTo) {
       const dateFromDate = new Date(dateFrom)
       const dateToDate = new Date(dateTo)
-      const searchStart = dateFromDate > now ? dateFromDate : now
+      const searchStart = dateRangeOverlapSearchStart(
+        dateFromDate,
+        now,
+        parsedIntent.time?.relativeWindowType,
+      )
       if (searchStart.getTime() > dateToDate.getTime()) {
         console.warn(
           "[v0] Date range empty after clamp (searchStart > searchEnd); using default forward window.",

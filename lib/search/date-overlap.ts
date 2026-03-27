@@ -14,8 +14,6 @@
  * - Past event (Nov 1 - Nov 5), search today: ❌ Excluded (ended)
  */
 
-import { DateTime } from "luxon"
-
 export interface DateOverlapFilter {
   startAt?: {
     lte?: Date
@@ -85,5 +83,21 @@ export function buildDateRangeOverlapWhere(
       gte: startDate, // Event ends after search window starts
     },
   }
+}
+
+/**
+ * Start of `[dateFrom, dateTo]` overlap filter in `/api/search/events`.
+ * Calendar weekend buckets use the full parsed window so Saturday-morning events are not
+ * dropped when the user searches mid-weekend; other ranges still clamp `past start → now`.
+ */
+export function dateRangeOverlapSearchStart(
+  dateFromDate: Date,
+  now: Date,
+  relativeWindowType: string | undefined,
+): Date {
+  if (relativeWindowType === "this_weekend" || relativeWindowType === "next_weekend") {
+    return dateFromDate
+  }
+  return dateFromDate > now ? dateFromDate : now
 }
 
