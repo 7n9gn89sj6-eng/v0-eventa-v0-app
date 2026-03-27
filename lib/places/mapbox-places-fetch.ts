@@ -20,13 +20,14 @@ export async function mapboxPlacesForwardSuggest(
   const q = query.trim()
   if (q.length < 2) return []
 
-  const limit = Math.min(Math.max(opts?.limit ?? 6, 1), 10)
+  const limit = Math.min(Math.max(opts?.limit ?? 10, 1), 10)
   const path = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json`
   const url = new URL(path)
   url.searchParams.set("access_token", token)
   url.searchParams.set("autocomplete", "true")
   url.searchParams.set("limit", String(limit))
-  url.searchParams.set("types", "address,poi,place,locality,neighborhood")
+  // poi first: same type set, slightly better POI prominence in combined relevance for venue-style queries.
+  url.searchParams.set("types", "poi,address,place,locality,neighborhood")
 
   try {
     const response = await fetch(url.toString())

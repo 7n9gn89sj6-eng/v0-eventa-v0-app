@@ -98,6 +98,58 @@ describe("mapMapboxFeatureToSelectedPlace", () => {
     expect(wire.parentCity).toBeNull()
     expect(wire.venueName).toBeNull()
   })
+
+  it("weak address: no city from street text; no fake country from single-segment place_name", () => {
+    const feature: MapboxFeature = {
+      id: "address.nicholson",
+      type: "Feature",
+      place_type: ["address"],
+      text: "Nicholson Street",
+      place_name: "Nicholson Street",
+      center: [144.98, -37.78],
+      context: [],
+    }
+    const wire = mapMapboxFeatureToSelectedPlace(feature)
+    expect(wire.city).toBe("")
+    expect(wire.country).toBe("")
+    expect(wire.formattedAddress).toBe("Nicholson Street")
+    expect(wire.lat).toBe(-37.78)
+    expect(wire.lng).toBe(144.98)
+  })
+
+  it("address with locality in context: city from locality; country from known place_name tail", () => {
+    const feature: MapboxFeature = {
+      id: "address.railway",
+      type: "Feature",
+      place_type: ["address"],
+      text: "800 Nicholson Street",
+      place_name: "800 Nicholson Street, North Fitzroy, Victoria, Australia",
+      center: [144.98, -37.78],
+      context: [
+        { id: "locality.1", text: "North Fitzroy" },
+        { id: "region.2", text: "Victoria" },
+      ],
+    }
+    const wire = mapMapboxFeatureToSelectedPlace(feature)
+    expect(wire.city).toBe("North Fitzroy")
+    expect(wire.country).toBe("Australia")
+    expect(wire.region).toBe("Victoria")
+  })
+
+  it("does not use unknown place_name tail as country", () => {
+    const feature: MapboxFeature = {
+      id: "address.foo",
+      type: "Feature",
+      place_type: ["address"],
+      text: "Main Road",
+      place_name: "Main Road, Fauxlandia",
+      center: [0, 0],
+      context: [{ id: "locality.1", text: "Somewhere" }],
+    }
+    const wire = mapMapboxFeatureToSelectedPlace(feature)
+    expect(wire.city).toBe("Somewhere")
+    expect(wire.country).toBe("")
+  })
 })
 
 describe("mapFeaturesToSuggestions", () => {
@@ -185,6 +237,24 @@ describe("/api/places/resolve", () => {
     expect(res.status).toBe(404)
     const body = (await res.json()) as { place: null }
     expect(body.place).toBeNull()
+  })
+
+  it("GET succeeds when city/country are empty but core address + coords exist", async () => {
+    retrieveMock.mockResolvedValueOnce({
+      id: "address.weak",
+      type: "Feature",
+      place_type: ["address"],
+      text: "Nicholson Street",
+      place_name: "Nicholson Street",
+      center: [144.98, -37.78],
+      context: [],
+    })
+    const req = new NextRequest("http://localhost/api/places/resolve?id=address.weak")
+    const res = await resolveGet(req)
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { place: { city: string; country: string } }
+    expect(body.place.city).toBe("")
+    expect(body.place.country).toBe("")
   })
 
   it("POST feature payload resolves without retrieve", async () => {

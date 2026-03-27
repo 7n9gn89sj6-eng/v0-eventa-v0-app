@@ -1,5 +1,6 @@
 import type { MapboxFeature } from "@/lib/geocoding"
 import { mapboxStructuredFromFeature } from "@/lib/geocoding"
+import { mapboxCountryFromPlaceNameTailIfKnown } from "@/lib/places/mapbox-known-countries"
 import type { SelectedPlaceWire } from "@/lib/places/selected-place"
 
 function sameName(a: string, b: string): boolean {
@@ -22,25 +23,21 @@ function placeFromContext(feature: MapboxFeature): string | null {
   return trimOrNull(c?.text)
 }
 
-function fallbackCountryFromPlaceName(placeName: string | undefined | null): string | null {
-  if (!placeName?.trim()) return null
-  const parts = placeName.split(",").map((p) => p.trim()).filter(Boolean)
-  if (parts.length === 0) return null
-  return parts[parts.length - 1] ?? null
-}
-
 /**
  * Normalize a Mapbox Geocoding feature into {@link SelectedPlaceWire}.
- * - city prefers locality-level structured.locality, then context place, then feature.text / place_name.
+ * - city: locality + context place; for {@code address} features never use {@code feature.text} (street).
+ * - country: Mapbox structured country only, or a {@code place_name} tail that matches a known country.
  * - parentCity follows structured rules; when locality exists and differs from context place, parent is place.
- * - optional strings use null when absent (no undefined).
  */
 export function mapMapboxFeatureToSelectedPlace(feature: MapboxFeature): SelectedPlaceWire {
   const structured = mapboxStructuredFromFeature(feature)
   const plc = placeFromContext(feature)
+  const primaryType = feature.place_type?.[0]
 
   let city =
-    trimOrEmpty(structured.locality) || trimOrEmpty(plc) || trimOrEmpty(feature.text) || ""
+    primaryType === "address"
+      ? trimOrEmpty(structured.locality) || trimOrEmpty(plc) || ""
+      : trimOrEmpty(structured.locality) || trimOrEmpty(plc) || trimOrEmpty(feature.text) || ""
 
   let parentCity: string | null = trimOrNull(structured.parentCity)
   const loc = trimOrNull(structured.locality)
@@ -52,7 +49,8 @@ export function mapMapboxFeatureToSelectedPlace(feature: MapboxFeature): Selecte
     parentCity = null
   }
 
-  let country = trimOrNull(structured.country) ?? fallbackCountryFromPlaceName(feature.place_name)
+  let country =
+    trimOrNull(structured.country) ?? trimOrNull(mapboxCountryFromPlaceNameTailIfKnown(feature.place_name))
   if (!country) country = ""
 
   const region = trimOrNull(structured.region)
@@ -73,14 +71,9 @@ export function mapMapboxFeatureToSelectedPlace(feature: MapboxFeature): Selecte
     }
   }
 
-  const primaryType = feature.place_type?.[0]
   const venueName = primaryType === "poi" ? trimOrNull(feature.text) : null
 
   const placeId = trimOrNull(feature.id)
-
-  if (!city && feature.place_name) {
-    city = feature.place_name.split(",")[0]?.trim() || ""
-  }
 
   return {
     provider: "mapbox",

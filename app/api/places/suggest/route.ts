@@ -6,7 +6,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 async function runSuggest(q: string): Promise<NextResponse> {
-  const features = await mapboxPlacesForwardSuggest(q, { limit: 6 })
+  const features = await mapboxPlacesForwardSuggest(q, { limit: 10 })
   return NextResponse.json({ suggestions: mapFeaturesToSuggestions(features) })
 }
 

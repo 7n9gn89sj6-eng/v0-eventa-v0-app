@@ -147,8 +147,8 @@ export function MapboxPlaceAutocomplete({
         return
       }
       const place = data.place as SelectedPlaceWire
-      if (!place.city?.trim() || !place.country?.trim()) {
-        setError("This result is missing city or country. Try another option.")
+      if (!place.formattedAddress?.trim()) {
+        setError("Could not confirm this place.")
         return
       }
       setSelected(place)

@@ -34,7 +34,14 @@ function normalizeFeaturePayload(raw: unknown): MapboxFeature | null {
 
 function respondWithPlace(feature: MapboxFeature): NextResponse {
   const place = mapMapboxFeatureToSelectedPlace(feature)
-  if (!place.city.trim() || !place.country.trim()) {
+  const hasCore =
+    Boolean(place.formattedAddress?.trim()) &&
+    Boolean(place.placeId?.trim()) &&
+    typeof place.lat === "number" &&
+    Number.isFinite(place.lat) &&
+    typeof place.lng === "number" &&
+    Number.isFinite(place.lng)
+  if (!hasCore) {
     return NextResponse.json({ place: null, error: "Could not structure this place." }, { status: 404 })
   }
   return NextResponse.json({ place })
