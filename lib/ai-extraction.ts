@@ -1,5 +1,5 @@
 import "server-only"
-import { generateObject } from "ai"
+import { generateObject, jsonSchema } from "ai"
 import { createOpenAI } from "@ai-sdk/openai"
 import type { EventExtractionInput, EventExtractionOutput } from "./types"
 import { nextSaturday, nextSunday, set } from "date-fns"
@@ -84,7 +84,7 @@ export async function extractEventFromText(input: EventExtractionInput): Promise
 
   const { object } = await generateObject({
     model: openai("gpt-4o"),
-    schema: {
+    schema: jsonSchema({
       type: "object",
       properties: {
         title: {
@@ -216,7 +216,7 @@ export async function extractEventFromText(input: EventExtractionInput): Promise
         "confidence",
         "notes_for_user",
       ],
-    },
+    }),
     prompt: `You are an AI event extraction system. Parse this natural language event description into structured data.
 
 User Input:
@@ -322,9 +322,9 @@ export async function suggestFollowUpQuestion(
     apiKey: process.env.OPENAI_API_KEY,
   })
 
-  const { text } = await generateObject({
+  const { object } = await generateObject({
     model: openai("gpt-4o-mini"),
-    schema: {
+    schema: jsonSchema({
       type: "object",
       properties: {
         question: {
@@ -333,7 +333,7 @@ export async function suggestFollowUpQuestion(
         },
       },
       required: ["question"],
-    },
+    }),
     prompt: `The user created an event but we need to clarify the ${missingField}.
 
 Extracted so far:
@@ -345,7 +345,7 @@ Generate ONE concise, friendly follow-up question to get the missing ${missingFi
 ${missingField === "datetime" ? 'Example: "What day and time is this event?"' : 'Example: "Where is this event taking place?"'}`,
   })
 
-  return (text as any).question
+  return (object as { question: string }).question
 }
 
 export function needsFollowUp(extraction: EventExtractionOutput): {
