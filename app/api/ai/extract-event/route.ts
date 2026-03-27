@@ -9,7 +9,14 @@ type ExtractFailureCategory = "provider_config" | "schema_validation" | "unknown
 const DEV_MESSAGE_MAX = 800
 
 function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message || error.name || "Error"
+  if (error instanceof Error) {
+    const base = error.message || error.name || "Error"
+    if (error.cause !== undefined) {
+      const causeMsg = getErrorMessage(error.cause)
+      if (causeMsg && causeMsg !== "Error") return `${base} | cause: ${causeMsg}`
+    }
+    return base
+  }
   if (typeof error === "string") return error
   try {
     return JSON.stringify(error)
@@ -56,6 +63,8 @@ function classifyExtractFailure(message: string): ExtractFailureCategory {
     m.includes("failed to parse") ||
     m.includes("does not match") ||
     m.includes("type validation") ||
+    m.includes("typeerror") && m.includes("not a function") ||
+    m.includes("is not a function") ||
     m.includes("invalid value") ||
     m.includes("invalid_enum") ||
     m.includes("json") && (m.includes("invalid") || m.includes("parse"))
@@ -77,9 +86,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json(extraction)
   } catch (error) {
-    const message = getErrorMessage(error)
-    const category = classifyExtractFailure(message)
     const hasOpenAiKey = Boolean(process.env.OPENAI_API_KEY?.trim())
+    const message = getErrorMessage(error)
+    const category = !hasOpenAiKey ? "provider_config" : classifyExtractFailure(message)
 
     console.error(
       "[v0] Event extraction error:",
@@ -99,9 +108,9 @@ export async function POST(req: Request) {
       error: "Failed to extract event data",
     }
     if (isDev) {
-      payload.debug = {
+      payload.detail = {
         category,
-        /** Presence only — never log or return the key itself. */
+        /** Presence only — never return or log the secret. */
         openAiKeyConfigured: hasOpenAiKey,
         message: message.slice(0, DEV_MESSAGE_MAX),
       }
