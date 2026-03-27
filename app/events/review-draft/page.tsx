@@ -427,12 +427,20 @@ export default function ReviewDraftPage() {
                 description="Start typing an address or place name, then choose the correct option from the list. You can still edit each field below."
                 onResolved={(place) => {
                   setSelectedPlace(place)
-                  // Match main Post Event form: trust venueName + formattedAddress only; structured
-                  // city/region/country on the wire are unreliable for some Mapbox POI/address features.
-                  setVenueName(place.venueName?.trim() || "")
-                  setAddressLine((place.formattedAddress ?? "").trim())
+                  setVenueName((prev) => {
+                    const v = place.venueName?.trim()
+                    return v && v.length > 0 ? v : prev
+                  })
+                  const formatted = (place.formattedAddress ?? "").trim()
+                  if (formatted) setAddressLine(formatted)
                   setCoordsLat(typeof place.lat === "number" && Number.isFinite(place.lat) ? place.lat : null)
                   setCoordsLng(typeof place.lng === "number" && Number.isFinite(place.lng) ? place.lng : null)
+                  const resolvedCity = place.city?.trim()
+                  if (resolvedCity) setCity(resolvedCity)
+                  const resolvedRegion = place.region?.trim()
+                  if (resolvedRegion) setStateRegion(resolvedRegion)
+                  const resolvedCountry = place.country?.trim()
+                  if (resolvedCountry) setCountry(resolvedCountry)
                 }}
                 onClear={() => {
                   setSelectedPlace(null)
