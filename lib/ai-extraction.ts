@@ -86,6 +86,7 @@ export async function extractEventFromText(input: EventExtractionInput): Promise
     model: openai("gpt-4o"),
     schema: jsonSchema({
       type: "object",
+      additionalProperties: false,
       properties: {
         title: {
           type: "string",
@@ -105,6 +106,7 @@ export async function extractEventFromText(input: EventExtractionInput): Promise
         },
         location: {
           type: "object",
+          additionalProperties: false,
           properties: {
             name: {
               type: ["string", "null"],
@@ -167,6 +169,7 @@ export async function extractEventFromText(input: EventExtractionInput): Promise
         },
         confidence: {
           type: "object",
+          additionalProperties: false,
           properties: {
             datetime: {
               type: "number",
@@ -326,6 +329,7 @@ export async function suggestFollowUpQuestion(
     model: openai("gpt-4o-mini"),
     schema: jsonSchema({
       type: "object",
+      additionalProperties: false,
       properties: {
         question: {
           type: "string",
