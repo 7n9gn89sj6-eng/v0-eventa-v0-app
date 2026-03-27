@@ -1,5 +1,6 @@
 const COUNTRY_BY_CITY: Record<string, string> = {
   berlin: "Germany",
+  munich: "Germany",
   paris: "France",
   rome: "Italy",
   london: "United Kingdom",

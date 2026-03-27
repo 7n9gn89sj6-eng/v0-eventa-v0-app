@@ -90,4 +90,32 @@ describe("resolveDiscoverApiSearchParams", () => {
     expect(r.city.toLowerCase()).toBe("sydney")
     expect(r.country.toLowerCase()).toContain("australia")
   })
+
+  it("live music Munich + Melbourne UI sends Munich/Germany (trailing known city beats picker)", () => {
+    const r = resolveDiscoverApiSearchParams({
+      rawQuery: "live music Munich",
+      selectedCategory: "All",
+      cityFilter: "Melbourne",
+      countryFilter: "Australia",
+      structuredCategoryAuthoritative: false,
+      structuredLocationAuthoritative: true,
+    })
+    expect(r.apiQuery.toLowerCase()).toContain("munich")
+    expect(r.apiQuery.toLowerCase()).toContain("music")
+    expect(r.city.toLowerCase()).toBe("munich")
+    expect(r.country.toLowerCase()).toContain("germany")
+  })
+
+  it("live music munich lowercase + Melbourne UI sends Munich/Germany", () => {
+    const r = resolveDiscoverApiSearchParams({
+      rawQuery: "live music munich",
+      selectedCategory: "All",
+      cityFilter: "Melbourne",
+      countryFilter: "Australia",
+      structuredCategoryAuthoritative: false,
+      structuredLocationAuthoritative: true,
+    })
+    expect(r.city.toLowerCase()).toBe("munich")
+    expect(r.country.toLowerCase()).toContain("germany")
+  })
 })

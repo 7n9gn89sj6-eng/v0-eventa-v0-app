@@ -274,17 +274,40 @@ function extractPlaceWithEvidence(query: string): {
   }
 
   if (!city && !region && !country) {
-    const trailing = q.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\b/g)
-    const candidate = trailing?.[trailing.length - 1]
-    if (
-      candidate &&
-      !/\b(today|tonight|tomorrow|weekend|friday|saturday|sunday|easter)\b/i.test(candidate) &&
-      !isCalendarMonthPlace(candidate) &&
-      !isQuerySpanNotAPlace(candidate) &&
-      countryForKnownCity(candidate) !== null
-    ) {
-      city = candidate
-      raw = candidate
+    const tokens = q.trim().replace(/[.,;!?]+$/g, "").trim().split(/\s+/).filter(Boolean)
+    const maxN = Math.min(3, tokens.length)
+
+    const trailingKnownCitySpan = (): string => {
+      for (let n = maxN; n >= 1; n--) {
+        const slice = tokens.slice(-n).join(" ")
+        if (!slice) continue
+        if (/\b(today|tonight|tomorrow|weekend|friday|saturday|sunday|easter)\b/i.test(slice)) continue
+        if (isCalendarMonthPlace(slice)) continue
+        if (isQuerySpanNotAPlace(slice)) continue
+        if (countryForKnownCity(slice) === null) continue
+        return slice
+      }
+      return ""
+    }
+
+    const leadingKnownCitySpan = (): string => {
+      for (let n = maxN; n >= 1; n--) {
+        const slice = tokens.slice(0, n).join(" ")
+        if (!slice) continue
+        if (/\b(today|tonight|tomorrow|weekend|friday|saturday|sunday|easter)\b/i.test(slice)) continue
+        if (isCalendarMonthPlace(slice)) continue
+        if (isQuerySpanNotAPlace(slice)) continue
+        if (countryForKnownCity(slice) === null) continue
+        return slice
+      }
+      return ""
+    }
+
+    const candidate = trailingKnownCitySpan() || leadingKnownCitySpan()
+    if (candidate) {
+      const cityLabel = titleCaseTokens(candidate)
+      city = cityLabel
+      raw = cityLabel
       if (isPlaceSuffixAnchored(q, candidate)) {
         if (geoEvidence === "none") geoEvidence = "explicit"
       } else if (geoEvidence === "none") {
