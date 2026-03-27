@@ -286,6 +286,11 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  /** Both ends set for request execution (before internal date-relax retries). Used for empty-state UX. */
+  const executionHadNarrowTimeWindow = Boolean(dateFrom && dateTo)
+  let internalDateRelaxedAttempted = false
+  let internalDateRelaxedFoundRows = false
+
   // Execution location comes only from the resolved search plan (never raw URL after this point).
   city = searchPlan.filters.applyLocationRestriction ? (searchPlan.location.city ?? null) : null
   country = searchPlan.filters.applyLocationRestriction ? (searchPlan.location.country ?? null) : null
@@ -926,6 +931,7 @@ export async function GET(req: NextRequest) {
 
     const hadStrictDateRange = Boolean(dateFrom && dateTo)
     if (count === 0 && hadStrictDateRange) {
+      internalDateRelaxedAttempted = true
       const whereRelaxedDate: any = structuredClone(internalWhereUsed)
       delete whereRelaxedDate.startAt
       delete whereRelaxedDate.endAt
@@ -945,6 +951,7 @@ export async function GET(req: NextRequest) {
           ),
           prisma.event.count({ where: whereRelaxedDate }),
         ])
+        if (count > 0) internalDateRelaxedFoundRows = true
       } catch (retryErr: any) {
         if (!isLanguageFilteringAvailable()) {
           try {
@@ -958,6 +965,7 @@ export async function GET(req: NextRequest) {
               }),
               prisma.event.count({ where: whereRelaxedDate }),
             ])
+            if (count > 0) internalDateRelaxedFoundRows = true
           } catch (retryErr2: any) {
             console.warn(
               "[v0] Date-relax retry failed; keeping prior empty internal results.",
@@ -2141,6 +2149,15 @@ export async function GET(req: NextRequest) {
       // Locality Contract F: Return effectiveLocation for UI labeling
       effectiveLocation: effectiveLocation,
       phase1Interpretation,
+      ...(isEmptyState && isEventQuery
+        ? {
+            emptyStateGuidance: {
+              hadParsedTimeWindow: executionHadNarrowTimeWindow,
+              internalDateRelaxedAttempted,
+              internalDateRelaxedFoundRows,
+            },
+          }
+        : {}),
     }
     
     // Add debug trace if ?debug=1

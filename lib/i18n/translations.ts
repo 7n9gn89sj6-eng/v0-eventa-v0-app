@@ -133,6 +133,13 @@ export const translations = {
         noEvents: "No events found",
         noEventsHint: "Try adjusting your search or filters",
         noResultsFound: "No results found.",
+        emptyStateParsedTitle: "No listings matched your search",
+        emptyStateParsedBody:
+          "Your place and date filters are on, but we didn't find anything that fits them in our results.",
+        emptyStateBroadenedDirectoryNote:
+          "We also tried a wider date window in our directory and still found nothing there.",
+        emptyStateParsedTips:
+          "Try clearing the date filters, searching a whole month (for example “in April”), or choosing a wider area.",
       },
       card: {
         free: "Free",
@@ -397,6 +404,13 @@ export const translations = {
         noEvents: "Nessun evento trovato",
         noEventsHint: "Prova a modificare la ricerca o i filtri",
         noResultsFound: "Nessun risultato trovato.",
+        emptyStateParsedTitle: "Nessun risultato corrisponde alla ricerca",
+        emptyStateParsedBody:
+          "Luogo e date sono attivi, ma non abbiamo trovato nulla che corrisponda.",
+        emptyStateBroadenedDirectoryNote:
+          "Abbiamo provato anche con una finestra di date più ampia nel nostro elenco, senza risultati.",
+        emptyStateParsedTips:
+          "Prova a cancellare le date, cercare un intero mese (es. “in aprile”) o scegliere un’area più vasta.",
       },
       card: {
         free: "Gratuito",
@@ -664,6 +678,13 @@ export const translations = {
         noEvents: "Δεν βρέθηκαν εκδηλώσεις",
         noEventsHint: "Δοκιμάστε να προσαρμόσετε την αναζήτηση ή τα φίλτρα σας",
         noResultsFound: "Δεν βρέθηκαν αποτελέσματα.",
+        emptyStateParsedTitle: "Καμία καταχώριση δεν ταιριάζει στην αναζήτησή σας",
+        emptyStateParsedBody:
+          "Τοποθεσία και ημερομηνίες είναι ενεργά, αλλά δεν βρέθηκε τίποτα που να ταιριάζει.",
+        emptyStateBroadenedDirectoryNote:
+          "Δοκιμάσαμε και ευρύτερο παράθυρο ημερομηνιών στον κατάλογό μας, χωρίς αποτέλεσμα.",
+        emptyStateParsedTips:
+          "Καθαρίστε τις ημερομηνίες, αναζητήστε ολόκληρο μήνα (π.χ. «τον Απρίλιο») ή επιλέξτε ευρύτερη περιοχή.",
       },
       card: {
         free: "Δωρεάν",
@@ -931,6 +952,13 @@ export const translations = {
         noEvents: "No se encontraron eventos",
         noEventsHint: "Intenta ajustar tu búsqueda o filtros",
         noResultsFound: "No se encontraron resultados.",
+        emptyStateParsedTitle: "No hay resultados que coincidan con tu búsqueda",
+        emptyStateParsedBody:
+          "El lugar y las fechas están activos, pero no encontramos nada que encaje en nuestros listados.",
+        emptyStateBroadenedDirectoryNote:
+          "También probamos un rango de fechas más amplio en nuestro directorio y seguimos sin resultados.",
+        emptyStateParsedTips:
+          "Prueba a quitar las fechas, buscar un mes completo (por ejemplo «en abril») o ampliar la zona.",
       },
       card: {
         free: "Gratis",
@@ -1198,6 +1226,13 @@ export const translations = {
         noEvents: "Aucun événement trouvé",
         noEventsHint: "Essayez d'ajuster votre recherche ou vos filtres",
         noResultsFound: "Aucun résultat trouvé.",
+        emptyStateParsedTitle: "Aucun résultat ne correspond à votre recherche",
+        emptyStateParsedBody:
+          "Le lieu et les dates sont actifs, mais rien ne correspond dans nos listes.",
+        emptyStateBroadenedDirectoryNote:
+          "Nous avons aussi élargi la plage de dates dans notre annuaire, sans résultat.",
+        emptyStateParsedTips:
+          "Effacez les dates, cherchez un mois entier (par ex. « en avril ») ou élargissez la zone.",
       },
       card: {
         free: "Gratuit",

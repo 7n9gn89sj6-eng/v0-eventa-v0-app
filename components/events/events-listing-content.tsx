@@ -77,6 +77,12 @@ type InterpretationSnapshot = {
   country: string | null
 }
 
+type EmptyStateGuidanceFromApi = {
+  hadParsedTimeWindow: boolean
+  internalDateRelaxedAttempted: boolean
+  internalDateRelaxedFoundRows: boolean
+}
+
 function normalizeInterpretationSnapshot(data: {
   effectiveLocation?: {
     city?: string | null
@@ -136,6 +142,7 @@ export function EventsListingContent({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [interpretationSnapshot, setInterpretationSnapshot] = useState<InterpretationSnapshot | null>(null)
+  const [emptyStateGuidance, setEmptyStateGuidance] = useState<EmptyStateGuidanceFromApi | null>(null)
   const [aiSuggestionChip, setAiSuggestionChip] = useState<AiSuggestionFromApi | null>(null)
   const [results, setResults] = useState<Event[]>([])
   const [total, setTotal] = useState(0)
@@ -315,6 +322,11 @@ export function EventsListingContent({
       setResults(allEvents)
       setTotal(data.count ?? allEvents.length)
       setInterpretationSnapshot(normalizeInterpretationSnapshot(data))
+      setEmptyStateGuidance(
+        data.emptyState && data.emptyStateGuidance
+          ? (data.emptyStateGuidance as EmptyStateGuidanceFromApi)
+          : null,
+      )
       setAiSuggestionChip(extractAiSuggestionFacet(data))
     } catch (e: any) {
       if (seq !== searchSeqRef.current) return
@@ -324,6 +336,7 @@ export function EventsListingContent({
       setResults([])
       setTotal(0)
       setInterpretationSnapshot(null)
+      setEmptyStateGuidance(null)
       setAiSuggestionChip(null)
     } finally {
       if (seq === searchSeqRef.current) {
@@ -531,6 +544,14 @@ export function EventsListingContent({
     }
     return parts.length > 0 ? parts.join(" · ") : ""
   })()
+
+  const showParsedEmptyGuidance = Boolean(
+    emptyStateGuidance?.hadParsedTimeWindow &&
+      (cityFilter.trim() ||
+        countryFilter.trim() ||
+        interpretationSnapshot?.city ||
+        interpretationSnapshot?.country),
+  )
 
   const aiSuggestionA11y =
     aiSuggestionChip && !loading && !error
@@ -788,7 +809,28 @@ export function EventsListingContent({
       ) : filteredResults.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center space-y-4">
-            {cityFilter ? (
+            {showParsedEmptyGuidance ? (
+              <>
+                <p className="text-lg font-medium text-foreground">{tEvents("results.emptyStateParsedTitle")}</p>
+                <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                  {tEvents("results.emptyStateParsedBody")}
+                </p>
+                {emptyStateGuidance?.internalDateRelaxedAttempted &&
+                !emptyStateGuidance.internalDateRelaxedFoundRows ? (
+                  <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                    {tEvents("results.emptyStateBroadenedDirectoryNote")}
+                  </p>
+                ) : null}
+                <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                  {tEvents("results.emptyStateParsedTips")}
+                </p>
+                {emptyStateConstraintSummary ? (
+                  <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                    Active scope: {emptyStateConstraintSummary}
+                  </p>
+                ) : null}
+              </>
+            ) : cityFilter ? (
               <>
                 <p className="text-lg font-medium text-foreground">
                   No events found in {cityFilter}{countryFilter ? `, ${countryFilter}` : ""} right now
