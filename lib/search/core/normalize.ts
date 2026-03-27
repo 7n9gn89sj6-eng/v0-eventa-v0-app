@@ -5,4 +5,8 @@
 
 export { sanitizeQueryParam } from "@/lib/search/sanitize-query-param"
 export { repairDiscoveryPhrases } from "@/lib/search/discovery-phrase-repair"
-export { normalizeSearchUtterance, stripTextSearchStopwords } from "@/lib/search/normalize-search-utterance"
+export {
+  normalizeSearchUtterance,
+  stripPerformanceContextTokens,
+  stripTextSearchStopwords,
+} from "@/lib/search/normalize-search-utterance"

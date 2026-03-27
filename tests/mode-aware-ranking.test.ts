@@ -8,6 +8,7 @@ import {
   extraWeakGenericWebPenalty,
   shouldApplySearchMode,
 } from "@/lib/search/mode-aware-ranking"
+import { stripPerformanceContextTokens } from "@/lib/search/normalize-search-utterance"
 import { scoreSearchResult } from "@/lib/search/score-search-result"
 
 const NOW = new Date("2026-03-18T12:00:00.000Z")
@@ -227,5 +228,16 @@ describe("mode-aware ranking (Phase 2.2)", () => {
       externalUrl: "https://venue.example.com/events/unique-gala-night-alpha",
     }
     expect(computePhraseTitleBoost(intent, webSame, "exact", true, 20, "web")).toBeGreaterThan(0)
+  })
+
+  it("stripPerformanceContextTokens removes gig/show/tour words", () => {
+    expect(stripPerformanceContextTokens("these new south whales gigs")).toBe("these new south whales")
+    expect(stripPerformanceContextTokens("Band Name on tour Melbourne")).toBe("Band Name Melbourne")
+  })
+
+  it("exact internal: query with gigs suffix gets full phrase cap when title is act name only", () => {
+    const intent = parseSearchIntent("these new south whales gigs")
+    const internal = { title: "These New South Whales at The Tote" }
+    expect(computePhraseTitleBoost(intent, internal, "exact", true, 24, "internal")).toBe(24)
   })
 })

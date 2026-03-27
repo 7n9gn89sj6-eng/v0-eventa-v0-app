@@ -132,3 +132,18 @@ export function stripTextSearchStopwords(textQuery: string): string {
   s = s.replace(TEXT_SEARCH_STOPWORD_SINGLE_REGEX, " ")
   return s.replace(/\s+/g, " ").trim()
 }
+
+/**
+ * Whole-word performance / tour tokens that should not become mandatory AND term groups
+ * against event title for act-name searches (e.g. "… gigs" vs title "These New South Whales").
+ */
+const PERFORMANCE_CONTEXT_WORD_RE =
+  /\b(?:gigs?|shows?|tours?|concerts?|playing|on\s+tour)\b/gi
+
+/** Strip {@link PERFORMANCE_CONTEXT_WORD_RE} and collapse whitespace. */
+export function stripPerformanceContextTokens(query: string): string {
+  return String(query || "")
+    .replace(PERFORMANCE_CONTEXT_WORD_RE, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}

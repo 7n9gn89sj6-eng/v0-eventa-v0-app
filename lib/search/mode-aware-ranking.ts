@@ -5,6 +5,7 @@
 
 import type { SearchIntent } from "@/app/lib/search/parseSearchIntent"
 import type { SearchMode } from "@/lib/search/classifyQueryIntent"
+import { stripPerformanceContextTokens } from "@/lib/search/normalize-search-utterance"
 
 export type ModeScoreTuning = {
   textOverlapMultiplier: number
@@ -137,7 +138,7 @@ export function computePhraseTitleBoost(
   const capUse =
     kind === "internal" ? cap : Math.min(14, Math.round(cap * 0.52))
   if (kind === "web" && capUse <= 0) return 0
-  const q = normalizeTitleMatch(intent.rawQuery || "")
+  const q = normalizeTitleMatch(stripPerformanceContextTokens(intent.rawQuery || ""))
   const rawText =
     kind === "web" ? buildWebPhraseMatchRawText(result) : String(result.title || "")
   const t = normalizeTitleMatch(rawText)

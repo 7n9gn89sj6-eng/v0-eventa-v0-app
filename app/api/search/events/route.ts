@@ -22,6 +22,7 @@ import {
   normalizeSearchUtterance,
   repairDiscoveryPhrases,
   sanitizeQueryParam,
+  stripPerformanceContextTokens,
   stripTextSearchStopwords,
 } from "@/lib/search/core/normalize"
 import {
@@ -656,6 +657,10 @@ export async function GET(req: NextRequest) {
     })
     textQuery = textQuery.replace(/\s+/g, " ").trim()
     textQuery = stripTextSearchStopwords(textQuery)
+    // Named-event AND text groups must not require "gig/show/tour…" tokens that titles often omit.
+    if (queryIntent.intentType === "named_event" && textQuery) {
+      textQuery = stripPerformanceContextTokens(textQuery)
+    }
 
     // If cleaned query is empty but we have filters, use empty string (will search by filters only)
     // If cleaned query is not empty, use textQuery for text matching (with time words removed)
