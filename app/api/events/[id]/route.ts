@@ -38,6 +38,34 @@ async function handleUpdate(
   }
 
   const body = await req.json();
+
+  // Token-authenticated soft withdraw only — no other status/moderation changes via this route.
+  if (body?.withdraw === true) {
+    try {
+      const existing = await db.event.findUnique({
+        where: { id: eventId },
+        select: { id: true, status: true },
+      });
+      if (!existing) {
+        return NextResponse.json({ error: "Event not found" }, { status: 404 });
+      }
+      if (existing.status === "ARCHIVED") {
+        return NextResponse.json({ success: true, withdrawn: true });
+      }
+      await db.event.update({
+        where: { id: eventId },
+        data: { status: "ARCHIVED" },
+      });
+      return NextResponse.json({ success: true, withdrawn: true });
+    } catch (error) {
+      console.error("[events/withdraw] Error:", error);
+      return NextResponse.json(
+        { error: "Failed to remove listing" },
+        { status: 500 }
+      );
+    }
+  }
+
   const {
     title,
     description,

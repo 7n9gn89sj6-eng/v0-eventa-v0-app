@@ -36,6 +36,18 @@ import {
   coerceToCanonicalEventCategory,
   isCanonicalEventCategory,
 } from "@/lib/categories/canonical-event-category"
+import type { EventStatus } from "@prisma/client"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 export type EditPageEventPayload = {
   id: string
@@ -57,6 +69,7 @@ export type EditPageEventPayload = {
   tags: string[]
   customCategoryLabel: string | null
   originalLanguage: string | null
+  status: EventStatus
 }
 
 function defaultCategoryValue(raw: string): string {
@@ -141,6 +154,9 @@ interface Props {
 
 export default function EditEventForm({ event, token }: Props) {
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [withdrawError, setWithdrawError] = useState<string | null>(null)
+  const [withdrawing, setWithdrawing] = useState(false)
+  const isWithdrawn = event.status === "ARCHIVED"
   const form = useForm<EditMagicLinkFormValues>({
     resolver: zodResolver(editMagicLinkSchema),
     defaultValues: {
@@ -236,12 +252,53 @@ export default function EditEventForm({ event, token }: Props) {
     window.location.href = `/events/${event.id}`
   }
 
+  async function withdrawListing() {
+    setWithdrawError(null)
+    setWithdrawing(true)
+    try {
+      const res = await fetch(`/api/events/${event.id}?token=${encodeURIComponent(token)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ withdraw: true }),
+      })
+      if (!res.ok) {
+        let msg = "Something went wrong. Please try again."
+        try {
+          const j = (await res.json()) as { error?: string }
+          if (j.error) msg = j.error
+        } catch {
+          /* ignore */
+        }
+        setWithdrawError(msg)
+        return
+      }
+      window.location.href = "/?listingRemoved=1"
+    } catch {
+      setWithdrawError("Something went wrong. Please try again.")
+    } finally {
+      setWithdrawing(false)
+    }
+  }
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         {saveError ? (
           <Alert variant="destructive">
             <AlertDescription>{saveError}</AlertDescription>
+          </Alert>
+        ) : null}
+        {isWithdrawn ? (
+          <Alert>
+            <AlertDescription>
+              This listing is no longer shown in Eventa search or on the public event page. You can still edit
+              details below if you want a copy for your records.
+            </AlertDescription>
+          </Alert>
+        ) : null}
+        {withdrawError ? (
+          <Alert variant="destructive">
+            <AlertDescription>{withdrawError}</AlertDescription>
           </Alert>
         ) : null}
 
@@ -537,6 +594,52 @@ export default function EditEventForm({ event, token }: Props) {
             </div>
           </CardContent>
         </Card>
+
+            {!isWithdrawn ? (
+              <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-4">
+                <div>
+                  <p className="text-sm font-medium">Listing on Eventa</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Finished or need to take a break? Remove your listing from search and the public page. Your event
+                    details stay saved — nothing is permanently deleted.
+                  </p>
+                </div>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button type="button" variant="outline" disabled={saving || withdrawing} className="w-full sm:w-auto">
+                      Remove listing
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Remove this listing?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        It will disappear from Eventa search and the public event page. You can keep this page open if
+                        you still want to copy anything first.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={withdrawing}>Cancel</AlertDialogCancel>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        disabled={withdrawing}
+                        onClick={() => void withdrawListing()}
+                      >
+                        {withdrawing ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                            Removing…
+                          </>
+                        ) : (
+                          "Remove listing"
+                        )}
+                      </Button>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            ) : null}
 
             <Button type="submit" disabled={saving} className="w-full sm:w-auto" size="lg">
               {saving ? (

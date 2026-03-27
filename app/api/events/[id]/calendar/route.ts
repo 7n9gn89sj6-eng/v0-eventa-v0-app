@@ -56,6 +56,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Event not found" }, { status: 404 })
     }
 
+    if (event.status === "ARCHIVED") {
+      return NextResponse.json({ error: "Event not available" }, { status: 404 })
+    }
+
     // Only allow calendar export for approved events
     if (event.moderationStatus !== "APPROVED" && event.status !== "PUBLISHED") {
       return NextResponse.json({ error: "Event not available" }, { status: 404 })

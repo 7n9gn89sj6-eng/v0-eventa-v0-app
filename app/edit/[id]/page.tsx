@@ -75,6 +75,7 @@ export default async function EditEventPage(props: EditPageProps) {
         tags: true,
         customCategoryLabel: true,
         originalLanguage: true,
+        status: true,
       },
     });
   } catch (error) {
@@ -109,6 +110,7 @@ export default async function EditEventPage(props: EditPageProps) {
     tags: event.tags ?? [],
     customCategoryLabel: event.customCategoryLabel ?? null,
     originalLanguage: event.originalLanguage ?? null,
+    status: event.status,
   };
 
   return (

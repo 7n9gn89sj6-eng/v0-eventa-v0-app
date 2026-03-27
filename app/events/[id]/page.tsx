@@ -9,11 +9,19 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
   const event = await db.event.findUnique({
     where: { id },
+    select: { title: true, description: true, status: true },
   })
 
   if (!event) {
     return {
       title: "Event Not Found - Eventa",
+    }
+  }
+
+  if (event.status === "ARCHIVED") {
+    return {
+      title: "Listing unavailable - Eventa",
+      description: "This listing is no longer on Eventa.",
     }
   }
 
@@ -48,6 +56,10 @@ export default async function EventPage({
   })
 
   if (!event) {
+    notFound()
+  }
+
+  if (event.status === "ARCHIVED") {
     notFound()
   }
 
