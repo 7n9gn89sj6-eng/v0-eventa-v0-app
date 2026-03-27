@@ -296,6 +296,119 @@ function buildCalendarRangeIso(
   }
 }
 
+function inferYearForDayInMonth(monthIndex: number, day: number, today: Date): number {
+  const cy = today.getFullYear()
+  const candidate = new Date(cy, monthIndex, day)
+  candidate.setHours(0, 0, 0, 0)
+  const todayStart = new Date(today)
+  todayStart.setHours(0, 0, 0, 0)
+  if (candidate.getTime() < todayStart.getTime()) {
+    return cy + 1
+  }
+  return cy
+}
+
+function buildSingleDayIso(year: number, monthIndex: number, day: number): { date_from: string; date_to: string } | null {
+  if (
+    !Number.isFinite(year) ||
+    year < 1900 ||
+    year > 2100 ||
+    monthIndex < 0 ||
+    monthIndex > 11 ||
+    day < 1 ||
+    day > 31
+  ) {
+    return null
+  }
+  const dayStart = new Date(year, monthIndex, day)
+  if (dayStart.getFullYear() !== year || dayStart.getMonth() !== monthIndex || dayStart.getDate() !== day) {
+    return null
+  }
+  dayStart.setHours(0, 0, 0, 0)
+  const dayEnd = new Date(year, monthIndex, day)
+  dayEnd.setHours(23, 59, 59, 999)
+  return {
+    date_from: dayStart.toISOString(),
+    date_to: dayEnd.toISOString(),
+  }
+}
+
+/**
+ * Single calendar day after explicit ranges: "15 May 2026", "May 15", yearless with roll when the day has passed.
+ * Placed before full-month window so "15 May" is one day, not trumped by "May" month logic.
+ * If a day+month(+year) phrase clearly matched but the calendar date is invalid, sets `invalidExplicitDay`
+ * so callers do not fall through to a looser month+year window on the same string.
+ */
+function tryParseSingleCalendarDay(
+  normalized: string,
+  today: Date,
+): { date_from?: string; date_to?: string; invalidExplicitDay?: true } {
+  const monthCap = `(${MONTH_NAME_ALT})`
+  const y4 = `(20\\d{2})`
+
+  type Hit = { monthIndex: number; day: number; explicitYear: number | null }
+  let hit: Hit | null = null
+
+  const dayFirst = normalized.match(new RegExp(`\\b(\\d{1,2})\\s+${monthCap}(?:\\s+${y4})?\\b`, "i"))
+  if (dayFirst) {
+    const d = Number.parseInt(dayFirst[1], 10)
+    const m = monthIndexFromToken(dayFirst[2])
+    if (m !== null) {
+      const yPart = dayFirst[3] ? Number.parseInt(dayFirst[3], 10) : null
+      hit = { monthIndex: m, day: d, explicitYear: yPart }
+    }
+  }
+
+  if (!hit) {
+    const monthDayYear = normalized.match(
+      new RegExp(`\\b${monthCap}\\s+(\\d{1,2})(?:,)?\\s+${y4}\\b`, "i"),
+    )
+    if (monthDayYear) {
+      const m = monthIndexFromToken(monthDayYear[1])
+      const d = Number.parseInt(monthDayYear[2], 10)
+      const y = Number.parseInt(monthDayYear[3], 10)
+      if (m !== null) {
+        hit = { monthIndex: m, day: d, explicitYear: y }
+      }
+    }
+  }
+
+  if (!hit) {
+    const monthDayOnly = normalized.match(new RegExp(`\\b${monthCap}\\s+(\\d{1,2})\\b(?!\\s*(?:to|–|—|\\-))`, "i"))
+    if (monthDayOnly) {
+      const m = monthIndexFromToken(monthDayOnly[1])
+      const d = Number.parseInt(monthDayOnly[2], 10)
+      if (m !== null) {
+        hit = { monthIndex: m, day: d, explicitYear: null }
+      }
+    }
+  }
+
+  if (!hit) return {}
+
+  if (hit.day < 1 || hit.day > 31) {
+    return { invalidExplicitDay: true }
+  }
+
+  let year: number
+  if (
+    hit.explicitYear !== null &&
+    Number.isFinite(hit.explicitYear) &&
+    hit.explicitYear >= 1900 &&
+    hit.explicitYear <= 2100
+  ) {
+    year = hit.explicitYear
+  } else {
+    year = inferYearForDayInMonth(hit.monthIndex, hit.day, today)
+  }
+
+  const built = buildSingleDayIso(year, hit.monthIndex, hit.day)
+  if (!built) {
+    return { invalidExplicitDay: true }
+  }
+  return built
+}
+
 /**
  * Full calendar month: "in May", "May 2026", "June markets …" (leading month + event noun).
  * Runs after explicit day ranges. Year: explicit 4-digit wins; else current year if the month
@@ -604,6 +717,14 @@ export function parseDateExpression(dateExpr: string): ParsedDateExpression {
   const explicitRange = tryParseExplicitCalendarRange(normalized)
   if (explicitRange.date_from && explicitRange.date_to) {
     return { ...explicitRange, relativeWindowType: "explicit_range" }
+  }
+
+  const singleDay = tryParseSingleCalendarDay(normalized, today)
+  if (singleDay.invalidExplicitDay) {
+    return {}
+  }
+  if (singleDay.date_from && singleDay.date_to) {
+    return { date_from: singleDay.date_from, date_to: singleDay.date_to, relativeWindowType: "calendar_day" }
   }
 
   const monthWindow = tryParseMonthWindow(normalized, today)

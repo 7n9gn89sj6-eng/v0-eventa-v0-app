@@ -191,6 +191,64 @@ describe("Eventa trust: parseDateExpression time intent", () => {
     expect(to.getDate()).toBe(3)
   })
 
+  it("parses single calendar day: day-first with year (15 May 2026)", () => {
+    const res = parseDateExpression("comedy gigs 15 may 2026 melbourne")
+    expect(res.date_from).toBeTruthy()
+    expect(res.date_to).toBeTruthy()
+    expect(res.relativeWindowType).toBe("calendar_day")
+    const from = new Date(res.date_from!)
+    const to = new Date(res.date_to!)
+    expect(from.getFullYear()).toBe(2026)
+    expect(from.getMonth()).toBe(4)
+    expect(from.getDate()).toBe(15)
+    expect(to.getFullYear()).toBe(2026)
+    expect(to.getMonth()).toBe(4)
+    expect(to.getDate()).toBe(15)
+    expect(to.getTime()).toBeGreaterThanOrEqual(from.getTime())
+  })
+
+  it("parses single calendar day: month-first with optional comma (May 15, 2026)", () => {
+    const res = parseDateExpression("market may 15, 2026 sydney")
+    expect(res.relativeWindowType).toBe("calendar_day")
+    const from = new Date(res.date_from!)
+    expect(from.getFullYear()).toBe(2026)
+    expect(from.getMonth()).toBe(4)
+    expect(from.getDate()).toBe(15)
+  })
+
+  it("yearless single day uses current year when the day is still ahead (March ref → 15 May)", () => {
+    const res = parseDateExpression("gigs on 15 may brisbane")
+    expect(res.relativeWindowType).toBe("calendar_day")
+    const from = new Date(res.date_from!)
+    expect(from.getFullYear()).toBe(2026)
+    expect(from.getMonth()).toBe(4)
+    expect(from.getDate()).toBe(15)
+  })
+
+  it("yearless single day rolls to next year when that date has passed (June ref → 15 May → 2027)", () => {
+    vi.setSystemTime(new Date("2026-06-15T10:00:00.000Z"))
+    const res = parseDateExpression("events 15 may berlin")
+    expect(res.relativeWindowType).toBe("calendar_day")
+    const from = new Date(res.date_from!)
+    expect(from.getFullYear()).toBe(2027)
+    expect(from.getMonth()).toBe(4)
+    expect(from.getDate()).toBe(15)
+    vi.setSystemTime(new Date("2026-03-18T10:00:00.000Z"))
+  })
+
+  it("does not treat `May 2026` as a single day (still full month window)", () => {
+    const res = parseDateExpression("may 2026 art shows")
+    expect(res.relativeWindowType).toBe("month")
+    const from = new Date(res.date_from!)
+    expect(from.getDate()).toBe(1)
+  })
+
+  it("rejects invalid single-day calendar dates", () => {
+    const res = parseDateExpression("show 31 april 2026")
+    expect(res.date_from).toBeFalsy()
+    expect(res.date_to).toBeFalsy()
+  })
+
   it("parses Easter as multi-day window around Western Easter 2026", () => {
     const res = parseDateExpression("events in echuca easter")
     expect(res.date_from).toBeTruthy()
