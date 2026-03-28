@@ -1,4 +1,5 @@
 import type { MapboxFeature } from "@/lib/geocoding"
+import { queryHasLeadingStreetNumber } from "@/lib/places/mapbox-suggest-helpers"
 
 /** Places API: prefers MAPBOX_ACCESS_TOKEN, then existing MAPBOX_TOKEN. */
 export function getMapboxAccessTokenForPlaces(): string | undefined {
@@ -26,8 +27,12 @@ export async function mapboxPlacesForwardSuggest(
   url.searchParams.set("access_token", token)
   url.searchParams.set("autocomplete", "true")
   url.searchParams.set("limit", String(limit))
-  // poi first: same type set, slightly better POI prominence in combined relevance for venue-style queries.
-  url.searchParams.set("types", "poi,address,place,locality,neighborhood")
+  // Numbered queries: address-only so street/city features do not crowd out full address candidates.
+  if (queryHasLeadingStreetNumber(q)) {
+    url.searchParams.set("types", "address")
+  } else {
+    url.searchParams.set("types", "poi,address,place,locality,neighborhood")
+  }
 
   try {
     const response = await fetch(url.toString())

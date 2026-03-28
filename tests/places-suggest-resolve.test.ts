@@ -8,6 +8,7 @@ import { GET as suggestGet } from "@/app/api/places/suggest/route"
 import { GET as resolveGet, POST as resolvePost } from "@/app/api/places/resolve/route"
 import { mapMapboxFeatureToSelectedPlace } from "@/lib/places/mapbox-feature-to-wire"
 import { mapFeaturesToSuggestions } from "@/lib/places/place-api-mapbox"
+import { queryHasLeadingStreetNumber, sortMapboxSuggestFeatures } from "@/lib/places/mapbox-suggest-helpers"
 
 const forwardMock = vi.hoisted(() => vi.fn())
 const retrieveMock = vi.hoisted(() => vi.fn())
@@ -180,14 +181,47 @@ describe("mapFeaturesToSuggestions", () => {
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({
       id: "locality.brunswick",
-      label: "Brunswick, Melbourne, Victoria, Australia",
-      primary: "Brunswick",
+      primary: "Brunswick, Melbourne, Victoria, Australia",
       city: "Brunswick",
       country: "Australia",
       region: "Victoria",
       lat: -37.77,
       lng: 144.96,
     })
+    expect(rows[0]!.label).toContain("Suburb")
+    expect(rows[0]!.label).toContain("Brunswick")
+  })
+})
+
+describe("sortMapboxSuggestFeatures (numbered address)", () => {
+  it("detects leading street numbers", () => {
+    expect(queryHasLeadingStreetNumber("23 Barkly Street Brunswick East")).toBe(true)
+    expect(queryHasLeadingStreetNumber("Barkly Street")).toBe(false)
+  })
+
+  it("ranks address features that include the street number above street-only lines", () => {
+    const streetOnly: MapboxFeature = {
+      id: "address.barkly_street",
+      type: "Feature",
+      place_type: ["address"],
+      text: "Barkly Street",
+      place_name: "Barkly Street, Brunswick East, Victoria, Australia",
+      center: [144.97, -37.77],
+      relevance: 0.9,
+    }
+    const fullNumber: MapboxFeature = {
+      id: "address.23_barkly",
+      type: "Feature",
+      place_type: ["address"],
+      text: "23 Barkly Street",
+      place_name: "23 Barkly Street, Brunswick East, Victoria, Australia",
+      center: [144.97, -37.77],
+      relevance: 0.85,
+    }
+    const q = "23 Barkly Street Brunswick East"
+    const sorted = sortMapboxSuggestFeatures(q, [streetOnly, fullNumber])
+    expect(sorted[0]!.id).toBe("address.23_barkly")
+    expect(sorted[1]!.id).toBe("address.barkly_street")
   })
 })
 
