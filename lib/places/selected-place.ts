@@ -15,6 +15,8 @@ export type SelectedPlaceWire = {
   lat?: number | null
   lng?: number | null
   venueName?: string | null
+  /** From Mapbox {@code postcode.*} context when present. */
+  postcode?: string | null
 }
 
 /** Verified selection from Mapbox (strict: coordinates required for submit verify-then-select). */
@@ -29,6 +31,7 @@ export const selectedMapboxPlaceSchema = z.object({
   lat: z.number(),
   lng: z.number(),
   venueName: z.string().nullable().optional(),
+  postcode: z.string().nullable().optional(),
 })
 
 export type SelectedMapboxPlace = z.infer<typeof selectedMapboxPlaceSchema>

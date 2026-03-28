@@ -23,6 +23,12 @@ function placeFromContext(feature: MapboxFeature): string | null {
   return trimOrNull(c?.text)
 }
 
+function postcodeFromContext(feature: MapboxFeature): string | null {
+  const ctx = feature.context ?? []
+  const c = ctx.find((x) => x.id.startsWith("postcode."))
+  return trimOrNull(c?.text)
+}
+
 /**
  * Normalize a Mapbox Geocoding feature into {@link SelectedPlaceWire}.
  * - city: locality + context place; for {@code address} features never use {@code feature.text} (street).
@@ -72,6 +78,7 @@ export function mapMapboxFeatureToSelectedPlace(feature: MapboxFeature): Selecte
   }
 
   const venueName = primaryType === "poi" ? trimOrNull(feature.text) : null
+  const postcode = postcodeFromContext(feature)
 
   const placeId = trimOrNull(feature.id)
 
@@ -86,5 +93,6 @@ export function mapMapboxFeatureToSelectedPlace(feature: MapboxFeature): Selecte
     lat,
     lng,
     venueName,
+    postcode,
   }
 }

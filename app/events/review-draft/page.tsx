@@ -120,10 +120,6 @@ export default function ReviewDraftPage() {
       setTimezoneReview(data.extraction.timezone ?? "")
       setVenueName(exLoc.name ?? "")
       setAddressLine(exLoc.address ?? "")
-      setCity("")
-      setStateRegion("")
-      setPostcode("")
-      setCountry("")
       setCoordsLat(typeof exLoc.lat === "number" && Number.isFinite(exLoc.lat) ? exLoc.lat : null)
       setCoordsLng(typeof exLoc.lng === "number" && Number.isFinite(exLoc.lng) ? exLoc.lng : null)
       setSelectedPlace(null)
@@ -431,16 +427,20 @@ export default function ReviewDraftPage() {
                     const v = place.venueName?.trim()
                     return v && v.length > 0 ? v : prev
                   })
-                  const formatted = (place.formattedAddress ?? "").trim()
-                  if (formatted) setAddressLine(formatted)
-                  setCoordsLat(typeof place.lat === "number" && Number.isFinite(place.lat) ? place.lat : null)
-                  setCoordsLng(typeof place.lng === "number" && Number.isFinite(place.lng) ? place.lng : null)
-                  const resolvedCity = place.city?.trim()
-                  if (resolvedCity) setCity(resolvedCity)
-                  const resolvedRegion = place.region?.trim()
-                  if (resolvedRegion) setStateRegion(resolvedRegion)
-                  const resolvedCountry = place.country?.trim()
-                  if (resolvedCountry) setCountry(resolvedCountry)
+                  setAddressLine((prev) => {
+                    const f = (place.formattedAddress ?? "").trim()
+                    return f.length > 0 ? f : prev
+                  })
+                  setCoordsLat((prev) =>
+                    typeof place.lat === "number" && Number.isFinite(place.lat) ? place.lat : prev,
+                  )
+                  setCoordsLng((prev) =>
+                    typeof place.lng === "number" && Number.isFinite(place.lng) ? place.lng : prev,
+                  )
+                  setCity((prev) => place.city?.trim() || prev)
+                  setStateRegion((prev) => place.region?.trim() || prev)
+                  setCountry((prev) => place.country?.trim() || prev)
+                  setPostcode((prev) => place.postcode?.trim() || prev)
                 }}
                 onClear={() => {
                   setSelectedPlace(null)

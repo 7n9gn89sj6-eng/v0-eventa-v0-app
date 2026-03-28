@@ -45,6 +45,7 @@ describe("mapMapboxFeatureToSelectedPlace", () => {
       lat: -37.77,
       lng: 144.96,
       venueName: null,
+      postcode: null,
     })
   })
 
@@ -115,6 +116,7 @@ describe("mapMapboxFeatureToSelectedPlace", () => {
     expect(wire.formattedAddress).toBe("Nicholson Street")
     expect(wire.lat).toBe(-37.78)
     expect(wire.lng).toBe(144.98)
+    expect(wire.postcode).toBeNull()
   })
 
   it("address with locality in context: city from locality; country from known place_name tail", () => {
@@ -134,6 +136,26 @@ describe("mapMapboxFeatureToSelectedPlace", () => {
     expect(wire.city).toBe("North Fitzroy")
     expect(wire.country).toBe("Australia")
     expect(wire.region).toBe("Victoria")
+  })
+
+  it("maps postcode from Mapbox postcode context", () => {
+    const feature: MapboxFeature = {
+      id: "address.withpc",
+      type: "Feature",
+      place_type: ["address"],
+      text: "1 Smith St",
+      place_name: "1 Smith St, Fitzroy North Victoria 3068, Australia",
+      center: [144.98, -37.78],
+      context: [
+        { id: "locality.1", text: "Fitzroy North" },
+        { id: "postcode.2", text: "3068" },
+        { id: "region.3", text: "Victoria" },
+        { id: "country.4", text: "Australia" },
+      ],
+    }
+    const wire = mapMapboxFeatureToSelectedPlace(feature)
+    expect(wire.postcode).toBe("3068")
+    expect(wire.city).toBe("Fitzroy North")
   })
 
   it("does not use unknown place_name tail as country", () => {
