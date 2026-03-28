@@ -14,8 +14,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Loader2, Plus } from "lucide-react"
 import { DateTime } from "luxon"
 
-import { PlaceAutocomplete } from "@/components/places/place-autocomplete"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { EventLocationPlaceBlock } from "@/components/events/event-location-place-block"
 import type { SelectedPlaceWire } from "@/lib/places/selected-place"
 import {
   CANONICAL_EVENT_CATEGORY_VALUES,
@@ -360,50 +359,16 @@ export function EventForm({ initialData, draftId }: any = {}) {
             </div>
           </div>
 
-          <PlaceAutocomplete
+          <EventLocationPlaceBlock
             disabled={isSubmitting}
-            id="event-location-search"
-            allowEditQueryWhileSelected
-            onResolved={(place) => {
-              setSelectedPlace(place)
-              setValue("venueName", place.venueName?.trim() || "")
-              setValue("address", place.formattedAddress)
-            }}
-            onClear={() => {
-              setSelectedPlace(null)
-              setValue("venueName", "")
-              setValue("address", "")
-            }}
+            idPrefix="event"
+            selectedPlace={selectedPlace}
+            onSelectedPlaceChange={setSelectedPlace}
+            venueName={formData.venueName ?? ""}
+            onVenueNameChange={(v) => setValue("venueName", v)}
+            addressLine={formData.address ?? ""}
+            onAddressLineChange={(v) => setValue("address", v)}
           />
-
-          {!selectedPlace?.placeId ? (
-            <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
-              <AlertDescription className="text-sm text-amber-900 dark:text-amber-100">
-                Choose a location from the suggestions and confirm your selection before publishing.
-              </AlertDescription>
-            </Alert>
-          ) : null}
-
-          <div className="space-y-2">
-            <Label htmlFor="venueName">Venue name</Label>
-            <Input
-              id="venueName"
-              placeholder="Shown on the event page"
-              disabled={isSubmitting}
-              {...register("venueName")}
-            />
-            <p className="text-xs text-muted-foreground">You can edit how the venue appears after selecting a place.</p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="address">Address (full line)</Label>
-            <Input
-              id="address"
-              placeholder="Filled when you pick a location from the list"
-              disabled={isSubmitting}
-              {...register("address")}
-            />
-          </div>
 
           <div className="space-y-2">
             <Label htmlFor="websiteUrl">Website</Label>

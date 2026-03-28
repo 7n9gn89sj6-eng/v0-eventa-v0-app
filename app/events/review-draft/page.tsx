@@ -16,7 +16,7 @@ import {
   eventCategoryPayloadSchema,
   type CanonicalEventCategory,
 } from "@/lib/categories/canonical-event-category"
-import { PlaceAutocomplete } from "@/components/places/place-autocomplete"
+import { EventLocationPlaceBlock } from "@/components/events/event-location-place-block"
 import { EventPosterUpload } from "@/components/events/event-poster-upload"
 import type { SelectedPlaceWire } from "@/lib/places/selected-place"
 
@@ -72,13 +72,7 @@ export default function ReviewDraftPage() {
   const [timezoneReview, setTimezoneReview] = useState("")
   const [venueName, setVenueName] = useState("")
   const [addressLine, setAddressLine] = useState("")
-  const [city, setCity] = useState("")
-  const [stateRegion, setStateRegion] = useState("")
-  const [postcode, setPostcode] = useState("")
-  const [country, setCountry] = useState("")
-  const [coordsLat, setCoordsLat] = useState<number | null>(null)
-  const [coordsLng, setCoordsLng] = useState<number | null>(null)
-  /** Mapbox-backed selection; optional — manual address still supported. */
+  /** Mapbox-backed selection — city/country/postcode come from here on submit (same as Post Event). */
   const [selectedPlace, setSelectedPlace] = useState<SelectedPlaceWire | null>(null)
   /** Seed the autocomplete query once from AI venue + address. */
   const [placeInitialQuery, setPlaceInitialQuery] = useState("")
@@ -120,8 +114,6 @@ export default function ReviewDraftPage() {
       setTimezoneReview(data.extraction.timezone ?? "")
       setVenueName(exLoc.name ?? "")
       setAddressLine(exLoc.address ?? "")
-      setCoordsLat(typeof exLoc.lat === "number" && Number.isFinite(exLoc.lat) ? exLoc.lat : null)
-      setCoordsLng(typeof exLoc.lng === "number" && Number.isFinite(exLoc.lng) ? exLoc.lng : null)
       setSelectedPlace(null)
       setPlaceInitialQuery([exLoc.name, exLoc.address].filter(Boolean).join(", ").trim())
     } catch (err) {
@@ -228,28 +220,29 @@ export default function ReviewDraftPage() {
         endForPayload = endDate.toISOString()
       }
 
+      const placeId = selectedPlace?.placeId?.trim()
+      if (
+        !placeId ||
+        !selectedPlace?.city?.trim() ||
+        !selectedPlace?.country?.trim()
+      ) {
+        setError("Choose a location from the suggestions list and confirm it before publishing.")
+        setIsSubmitting(false)
+        return
+      }
+
       const locationPayload: Record<string, unknown> = {
         name: venueName.trim() || undefined,
         address: addressLine.trim() || undefined,
-        city: city.trim() || undefined,
-        state: stateRegion.trim() || undefined,
-        postcode: postcode.trim() || undefined,
-        country: country.trim() || undefined,
-      }
-      if (coordsLat != null && coordsLng != null && Number.isFinite(coordsLat) && Number.isFinite(coordsLng)) {
-        locationPayload.lat = coordsLat
-        locationPayload.lng = coordsLng
-      }
-
-      const placeId = selectedPlace?.placeId?.trim()
-      if (placeId) {
-        locationPayload.mapboxPlaceId = placeId
-        const formatted =
-          addressLine.trim() || selectedPlace?.formattedAddress?.trim() || ""
-        if (formatted) locationPayload.formattedAddress = formatted
-        if (selectedPlace?.parentCity !== undefined && selectedPlace?.parentCity !== null) {
-          locationPayload.parentCity = selectedPlace.parentCity
-        }
+        city: selectedPlace.city,
+        country: selectedPlace.country,
+        state: selectedPlace.region ?? undefined,
+        postcode: selectedPlace.postcode ?? undefined,
+        parentCity: selectedPlace.parentCity ?? null,
+        lat: selectedPlace.lat ?? undefined,
+        lng: selectedPlace.lng ?? undefined,
+        formattedAddress: selectedPlace.formattedAddress,
+        mapboxPlaceId: placeId,
       }
 
       const submitPayload: Record<string, unknown> = {
@@ -411,121 +404,21 @@ export default function ReviewDraftPage() {
               </div>
             </div>
 
-            {/* Location — autocomplete + editable fields (Post Event pattern) */}
-            <div className="space-y-4">
-              <PlaceAutocomplete
-                disabled={isSubmitting}
-                id="review-draft-location-search"
-                testId="review-draft-place-autocomplete"
-                allowEditQueryWhileSelected
-                initialQuery={placeInitialQuery}
-                label="Find address on map"
-                description="Start typing an address or place name, then choose the correct option from the list. You can still edit each field below."
-                onResolved={(place) => {
-                  setSelectedPlace(place)
-                  setVenueName((prev) => {
-                    const v = place.venueName?.trim()
-                    return v && v.length > 0 ? v : prev
-                  })
-                  setAddressLine((prev) => {
-                    const f = (place.formattedAddress ?? "").trim()
-                    return f.length > 0 ? f : prev
-                  })
-                  setCoordsLat((prev) =>
-                    typeof place.lat === "number" && Number.isFinite(place.lat) ? place.lat : prev,
-                  )
-                  setCoordsLng((prev) =>
-                    typeof place.lng === "number" && Number.isFinite(place.lng) ? place.lng : prev,
-                  )
-                  setCity((prev) => place.city?.trim() || prev)
-                  setStateRegion((prev) => place.region?.trim() || prev)
-                  setCountry((prev) => place.country?.trim() || prev)
-                  setPostcode((prev) => place.postcode?.trim() || prev)
-                }}
-                onClear={() => {
-                  setSelectedPlace(null)
-                  setVenueName("")
-                  setAddressLine("")
-                  setCoordsLat(null)
-                  setCoordsLng(null)
-                }}
-              />
-
-              <div>
-                <Label htmlFor="review-venue">Venue or place name</Label>
-                <Input
-                  id="review-venue"
-                  value={venueName}
-                  onChange={(e) => setVenueName(e.target.value)}
-                  disabled={isSubmitting}
-                  placeholder="e.g. Railway Hotel"
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label htmlFor="review-address">Street address</Label>
-                <Input
-                  id="review-address"
-                  value={addressLine}
-                  onChange={(e) => setAddressLine(e.target.value)}
-                  disabled={isSubmitting}
-                  placeholder="Street, suburb, or full address"
-                  className="mt-1"
-                />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label htmlFor="review-city">City / suburb</Label>
-                  <Input
-                    id="review-city"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    disabled={isSubmitting}
-                    placeholder="City"
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="review-state">State / province</Label>
-                  <Input
-                    id="review-state"
-                    value={stateRegion}
-                    onChange={(e) => setStateRegion(e.target.value)}
-                    disabled={isSubmitting}
-                    placeholder="State"
-                    className="mt-1"
-                  />
-                </div>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label htmlFor="review-postcode">Postcode</Label>
-                  <Input
-                    id="review-postcode"
-                    value={postcode}
-                    onChange={(e) => setPostcode(e.target.value)}
-                    disabled={isSubmitting}
-                    placeholder="Postcode"
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="review-country">Country</Label>
-                  <Input
-                    id="review-country"
-                    value={country}
-                    onChange={(e) => setCountry(e.target.value)}
-                    disabled={isSubmitting}
-                    placeholder="Country"
-                    className="mt-1"
-                  />
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Add city and country when you know them — it helps attendees and maps. We’ll match your text when
-                possible.
-              </p>
-            </div>
+            {/* Location — same Mapbox block as Post Event (`/events/new`) */}
+            <EventLocationPlaceBlock
+              disabled={isSubmitting}
+              idPrefix="review-draft"
+              testId="review-draft-place-autocomplete"
+              initialQuery={placeInitialQuery}
+              label="Find address on map"
+              description="Start typing an address or place name, then choose the correct option from the list. You can still edit venue and address below."
+              selectedPlace={selectedPlace}
+              onSelectedPlaceChange={setSelectedPlace}
+              venueName={venueName}
+              onVenueNameChange={setVenueName}
+              addressLine={addressLine}
+              onAddressLineChange={setAddressLine}
+            />
 
             {/* Category — editable; OTHER requires short label (same rules as event-form / submit schema). */}
             <div>
@@ -691,7 +584,10 @@ export default function ReviewDraftPage() {
               !startLocal.trim() ||
               sessionLoading ||
               !creatorEmailValid ||
-              (reviewCategory === "OTHER" && !customOtherLabel.trim())
+              (reviewCategory === "OTHER" && !customOtherLabel.trim()) ||
+              !selectedPlace?.placeId?.trim() ||
+              !selectedPlace?.city?.trim() ||
+              !selectedPlace?.country?.trim()
             }
             className="flex-1"
           >
