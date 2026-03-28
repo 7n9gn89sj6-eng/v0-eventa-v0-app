@@ -28,6 +28,10 @@ export interface MapboxPlaceAutocompleteProps {
   id?: string
   label?: string
   description?: string
+  /** Omit the helper line under the label (e.g. when the field is a normal “Address” row). */
+  hideDescription?: boolean
+  /** Current query text as the user types (for controlled parent state / submit payloads). */
+  onQueryChange?: (query: string) => void
   /** Seed the input when the field mounts (e.g. header prefill). */
   initialQuery?: string
   autoFocus?: boolean
@@ -48,6 +52,8 @@ export function MapboxPlaceAutocomplete({
   id: idProp,
   label = "Event location",
   description = "Start typing an address or place name, then choose the correct option from the list.",
+  hideDescription = false,
+  onQueryChange,
   initialQuery = "",
   autoFocus = false,
   testId,
@@ -136,11 +142,12 @@ export function MapboxPlaceAutocomplete({
   const clearSelection = useCallback(() => {
     setSelected(null)
     setQuery("")
+    onQueryChange?.("")
     setSuggestions([])
     setOpen(false)
     setError(null)
     onClear()
-  }, [onClear])
+  }, [onClear, onQueryChange])
 
   const handleSelect = async (s: Suggestion) => {
     setResolveLoading(true)
@@ -174,6 +181,7 @@ export function MapboxPlaceAutocomplete({
       }
       setSelected(merged)
       setQuery(merged.formattedAddress)
+      onQueryChange?.(merged.formattedAddress)
       setOpen(false)
       setSuggestions([])
       onResolved(merged)
@@ -191,6 +199,7 @@ export function MapboxPlaceAutocomplete({
       onClear()
     }
     setQuery(v)
+    onQueryChange?.(v)
     setOpen(true)
     setHighlight(0)
   }
@@ -229,7 +238,9 @@ export function MapboxPlaceAutocomplete({
           </Button>
         ) : null}
       </div>
-      <p className="text-xs text-muted-foreground">{description}</p>
+      {!hideDescription ? (
+        <p className="text-xs text-muted-foreground">{description}</p>
+      ) : null}
 
       <div className="relative">
         <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />

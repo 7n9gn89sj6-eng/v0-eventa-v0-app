@@ -16,8 +16,9 @@ import {
   eventCategoryPayloadSchema,
   type CanonicalEventCategory,
 } from "@/lib/categories/canonical-event-category"
-import { EventLocationPlaceBlock } from "@/components/events/event-location-place-block"
+import { PlaceAutocomplete } from "@/components/places/place-autocomplete"
 import { EventPosterUpload } from "@/components/events/event-poster-upload"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import type { SelectedPlaceWire } from "@/lib/places/selected-place"
 
 /** `datetime-local` value in the browser's local timezone (same pattern as event forms). */
@@ -404,21 +405,55 @@ export default function ReviewDraftPage() {
               </div>
             </div>
 
-            {/* Location — same Mapbox block as Post Event (`/events/new`) */}
-            <EventLocationPlaceBlock
-              disabled={isSubmitting}
-              idPrefix="review-draft"
-              testId="review-draft-place-autocomplete"
-              initialQuery={placeInitialQuery}
-              label="Find address on map"
-              description="Start typing an address or place name, then choose the correct option from the list. You can still edit venue and address below."
-              selectedPlace={selectedPlace}
-              onSelectedPlaceChange={setSelectedPlace}
-              venueName={venueName}
-              onVenueNameChange={setVenueName}
-              addressLine={addressLine}
-              onAddressLineChange={setAddressLine}
-            />
+            {/* Location — venue + single address combobox (same suggest/resolve flow as manual post) */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="review-draft-venue-name">Venue name</Label>
+                <Input
+                  id="review-draft-venue-name"
+                  value={venueName}
+                  onChange={(e) => setVenueName(e.target.value)}
+                  disabled={isSubmitting}
+                  placeholder="Shown on the event page"
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground">
+                  You can edit how the venue appears after selecting a place.
+                </p>
+              </div>
+
+              <PlaceAutocomplete
+                disabled={isSubmitting}
+                id="review-draft-address"
+                testId="review-draft-place-autocomplete"
+                allowEditQueryWhileSelected
+                initialQuery={placeInitialQuery}
+                label="Address (full line)"
+                hideDescription
+                onQueryChange={setAddressLine}
+                onResolved={(place) => {
+                  setSelectedPlace(place)
+                  setVenueName((prev) => {
+                    const v = place.venueName?.trim()
+                    return v && v.length > 0 ? v : prev
+                  })
+                  setAddressLine(place.formattedAddress ?? "")
+                }}
+                onClear={() => {
+                  setSelectedPlace(null)
+                  setVenueName("")
+                  setAddressLine("")
+                }}
+              />
+
+              {!selectedPlace?.placeId ? (
+                <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+                  <AlertDescription className="text-sm text-amber-900 dark:text-amber-100">
+                    Choose a location from the suggestions and confirm your selection before publishing.
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+            </div>
 
             {/* Category — editable; OTHER requires short label (same rules as event-form / submit schema). */}
             <div>
