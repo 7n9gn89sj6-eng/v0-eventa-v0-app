@@ -18,7 +18,17 @@ describe("MapboxPlaceAutocomplete", () => {
             json: () =>
               Promise.resolve({
                 suggestions: [
-                  { id: "place.abc", label: "Melbourne, Victoria, Australia", primary: "Melbourne" },
+                  {
+                    id: "place.abc",
+                    label: "City or town",
+                    primary: "Melbourne, Victoria, Australia",
+                    city: "Melbourne",
+                    country: "Australia",
+                    region: "Victoria",
+                    postcode: null,
+                    lat: -37.81,
+                    lng: 144.96,
+                  },
                 ],
               }),
           })
@@ -38,7 +48,8 @@ describe("MapboxPlaceAutocomplete", () => {
                   parentCity: null,
                   lat: -37.81,
                   lng: 144.96,
-                  venueName: "Melbourne",
+                  venueName: null,
+                  postcode: null,
                 },
               }),
           })
@@ -66,10 +77,10 @@ describe("MapboxPlaceAutocomplete", () => {
     fireEvent.change(input, { target: { value: "Mel" } })
 
     await waitFor(() => {
-      expect(screen.getByText("Melbourne, Victoria, Australia")).toBeTruthy()
+      expect(screen.getByRole("button", { name: /Melbourne, Victoria, Australia/ })).toBeTruthy()
     })
 
-    fireEvent.click(screen.getByText("Melbourne, Victoria, Australia"))
+    fireEvent.click(screen.getByRole("button", { name: /Melbourne, Victoria, Australia/ }))
 
     await waitFor(() => {
       expect(onResolved).toHaveBeenCalledTimes(1)

@@ -8,6 +8,7 @@ import { GET as suggestGet } from "@/app/api/places/suggest/route"
 import { GET as resolveGet, POST as resolvePost } from "@/app/api/places/resolve/route"
 import { mapMapboxFeatureToSelectedPlace } from "@/lib/places/mapbox-feature-to-wire"
 import { mapFeaturesToSuggestions } from "@/lib/places/place-api-mapbox"
+import { mergeResolvedPlaceWithSuggestion } from "@/lib/places/merge-resolved-with-suggest"
 import { queryHasLeadingStreetNumber, sortMapboxSuggestFeatures } from "@/lib/places/mapbox-suggest-helpers"
 
 const forwardMock = vi.hoisted(() => vi.fn())
@@ -175,6 +176,35 @@ describe("mapMapboxFeatureToSelectedPlace", () => {
   })
 })
 
+describe("mergeResolvedPlaceWithSuggestion", () => {
+  it("keeps full list primary when retrieve returns shorter formattedAddress", () => {
+    const resolved = mapMapboxFeatureToSelectedPlace({
+      id: "addr.1",
+      type: "Feature",
+      place_type: ["address"],
+      text: "Nicholson Street",
+      place_name: "Nicholson Street",
+      center: [144.97, -37.77],
+      context: [],
+    })
+    const row = {
+      primary: "800 Nicholson Street, Fitzroy North Victoria 3068, Australia",
+      city: "Fitzroy North",
+      country: "Australia",
+      region: "Victoria",
+      postcode: null as string | null,
+      lat: -37.77,
+      lng: 144.97,
+    }
+    const m = mergeResolvedPlaceWithSuggestion(resolved, row)
+    expect(m.formattedAddress).toBe(row.primary)
+    expect(m.postcode).toBe("3068")
+    expect(m.city).toBe("Fitzroy North")
+    expect(m.country).toBe("Australia")
+    expect(m.region).toBe("Victoria")
+  })
+})
+
 describe("mapFeaturesToSuggestions", () => {
   it("returns structured suggestion rows with id, label, primary, city, country, region, lat, lng", () => {
     const rows = mapFeaturesToSuggestions([brunswickLocality])
@@ -185,6 +215,7 @@ describe("mapFeaturesToSuggestions", () => {
       city: "Brunswick",
       country: "Australia",
       region: "Victoria",
+      postcode: null,
       lat: -37.77,
       lng: 144.96,
     })

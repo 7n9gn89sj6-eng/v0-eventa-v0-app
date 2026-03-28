@@ -24,6 +24,7 @@ export function mapFeaturesToSuggestions(features: MapboxFeature[]) {
       city: wire.city,
       country: wire.country,
       region: wire.region ?? null,
+      postcode: wire.postcode ?? null,
       lat: wire.lat ?? null,
       lng: wire.lng ?? null,
     }

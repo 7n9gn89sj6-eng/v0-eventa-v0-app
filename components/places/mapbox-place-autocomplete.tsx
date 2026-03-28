@@ -7,10 +7,21 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { mergeResolvedPlaceWithSuggestion } from "@/lib/places/merge-resolved-with-suggest"
 import type { SelectedPlaceWire } from "@/lib/places/selected-place"
 import { cn } from "@/lib/utils"
 
-type Suggestion = { id: string; label: string; primary: string }
+type Suggestion = {
+  id: string
+  label: string
+  primary: string
+  city: string
+  country: string
+  region: string | null
+  postcode: string | null
+  lat: number | null
+  lng: number | null
+}
 
 export interface MapboxPlaceAutocompleteProps {
   disabled?: boolean
@@ -147,15 +158,24 @@ export function MapboxPlaceAutocomplete({
         return
       }
       const place = data.place as SelectedPlaceWire
-      if (!place.formattedAddress?.trim()) {
+      const merged = mergeResolvedPlaceWithSuggestion(place, {
+        primary: s.primary,
+        city: s.city,
+        country: s.country,
+        region: s.region,
+        postcode: s.postcode,
+        lat: s.lat,
+        lng: s.lng,
+      })
+      if (!merged.formattedAddress?.trim()) {
         setError("Could not confirm this place.")
         return
       }
-      setSelected(place)
-      setQuery(place.formattedAddress)
+      setSelected(merged)
+      setQuery(merged.formattedAddress)
       setOpen(false)
       setSuggestions([])
-      onResolved(place)
+      onResolved(merged)
     } catch {
       setError("Could not confirm this place.")
     } finally {
