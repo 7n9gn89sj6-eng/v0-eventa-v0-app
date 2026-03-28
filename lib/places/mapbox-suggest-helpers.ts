@@ -5,6 +5,39 @@ export function queryHasLeadingStreetNumber(q: string): boolean {
   return /^\s*\d+[a-zA-Z]?\s+\S/.test(String(q || "").trim())
 }
 
+/** True when a single comma-separated segment (trimmed) begins with a civic number + rest. */
+export function segmentHasLeadingStreetNumber(segment: string): boolean {
+  return queryHasLeadingStreetNumber(segment)
+}
+
+/**
+ * True when any comma-separated part of {@param line} looks like a numbered street segment.
+ * Covers "800 Nicholson St, …" and "Venue, 800 Nicholson Street, …".
+ */
+export function lineHasNumberedStreetSegment(line: string): boolean {
+  const t = String(line || "").trim()
+  if (!t) return false
+  return t.split(",").some((part) => segmentHasLeadingStreetNumber(part.trim()))
+}
+
+/**
+ * First comma-free substring starting with a civic number from typed search (for POI + numbered query merge).
+ */
+export function extractLeadingNumberedStreetFromQuery(q: string): string | null {
+  const m = String(q || "")
+    .trim()
+    .match(/^(\d+[a-zA-Z]?\s+[^,]+)/)
+  const s = m?.[1]?.trim()
+  return s && s.length > 0 ? s : null
+}
+
+/** Heuristic: segment is probably a street name (not only a suburb) so we may replace it with a full civic line. */
+export function looksLikeStreetNameSegment(segment: string): boolean {
+  return /\b(street|st\b|road|rd\b|avenue|ave\b|parade|pde\b|drive|dr\b|court|ct\b|lane|ln\b|way\b|crescent|cres\b|highway|hwy\b|boulevard|blvd\b|terrace|tce\b|grove|gr\b|walk\b|place|pl\b)\b/i.test(
+    segment,
+  )
+}
+
 function leadingNumberToken(q: string): string | null {
   const m = String(q || "")
     .trim()

@@ -166,6 +166,7 @@ export function MapboxPlaceAutocomplete({
         postcode: s.postcode,
         lat: s.lat,
         lng: s.lng,
+        typedQuery: query,
       })
       if (!merged.formattedAddress?.trim()) {
         setError("Could not confirm this place.")
