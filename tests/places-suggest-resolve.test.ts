@@ -8,7 +8,10 @@ import { GET as suggestGet } from "@/app/api/places/suggest/route"
 import { GET as resolveGet, POST as resolvePost } from "@/app/api/places/resolve/route"
 import { mapMapboxFeatureToSelectedPlace } from "@/lib/places/mapbox-feature-to-wire"
 import { mapFeaturesToSuggestions } from "@/lib/places/place-api-mapbox"
-import { mergeResolvedPlaceWithSuggestion } from "@/lib/places/merge-resolved-with-suggest"
+import {
+  mergeResolvedPlaceWithSuggestion,
+  replaceFirstWeakStreetSegmentWithCivic,
+} from "@/lib/places/merge-resolved-with-suggest"
 import {
   lineHasNumberedStreetSegment,
   queryHasLeadingStreetNumber,
@@ -269,6 +272,80 @@ describe("mergeResolvedPlaceWithSuggestion", () => {
     expect(m.formattedAddress).toContain("The Railway Hotel")
     expect(m.venueName).toBe("The Railway Hotel")
     expect(lineHasNumberedStreetSegment(m.formattedAddress)).toBe(true)
+  })
+
+  it("replaces wrong unnumbered street when resolve omits venueName but user typed a civic address", () => {
+    const resolved = mapMapboxFeatureToSelectedPlace({
+      id: "address.railway_st",
+      type: "Feature",
+      place_type: ["address"],
+      text: "Railway Street",
+      place_name: "Railway Street, Fitzroy North Victoria 3068, Australia",
+      center: [144.98, -37.78],
+      context: [
+        { id: "locality.1", text: "Fitzroy North" },
+        { id: "postcode.2", text: "3068" },
+        { id: "region.3", text: "Victoria" },
+        { id: "country.4", text: "Australia" },
+      ],
+    })
+    expect(resolved.venueName).toBeNull()
+
+    const row = {
+      primary: "Railway Street, Fitzroy North Victoria 3068, Australia",
+      city: "Fitzroy North",
+      country: "Australia",
+      region: "Victoria",
+      postcode: "3068",
+      lat: -37.78,
+      lng: 144.98,
+      typedQuery: "800 Nicholson Street",
+    }
+    const m = mergeResolvedPlaceWithSuggestion(resolved, row)
+    expect(m.formattedAddress.startsWith("800 Nicholson Street")).toBe(true)
+    expect(m.formattedAddress).toContain("Fitzroy North")
+    expect(lineHasNumberedStreetSegment(m.formattedAddress)).toBe(true)
+  })
+
+  it("POI inject matches venue when place_name uses The … but feature.text omits The", () => {
+    const resolved = mapMapboxFeatureToSelectedPlace({
+      id: "poi.railway",
+      type: "Feature",
+      place_type: ["poi"],
+      text: "Railway Hotel",
+      place_name: "The Railway Hotel, Railway Street, North Fitzroy, Victoria, Australia",
+      center: [144.98, -37.78],
+      context: [
+        { id: "locality.1", text: "North Fitzroy" },
+        { id: "region.2", text: "Victoria" },
+        { id: "country.3", text: "Australia" },
+      ],
+    })
+    expect(resolved.venueName).toBe("Railway Hotel")
+
+    const m = mergeResolvedPlaceWithSuggestion(resolved, {
+      primary: "The Railway Hotel, Railway Street, North Fitzroy, Victoria, Australia",
+      city: "North Fitzroy",
+      country: "Australia",
+      region: "Victoria",
+      postcode: null,
+      lat: -37.78,
+      lng: 144.98,
+      typedQuery: "800 Nicholson Street",
+    })
+    expect(m.formattedAddress).toContain("The Railway Hotel")
+    expect(m.formattedAddress).toContain("800 Nicholson Street")
+    expect(m.formattedAddress).not.toMatch(/Railway Street/)
+  })
+})
+
+describe("replaceFirstWeakStreetSegmentWithCivic", () => {
+  it("replaces the first street-like segment without a civic number", () => {
+    const out = replaceFirstWeakStreetSegmentWithCivic(
+      "Railway Street, Fitzroy North Victoria 3068, Australia",
+      "800 Nicholson Street",
+    )
+    expect(out).toBe("800 Nicholson Street, Fitzroy North Victoria 3068, Australia")
   })
 })
 

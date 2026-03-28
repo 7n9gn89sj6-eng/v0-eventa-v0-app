@@ -38,6 +38,36 @@ function pickFormattedAddressLine(listPrimary: string, rAddr: string): string {
   return b || a
 }
 
+/** Mapbox {@code text} can be "Railway Hotel" while {@code place_name} starts with "The Railway Hotel". */
+function venueHeadMatchesVenueName(headLower: string, venueLower: string): boolean {
+  if (headLower === venueLower || headLower.startsWith(`${venueLower} `)) return true
+  const stripThe = (s: string) => (s.startsWith("the ") ? s.slice(4).trim() : s)
+  const h = stripThe(headLower)
+  const v = stripThe(venueLower)
+  return h === v || h.startsWith(`${v} `) || headLower.startsWith(`${v} `)
+}
+
+/**
+ * When resolve drops POI {@code venueName} but returns an unnumbered street segment (e.g. wrong
+ * nearby street), replace the first weak street segment with the civic line from typed search.
+ */
+export function replaceFirstWeakStreetSegmentWithCivic(formattedAddress: string, civic: string): string {
+  const civicTrim = civic.trim()
+  const line = formattedAddress.trim()
+  if (!civicTrim || !line) return formattedAddress
+  if (line.toLowerCase().includes(civicTrim.toLowerCase())) return formattedAddress
+  if (lineHasNumberedStreetSegment(line)) return formattedAddress
+
+  const parts = line.split(",").map((p) => p.trim()).filter(Boolean)
+  for (let i = 0; i < parts.length; i++) {
+    const seg = parts[i]!
+    if (looksLikeStreetNameSegment(seg) && !lineHasNumberedStreetSegment(seg)) {
+      return [...parts.slice(0, i), civicTrim, ...parts.slice(i + 1)].join(", ")
+    }
+  }
+  return `${civicTrim}, ${line}`
+}
+
 /** Insert typed civic line into a POI {@code place_name}-style string when Mapbox omitted the number. */
 export function injectCivicForPoiLine(formattedAddress: string, venueName: string, civic: string): string {
   const civicTrim = civic.trim()
@@ -53,7 +83,7 @@ export function injectCivicForPoiLine(formattedAddress: string, venueName: strin
 
   const head = parts[0]!.toLowerCase()
   const venLc = ven.toLowerCase()
-  const venueFirst = head === venLc || head.startsWith(`${venLc} `)
+  const venueFirst = venueHeadMatchesVenueName(head, venLc)
 
   if (venueFirst) {
     if (
@@ -82,9 +112,16 @@ export function mergeResolvedPlaceWithSuggestion(
 
   const venue = resolved.venueName?.trim()
   const typedQuery = row.typedQuery?.trim() ?? ""
-  if (venue && typedQuery && queryHasLeadingStreetNumber(typedQuery) && !lineHasNumberedStreetSegment(formattedAddress)) {
+  if (typedQuery && queryHasLeadingStreetNumber(typedQuery)) {
     const civic = extractLeadingNumberedStreetFromQuery(typedQuery)
-    if (civic) formattedAddress = injectCivicForPoiLine(formattedAddress, venue, civic)
+    if (civic) {
+      if (venue && !lineHasNumberedStreetSegment(formattedAddress)) {
+        formattedAddress = injectCivicForPoiLine(formattedAddress, venue, civic)
+      }
+      if (!lineHasNumberedStreetSegment(formattedAddress)) {
+        formattedAddress = replaceFirstWeakStreetSegmentWithCivic(formattedAddress, civic)
+      }
+    }
   }
 
   const postcodeFromLine = extractAuPostcodeFromLine(formattedAddress)
