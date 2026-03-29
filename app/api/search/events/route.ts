@@ -17,6 +17,7 @@ import { isEventIntentQuery } from "@/lib/search/event-ranking"
 import { applyBroadWebHostDiversity } from "@/lib/search/broad-web-host-diversity"
 import { applyNamedEventSameHostWebDedupe } from "@/lib/search/named-event-same-host-dedupe"
 import { genericWebListingPenalty, scoreSearchResult } from "@/lib/search/score-search-result"
+import { evaluateVisiblePastDateStale } from "@/lib/search/visible-past-date-text"
 import { getExpandedTermGroups } from "@/lib/search/search-taxonomy"
 import {
   normalizeSearchUtterance,
@@ -1731,6 +1732,14 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      const pastVisible = evaluateVisiblePastDateStale(text, now)
+      if (pastVisible.kind === "drop") {
+        return false
+      }
+      if (pastVisible.kind === "penalize") {
+        ;(result as { _ambiguousStaleNumericDate?: boolean })._ambiguousStaleNumericDate = true
+      }
+
       return true
     })
     
@@ -1908,6 +1917,7 @@ export async function GET(req: NextRequest) {
       const {
         _eventnessBoost,
         _weakStaleYearVisibleText,
+        _ambiguousStaleNumericDate,
         _score,
         _rankBreakdown,
         _resultKind,

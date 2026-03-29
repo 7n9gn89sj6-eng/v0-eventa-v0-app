@@ -503,6 +503,9 @@ export function scoreSearchResult(args: {
     if (result._weakStaleYearVisibleText === true) {
       mismatchPenalty += 24
     }
+    if (result._ambiguousStaleNumericDate === true) {
+      mismatchPenalty += 28
+    }
     if (!bounds && genericWebPenaltyRaw >= 10) {
       mismatchPenalty += 10
     } else if (bounds && genericWebPenaltyRaw <= 8) {

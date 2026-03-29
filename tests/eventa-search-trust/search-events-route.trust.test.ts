@@ -1818,7 +1818,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
       {
         source: "web",
         title: "Courtyard night market Melbourne",
-        snippet: "Join us Saturday 15 March 2025 in the square.",
+        snippet: "Saturday night market — part of our popular 2025 season in the square.",
         url: "https://example.com/night-market-2025",
       },
     ]
@@ -1857,6 +1857,99 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     })
 
     expect((data.external || []).some((e: any) => e.externalUrl === "https://example.com/archive-2024")).toBe(true)
+  })
+
+  it("web trust: drops visible month+year clearly before now when no startAt", async () => {
+    fixtureInternalEvents = []
+    fixtureWebResults = [
+      {
+        source: "web",
+        title: "Echuca Riverboats",
+        snippet: "Festival weekend january 2026 at the port.",
+        url: "https://example.com/echuca-boats-jan",
+      },
+    ]
+
+    const data = await callSearchEvents({
+      query: "what on in Echuca",
+      city: "Echuca",
+      country: "Australia",
+    })
+
+    expect((data.external || []).some((e: any) => e.externalUrl === "https://example.com/echuca-boats-jan")).toBe(
+      false,
+    )
+  })
+
+  it("web trust: keeps future explicit visible date in snippet when no startAt", async () => {
+    fixtureInternalEvents = []
+    fixtureWebResults = [
+      {
+        source: "web",
+        title: "Echuca Field Day",
+        snippet: "Tickets — event date 2026-04-20. Live music and food.",
+        url: "https://example.com/echuca-future-march",
+      },
+    ]
+
+    const data = await callSearchEvents({
+      query: "what on in Echuca",
+      city: "Echuca",
+      country: "Australia",
+    })
+
+    expect((data.external || []).some((e: any) => e.externalUrl === "https://example.com/echuca-future-march")).toBe(
+      true,
+    )
+  })
+
+  it("web trust: history intent keeps past visible month+year in snippet", async () => {
+    fixtureInternalEvents = []
+    fixtureWebResults = [
+      {
+        source: "web",
+        title: "Old season recap",
+        snippet: "Highlights from january 2026.",
+        url: "https://example.com/echuca-archive-jan",
+      },
+    ]
+
+    const data = await callSearchEvents({
+      query: "historical archive events echuca",
+      city: "Echuca",
+      country: "Australia",
+    })
+
+    expect((data.external || []).some((e: any) => e.externalUrl === "https://example.com/echuca-archive-jan")).toBe(
+      true,
+    )
+  })
+
+  it("web trust: ambiguous d/m slash gets penalty not drop when still potentially future", async () => {
+    fixtureInternalEvents = []
+    fixtureWebResults = [
+      {
+        source: "web",
+        title: "Summer fair",
+        snippet: "Gates open 06/07/2026 early.",
+        url: "https://example.com/ambiguous-slash",
+      },
+    ]
+
+    const data = await callSearchEvents({
+      query: "what on in Echuca",
+      city: "Echuca",
+      country: "Australia",
+      debug: true,
+    })
+
+    expect((data.external || []).some((e: any) => e.externalUrl === "https://example.com/ambiguous-slash")).toBe(
+      true,
+    )
+    const ranked = (data.debugTrace?.rankingUnifiedTop15 || []).find(
+      (r: any) => r.url === "https://example.com/ambiguous-slash",
+    )
+    expect(ranked?._rankBreakdown?.mismatchPenalty ?? 0).toBeGreaterThanOrEqual(28)
   })
 })
 
