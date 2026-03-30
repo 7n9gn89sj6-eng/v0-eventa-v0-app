@@ -63,7 +63,11 @@ export function AddEventFormWrapper({ initialData, draftId }: AddEventFormWrappe
   }, [draftId])
 
   if (isLoading) {
-    return <div>Loading draft...</div>
+    return (
+      <div className="container mx-auto max-w-2xl px-4 py-8" role="status" aria-live="polite">
+        <p className="text-sm text-muted-foreground">Loading draft…</p>
+      </div>
+    )
   }
 
   if (draftNotFound) {

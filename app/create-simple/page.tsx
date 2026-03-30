@@ -34,7 +34,13 @@ export default function CreateSimplePage() {
           </p>
         </div>
 
-        <Suspense fallback={<div>Loading...</div>}>
+        <Suspense
+          fallback={
+            <p className="text-sm text-muted-foreground" role="status" aria-live="polite">
+              Loading…
+            </p>
+          }
+        >
           <SimpleEventCreator />
         </Suspense>
       </div>

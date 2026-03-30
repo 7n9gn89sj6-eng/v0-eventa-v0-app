@@ -19,7 +19,17 @@ export default function AddEventPage({
   const draftId = params.draft
 
   return (
-    <Suspense fallback={<div className="container mx-auto max-w-2xl px-4 py-8">Loading...</div>}>
+    <Suspense
+      fallback={
+        <div
+          className="container mx-auto max-w-2xl px-4 py-8"
+          role="status"
+          aria-live="polite"
+        >
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        </div>
+      }
+    >
       <AddEventFormWrapper initialData={initialData} draftId={draftId} />
     </Suspense>
   )
