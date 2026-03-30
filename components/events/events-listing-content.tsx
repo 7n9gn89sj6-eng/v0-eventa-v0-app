@@ -546,6 +546,8 @@ export function EventsListingContent({
     return parts.length > 0 ? parts.join(" · ") : ""
   })()
 
+  const emptyStateCityPlace = [cityFilter.trim(), countryFilter.trim()].filter(Boolean).join(", ")
+
   const showParsedEmptyGuidance = Boolean(
     emptyStateGuidance?.hadParsedTimeWindow &&
       (cityFilter.trim() ||
@@ -844,7 +846,7 @@ export function EventsListingContent({
             ) : cityFilter ? (
               <>
                 <p className="text-lg font-medium text-foreground">
-                  No events found in {cityFilter}{countryFilter ? `, ${countryFilter}` : ""} right now
+                  {tEvents("results.emptyStateCityTitle", { place: emptyStateCityPlace })}
                 </p>
                 {emptyStateConstraintSummary ? (
                   <p className="text-sm text-muted-foreground max-w-md mx-auto">
@@ -852,7 +854,7 @@ export function EventsListingContent({
                   </p>
                 ) : null}
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  Try expanding your search area, changing dates, or searching another city.
+                  {tEvents("results.emptyStateCityBody")}
                 </p>
               </>
             ) : (

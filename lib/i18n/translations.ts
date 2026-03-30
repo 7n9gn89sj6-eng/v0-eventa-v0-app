@@ -140,6 +140,8 @@ export const translations = {
           "We also tried a wider date window in our directory and still found nothing there.",
         emptyStateParsedTips:
           "Try clearing the date filters, searching a whole month (for example “in April”), or choosing a wider area.",
+        emptyStateCityTitle: "No listings matched your search in {place}.",
+        emptyStateCityBody: "Try a wider area, different dates, or another nearby town.",
       },
       card: {
         free: "Free",
@@ -411,6 +413,9 @@ export const translations = {
           "Abbiamo provato anche con una finestra di date più ampia nel nostro elenco, senza risultati.",
         emptyStateParsedTips:
           "Prova a cancellare le date, cercare un intero mese (es. “in aprile”) o scegliere un’area più vasta.",
+        emptyStateCityTitle: "Nessun risultato corrisponde alla ricerca a {place}.",
+        emptyStateCityBody:
+          "Prova un’area più ampia, date diverse o un’altra città vicina.",
       },
       card: {
         free: "Gratuito",
@@ -685,6 +690,10 @@ export const translations = {
           "Δοκιμάσαμε και ευρύτερο παράθυρο ημερομηνιών στον κατάλογό μας, χωρίς αποτέλεσμα.",
         emptyStateParsedTips:
           "Καθαρίστε τις ημερομηνίες, αναζητήστε ολόκληρο μήνα (π.χ. «τον Απρίλιο») ή επιλέξτε ευρύτερη περιοχή.",
+        emptyStateCityTitle:
+          "Καμία καταχώριση δεν ταιριάζει στην αναζήτησή σας στην περιοχή {place}.",
+        emptyStateCityBody:
+          "Δοκιμάστε μεγαλύτερη περιοχή, άλλες ημερομηνίες ή κοντινή πόλη.",
       },
       card: {
         free: "Δωρεάν",
@@ -959,6 +968,9 @@ export const translations = {
           "También probamos un rango de fechas más amplio en nuestro directorio y seguimos sin resultados.",
         emptyStateParsedTips:
           "Prueba a quitar las fechas, buscar un mes completo (por ejemplo «en abril») o ampliar la zona.",
+        emptyStateCityTitle: "No hay resultados que coincidan con tu búsqueda en {place}.",
+        emptyStateCityBody:
+          "Prueba un área más amplia, otras fechas o otra localidad cercana.",
       },
       card: {
         free: "Gratis",
@@ -1233,6 +1245,9 @@ export const translations = {
           "Nous avons aussi élargi la plage de dates dans notre annuaire, sans résultat.",
         emptyStateParsedTips:
           "Effacez les dates, cherchez un mois entier (par ex. « en avril ») ou élargissez la zone.",
+        emptyStateCityTitle: "Aucun résultat ne correspond à votre recherche à {place}.",
+        emptyStateCityBody:
+          "Essayez un périmètre plus large, d'autres dates ou une ville voisine.",
       },
       card: {
         free: "Gratuit",
