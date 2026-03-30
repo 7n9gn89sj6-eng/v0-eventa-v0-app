@@ -126,7 +126,7 @@ export function SimpleEventCreator() {
 
     // If there's a follow-up question and no answer, prompt user
     if (followUpQuestion && !followUpAnswer.trim()) {
-      setError("Please answer the question above before posting")
+      setError("Please answer the question above before continuing.")
       return
     }
 
@@ -374,10 +374,10 @@ export function SimpleEventCreator() {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Posting...
+                    Opening review…
                   </>
                 ) : (
-                  "Looks good → Post"
+                  "Continue to review"
                 )}
               </Button>
             </CardContent>
