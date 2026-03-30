@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import ClientOnly from "@/components/ClientOnly"
 import { useI18n } from "@/lib/i18n/context"
@@ -809,7 +810,17 @@ export function EventsListingContent({
       ) : filteredResults.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center space-y-4">
-            {showParsedEmptyGuidance ? (
+            {error ? (
+              <>
+                <Alert variant="destructive" className="max-w-md mx-auto text-left">
+                  <AlertTitle>We couldn&apos;t load results.</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+                <Button type="button" variant="outline" size="sm" onClick={() => void runSearch()}>
+                  Try again
+                </Button>
+              </>
+            ) : showParsedEmptyGuidance ? (
               <>
                 <p className="text-lg font-medium text-foreground">{tEvents("results.emptyStateParsedTitle")}</p>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
