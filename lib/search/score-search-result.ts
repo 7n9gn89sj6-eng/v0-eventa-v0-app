@@ -259,6 +259,8 @@ export function genericWebListingPenalty(result: any): number {
   if (/\bevent\s+(calendar|guide|directory|listing)s?\b/i.test(blob)) p += 14
   if (/\/events?\/(calendar|guide)\b/i.test(url)) p += 10
   if (/\/upcoming\b/i.test(url)) p += 8
+  // Eventbrite discovery hubs (/d/region/events) — not single-event /e/ pages.
+  if (/eventbrite\.com\/d\//i.test(url)) p += 22
   return Math.min(55, p)
 }
 
@@ -273,13 +275,16 @@ function aggregatorPenalty(result: any): number {
   ]
   let p = 0
   if (phrases.some((re) => re.test(fullText))) p += 10
-  if (
-    url.includes("eventbrite.com") ||
-    (url.includes("timeout.com") && fullText.includes("best"))
-  ) {
+  if (url.includes("eventbrite.com")) {
+    if (/\/e\//i.test(url)) {
+      p += 9
+    } else {
+      p += 22
+    }
+  } else if (url.includes("timeout.com") && fullText.includes("best")) {
     p += 12
   }
-  return Math.min(22, p)
+  return Math.min(34, p)
 }
 
 /**
@@ -497,14 +502,17 @@ export function scoreSearchResult(args: {
   if (desc.length >= 40) qualityScore += 6
   if (result.venueName || result.address) qualityScore += 5
   if (bounds && bounds.end.getTime() >= now.getTime()) qualityScore += 4
+  if (kind === "web" && result._visibleExplicitFutureCalendarInText === true) {
+    qualityScore += 5
+  }
 
   if (kind === "web") {
     mismatchPenalty += aggregatorPenalty(result)
     if (result._weakStaleYearVisibleText === true) {
-      mismatchPenalty += 24
+      mismatchPenalty += 34
     }
     if (result._ambiguousStaleNumericDate === true) {
-      mismatchPenalty += 28
+      mismatchPenalty += 42
     }
     if (!bounds && genericWebPenaltyRaw >= 10) {
       mismatchPenalty += 10

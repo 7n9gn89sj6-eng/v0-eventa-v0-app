@@ -185,4 +185,44 @@ describe("unified search ranking (deterministic)", () => {
     expect(genericWebListingPenalty(strongWeb)).toBe(0)
     expect(gw.genericWebPenalty).toBeGreaterThan(0)
   })
+
+  it("Eventbrite /d/ discovery hub ranks below same-city /e/ event page for broad discovery", () => {
+    const q = "what on in Echuca"
+    const intent = parseSearchIntent(q)
+    const plan = resolveSearchPlan(intent, { city: "Echuca", country: "Australia" })
+    const hub = {
+      title: "Events in Echuca",
+      description: "Discover events and browse listings.",
+      city: "Echuca",
+      country: "Australia",
+      externalUrl: "https://www.eventbrite.com/d/australia--echuca/events/",
+      _originalUrl: "https://www.eventbrite.com/d/australia--echuca/events/",
+    }
+    const eventPage = {
+      title: "Riverboat Jazz Night — Echuca",
+      description: "Live jazz on the wharf this weekend.",
+      city: "Echuca",
+      country: "Australia",
+      externalUrl: "https://www.eventbrite.com/e/jazz-night-echuca-tickets-123",
+      _originalUrl: "https://www.eventbrite.com/e/jazz-night-echuca-tickets-123",
+    }
+
+    const hubScore = scoreSearchResult({
+      result: hub,
+      intent,
+      searchPlan: plan,
+      now: NOW,
+      kind: "web",
+    })!
+    const eventScore = scoreSearchResult({
+      result: eventPage,
+      intent,
+      searchPlan: plan,
+      now: NOW,
+      kind: "web",
+    })!
+
+    expect(eventScore.total).toBeGreaterThan(hubScore.total)
+    expect(hubScore.mismatchPenalty).toBeGreaterThan(eventScore.mismatchPenalty)
+  })
 })

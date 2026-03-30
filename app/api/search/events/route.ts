@@ -17,7 +17,10 @@ import { isEventIntentQuery } from "@/lib/search/event-ranking"
 import { applyBroadWebHostDiversity } from "@/lib/search/broad-web-host-diversity"
 import { applyNamedEventSameHostWebDedupe } from "@/lib/search/named-event-same-host-dedupe"
 import { genericWebListingPenalty, scoreSearchResult } from "@/lib/search/score-search-result"
-import { evaluateVisiblePastDateStale } from "@/lib/search/visible-past-date-text"
+import {
+  evaluateVisiblePastDateStale,
+  visibleTextHasExplicitFutureCalendarEnd,
+} from "@/lib/search/visible-past-date-text"
 import { getExpandedTermGroups } from "@/lib/search/search-taxonomy"
 import {
   normalizeSearchUtterance,
@@ -1738,6 +1741,9 @@ export async function GET(req: NextRequest) {
       }
       if (pastVisible.kind === "penalize") {
         ;(result as { _ambiguousStaleNumericDate?: boolean })._ambiguousStaleNumericDate = true
+      } else if (visibleTextHasExplicitFutureCalendarEnd(text, now)) {
+        ;(result as { _visibleExplicitFutureCalendarInText?: boolean })._visibleExplicitFutureCalendarInText =
+          true
       }
 
       return true
@@ -1918,6 +1924,7 @@ export async function GET(req: NextRequest) {
         _eventnessBoost,
         _weakStaleYearVisibleText,
         _ambiguousStaleNumericDate,
+        _visibleExplicitFutureCalendarInText,
         _score,
         _rankBreakdown,
         _resultKind,
@@ -1971,11 +1978,13 @@ export async function GET(req: NextRequest) {
       const isGov = url.includes(".gov.au") || url.includes(".gov/")
       const listingPenalty = genericWebListingPenalty(result)
       const highGenericHub = listingPenalty >= 12
+      /** Mild directory / calendar wording — skip route boost so fresher event-like pages can pass. */
+      const govListingLike = listingPenalty >= 10
 
       if (isGov && /\/events?\b/i.test(url)) {
-        boost += highGenericHub ? 0 : 4
+        boost += highGenericHub || govListingLike ? 0 : 4
       } else if (isGov) {
-        boost += highGenericHub ? 0 : 2
+        boost += highGenericHub || govListingLike ? 0 : 2
       }
 
       if (!isGov && /(whats-on|whatson|what-s-on|\/events\/|event-calendar|gig-guide)/i.test(fullText)) {
@@ -1983,7 +1992,13 @@ export async function GET(req: NextRequest) {
       }
 
       if (url.includes("eventbrite.com")) {
-        boost -= 3
+        if (/\/d\//i.test(url)) {
+          boost -= 8
+        } else if (/\/e\//i.test(url)) {
+          boost -= 2
+        } else {
+          boost -= 5
+        }
       }
       if (url.includes("reddit.com") || url.includes("facebook.com/posts")) {
         boost -= 2

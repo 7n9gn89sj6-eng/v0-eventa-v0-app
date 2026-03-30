@@ -516,6 +516,36 @@ describe("Eventa trust: broad + parsed time uses strict overlap in ranking", () 
     ).toBeNull()
   })
 
+  it("web: _visibleExplicitFutureCalendarInText adds quality score for discovery rows", () => {
+    const q = "what on in Echuca"
+    const intent = parseSearchIntent(q)
+    const plan = resolveSearchPlan(intent, { city: "Echuca", country: "Australia" })
+    const baseRow = {
+      title: "Community fair Echuca",
+      description: "Free entry and market stalls on the main day 2026-06-01. Family friendly.",
+      city: "Echuca",
+      country: "Australia",
+      externalUrl: "https://example.com/fair",
+      _originalUrl: "https://example.com/fair",
+    }
+    const withFlag = { ...baseRow, _visibleExplicitFutureCalendarInText: true as const }
+    const base = scoreSearchResult({
+      result: baseRow,
+      intent,
+      searchPlan: plan,
+      now: NOW,
+      kind: "web",
+    })!
+    const boosted = scoreSearchResult({
+      result: withFlag,
+      intent,
+      searchPlan: plan,
+      now: NOW,
+      kind: "web",
+    })!
+    expect(boosted.qualityScore).toBe(base.qualityScore + 5)
+  })
+
   function planFrom(i: ReturnType<typeof parseSearchIntent>) {
     return resolveSearchPlan(i, { city: "Melbourne", country: "Australia" })
   }

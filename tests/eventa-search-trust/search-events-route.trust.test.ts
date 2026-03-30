@@ -1836,7 +1836,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     const ranked = (data.debugTrace?.rankingUnifiedTop15 || []).find(
       (r: any) => r.url === "https://example.com/night-market-2025",
     )
-    expect(ranked?._rankBreakdown?.mismatchPenalty ?? 0).toBeGreaterThanOrEqual(24)
+    expect(ranked?._rankBreakdown?.mismatchPenalty ?? 0).toBeGreaterThanOrEqual(34)
   })
 
   it("web trust: history/archive query skips aggressive visible-year drop", async () => {
@@ -1949,7 +1949,7 @@ describe("Eventa trust: /api/search/events regression suite", () => {
     const ranked = (data.debugTrace?.rankingUnifiedTop15 || []).find(
       (r: any) => r.url === "https://example.com/ambiguous-slash",
     )
-    expect(ranked?._rankBreakdown?.mismatchPenalty ?? 0).toBeGreaterThanOrEqual(28)
+    expect(ranked?._rankBreakdown?.mismatchPenalty ?? 0).toBeGreaterThanOrEqual(42)
   })
 })
 
