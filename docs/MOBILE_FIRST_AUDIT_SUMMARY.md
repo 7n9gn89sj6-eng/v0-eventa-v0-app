@@ -140,7 +140,7 @@ Event relevance: event.startAt <= searchEnd AND event.endAt >= searchStart
 
 **Changes Made:**
 
-1. **`components/events/edit-event-form.tsx`**:
+1. **`app/edit/[id]/EditEventForm.tsx`** (live magic-link edit form):
    - Added `state` field to schema and form UI
    - Integrated `PlacesAutocomplete` component for address field
    - Auto-fills city, state, country, postcode from selected place
@@ -177,7 +177,7 @@ Event relevance: event.startAt <= searchEnd AND event.endAt >= searchStart
 3. **`components/search/search-filters.tsx`**
    - Added mobile touch targets to filter buttons
 
-4. **`components/events/edit-event-form.tsx`**
+4. **`app/edit/[id]/EditEventForm.tsx`**
    - Added `state` field
    - Integrated Places autocomplete
    - Updated form to handle all address components

@@ -82,7 +82,7 @@ export default function ReviewDraftPage() {
     // Load draft from session storage
     const stored = sessionStorage.getItem("ai-event-draft")
     if (!stored) {
-      router.push("/create-simple")
+      router.replace("/create-simple?reason=expired")
       return
     }
 
@@ -119,7 +119,7 @@ export default function ReviewDraftPage() {
       setPlaceInitialQuery([exLoc.name, exLoc.address].filter(Boolean).join(", ").trim())
     } catch (err) {
       console.error("[v0] Failed to load draft:", err)
-      router.push("/create-simple")
+      router.replace("/create-simple?reason=expired")
     }
   }, [router])
 

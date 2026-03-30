@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { AddEventForm } from "@/components/events/add-event-form"
+import { Button } from "@/components/ui/button"
 import { useI18n } from "@/lib/i18n/context"
 
 interface AddEventFormWrapperProps {
@@ -20,36 +21,67 @@ export function AddEventFormWrapper({ initialData, draftId }: AddEventFormWrappe
   const tForm = t("form")
   const [draftData, setDraftData] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(!!draftId)
+  const [draftNotFound, setDraftNotFound] = useState(false)
 
   useEffect(() => {
-    if (draftId && typeof window !== "undefined") {
-      const saved = localStorage.getItem("eventa-drafts")
-      if (saved) {
-        const drafts = JSON.parse(saved)
-        const draft = drafts.find((d: any) => d.id === draftId)
-        if (draft) {
-          // Convert draft format to form format
-          const formattedDate = `${draft.date}T${draft.time}`
-          const endDate = new Date(new Date(formattedDate).getTime() + 2 * 60 * 60 * 1000)
+    if (!draftId || typeof window === "undefined") {
+      setIsLoading(false)
+      return
+    }
 
-          setDraftData({
-            title: draft.title,
-            description: draft.description || "",
-            location: draft.city,
-            date: formattedDate,
-            city: draft.city,
-            venue: draft.venue,
-            startAt: formattedDate,
-            endAt: endDate.toISOString().slice(0, 16),
-          })
-        }
+    try {
+      const saved = localStorage.getItem("eventa-drafts")
+      if (!saved) {
+        setDraftNotFound(true)
+        return
       }
+      const drafts = JSON.parse(saved)
+      const draft = Array.isArray(drafts) ? drafts.find((d: any) => d.id === draftId) : null
+      if (!draft) {
+        setDraftNotFound(true)
+        return
+      }
+      // Convert draft format to form format (unchanged mapping)
+      const formattedDate = `${draft.date}T${draft.time}`
+      const endDate = new Date(new Date(formattedDate).getTime() + 2 * 60 * 60 * 1000)
+
+      setDraftData({
+        title: draft.title,
+        description: draft.description || "",
+        location: draft.city,
+        date: formattedDate,
+        city: draft.city,
+        venue: draft.venue,
+        startAt: formattedDate,
+        endAt: endDate.toISOString().slice(0, 16),
+      })
+    } catch {
+      setDraftNotFound(true)
+    } finally {
       setIsLoading(false)
     }
   }, [draftId])
 
   if (isLoading) {
     return <div>Loading draft...</div>
+  }
+
+  if (draftNotFound) {
+    return (
+      <div className="container mx-auto max-w-2xl px-4 py-8">
+        <p className="text-pretty text-muted-foreground">
+          This draft could not be found or has expired.
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Button asChild>
+            <Link href="/add-event">Start new event</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/create-simple">Use simple creator</Link>
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (

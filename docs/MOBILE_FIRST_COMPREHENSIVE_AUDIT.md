@@ -494,7 +494,7 @@ These issues can be addressed quickly without major refactoring. The core UX is 
 - ✅ SearchFilters
 - ✅ Event Cards
 - ✅ AddEventForm
-- ✅ EditEventForm
+- ✅ `app/edit/[id]/EditEventForm.tsx`
 - ✅ PlacesAutocomplete
 - ✅ EventDetail
 
