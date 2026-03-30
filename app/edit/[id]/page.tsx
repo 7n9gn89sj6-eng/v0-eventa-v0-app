@@ -1,12 +1,49 @@
+import Link from "next/link";
 import db from "@/lib/db";
 import { validateEventEditToken } from "@/lib/eventEditToken";
 import { notFound } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import EditEventForm, {
   type EditPageEventPayload,
 } from "./EditEventForm";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+function EditLinkErrorView({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="max-w-3xl mx-auto p-8">
+      <h1 className="text-2xl font-semibold mb-6">Edit Event</h1>
+      <Card>
+        <CardHeader>
+          <CardTitle>{title}</CardTitle>
+          <CardDescription className="text-pretty">{description}</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-3">
+          <Button asChild>
+            <Link href="/discover">Browse events</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/add-event">Post an event</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 interface EditPageProps {
   params: Promise<{ id: string }>;
@@ -26,14 +63,20 @@ export default async function EditEventPage(props: EditPageProps) {
     token = searchParams.token ?? null;
   } catch (error) {
     return (
-      <div className="max-w-2xl mx-auto p-8">
-        <div className="p-6 text-red-500">Error loading page parameters.</div>
-      </div>
+      <EditLinkErrorView
+        title="Something went wrong"
+        description="We couldn’t load the editor. Wait a moment and refresh the page, or go back using the buttons below."
+      />
     );
   }
 
   if (!eventId || !token) {
-    return <div className="p-6 text-red-500">Missing edit token.</div>;
+    return (
+      <EditLinkErrorView
+        title="We couldn’t open this edit link"
+        description="This link looks incomplete. Open the full link from your Eventa email, or start from Discover below."
+      />
+    );
   }
 
   let isValid: boolean;
@@ -41,14 +84,20 @@ export default async function EditEventPage(props: EditPageProps) {
     isValid = await validateEventEditToken(eventId, token);
   } catch (error) {
     return (
-      <div className="max-w-2xl mx-auto p-8">
-        <div className="p-6 text-red-500">Error validating edit token. Please try again.</div>
-      </div>
+      <EditLinkErrorView
+        title="Something went wrong"
+        description="We couldn’t load the editor. Wait a moment and refresh the page, or go back using the buttons below."
+      />
     );
   }
 
   if (!isValid) {
-    return <div className="p-6 text-red-500">Invalid or expired edit token.</div>;
+    return (
+      <EditLinkErrorView
+        title="This edit link is no longer valid"
+        description="Links expire for security. Check your email for a newer message from Eventa, or post your event again."
+      />
+    );
   }
 
   let event;
@@ -80,9 +129,10 @@ export default async function EditEventPage(props: EditPageProps) {
     });
   } catch (error) {
     return (
-      <div className="max-w-2xl mx-auto p-8">
-        <div className="p-6 text-red-500">Error loading event. Please try again.</div>
-      </div>
+      <EditLinkErrorView
+        title="Something went wrong"
+        description="We couldn’t load the editor. Wait a moment and refresh the page, or go back using the buttons below."
+      />
     );
   }
 
